@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: mypast-postgres
+    environment:
+      POSTGRES_USER: mypast
+      POSTGRES_PASSWORD: mypast
+      POSTGRES_DB: mypast_dev
+    ports:
+      - "5433:5432"   # host 5433 to avoid clashing with local postgres@18
+    volumes:
+      - mypast_pg:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mypast -d mypast_dev"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  mypast:
+    build: .
+    container_name: mypast-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MYPAST_DB_URL: postgres://mypast:mypast@postgres:5432/mypast_dev?sslmode=disable
+      MYPAST_ADDR: ":8080"
+      GIN_MODE: release
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+volumes:
+  mypast_pg:
