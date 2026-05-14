@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/colinleefish/mypast/internal/config"
@@ -26,7 +27,7 @@ type SummarizationWorker struct {
 
 type claimedSummarizationTask struct {
 	SessionID        uuid.UUID
-	RecordID         uuid.UUID
+	TurnIDs          []uuid.UUID
 	PreviousOverview string
 	MessagesJSONL    string
 }
@@ -105,14 +106,14 @@ func (w *SummarizationWorker) selectCandidateSessions(ctx context.Context) ([]uu
 	rows := make([]row, 0, limit)
 	if err := w.db.WithContext(ctx).Raw(`
 		SELECT session_id
-		FROM session_records
-		WHERE record_status IN (?, ?)
+		FROM session_turns
+		WHERE turn_status IN (?, ?)
 		GROUP BY session_id
 		ORDER BY MIN(created_at)
 		LIMIT ?
 	`,
-		model.SessionRecordStatusNotSummarized,
-		model.SessionRecordStatusSummarizing,
+		model.SessionTurnStatusNotSummarized,
+		model.SessionTurnStatusSummarizing,
 		limit,
 	).Scan(&rows).Error; err != nil {
 		return nil, fmt.Errorf("query candidate sessions: %w", err)
@@ -126,7 +127,7 @@ func (w *SummarizationWorker) selectCandidateSessions(ctx context.Context) ([]uu
 }
 
 func (w *SummarizationWorker) processSession(ctx context.Context, sessionID uuid.UUID) error {
-	task, ok, err := w.claimNextRecord(ctx, sessionID)
+	task, ok, err := w.claimNextTurns(ctx, sessionID)
 	if err != nil {
 		return err
 	}
@@ -137,25 +138,30 @@ func (w *SummarizationWorker) processSession(ctx context.Context, sessionID uuid
 	merged, err := w.llm.MergeOverview(ctx, task.PreviousOverview, task.MessagesJSONL)
 	if err != nil {
 		log.Printf(
-			"summarization worker llm merge failed session=%s record=%s: %v",
+			"summarization worker llm merge failed session=%s turns=%d: %v",
 			task.SessionID,
-			task.RecordID,
+			len(task.TurnIDs),
 			err,
 		)
-		if markErr := w.markRecordFailed(ctx, task.SessionID, task.RecordID); markErr != nil {
+		if markErr := w.markTurnsFailed(ctx, task.SessionID, task.TurnIDs); markErr != nil {
 			return fmt.Errorf("mark failed after llm error: %w", markErr)
 		}
 		return nil
 	}
-	return w.completeRecord(ctx, task.SessionID, task.RecordID, merged)
+	return w.completeTurns(ctx, task.SessionID, task.TurnIDs, merged)
 }
 
-func (w *SummarizationWorker) claimNextRecord(
+func (w *SummarizationWorker) claimNextTurns(
 	ctx context.Context,
 	sessionID uuid.UUID,
 ) (claimedSummarizationTask, bool, error) {
 	now := w.now().UTC()
 	staleBefore := now.Add(-w.config.StaleSummarizingAfter)
+	maxTurns := w.config.MaxTurnsPerMerge
+	if maxTurns <= 0 {
+		maxTurns = 1
+	}
+	maxChars := w.config.MaxCharsPerMerge
 
 	task := claimedSummarizationTask{}
 	err := w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -177,34 +183,52 @@ func (w *SummarizationWorker) claimNextRecord(
 			return fmt.Errorf("load session for claim: %w", err)
 		}
 
-		var head model.SessionRecord
+		var pending []model.SessionTurn
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).
-			Where("session_id = ? AND record_status <> ?", session.ID, model.SessionRecordStatusSummarized).
-			Order("record_index ASC").
-			Take(&head).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return nil
-			}
-			return fmt.Errorf("load session head record: %w", err)
+			Where("session_id = ? AND turn_status <> ?", session.ID, model.SessionTurnStatusSummarized).
+			Order("id ASC").
+			Limit(maxTurns).
+			Find(&pending).Error; err != nil {
+			return fmt.Errorf("load session head turns: %w", err)
 		}
-
-		if !canClaimRecord(head, staleBefore) {
+		if len(pending) == 0 {
 			return nil
 		}
 
-		if err := tx.Model(&model.SessionRecord{}).
-			Where("id = ?", head.ID).
+		claimable := make([]model.SessionTurn, 0, len(pending))
+		for _, turn := range pending {
+			if !canClaimTurn(turn, staleBefore) {
+				break
+			}
+			claimable = append(claimable, turn)
+		}
+		if len(claimable) == 0 {
+			return nil
+		}
+
+		turnIDs := make([]uuid.UUID, 0, len(claimable))
+		for _, turn := range claimable {
+			turnIDs = append(turnIDs, turn.ID)
+		}
+
+		if err := tx.Model(&model.SessionTurn{}).
+			Where("id IN ? AND session_id = ?", turnIDs, session.ID).
 			Updates(map[string]any{
-				"record_status":        model.SessionRecordStatusSummarizing,
+				"turn_status":          model.SessionTurnStatusSummarizing,
 				"summarize_started_at": now,
 			}).Error; err != nil {
-			return fmt.Errorf("mark record summarizing: %w", err)
+			return fmt.Errorf("mark turns summarizing: %w", err)
+		}
+
+		mergedJSONL := mergeTurnMessagesJSONL(claimable, maxChars)
+		if strings.TrimSpace(mergedJSONL) == "" {
+			mergedJSONL = "(empty)\n"
 		}
 
 		task = claimedSummarizationTask{
 			SessionID:        session.ID,
-			RecordID:         head.ID,
-			MessagesJSONL:    head.MessagesJSONL,
+			TurnIDs:          turnIDs,
+			MessagesJSONL:    mergedJSONL,
 			PreviousOverview: derefString(session.OverviewText),
 		}
 		return nil
@@ -213,18 +237,48 @@ func (w *SummarizationWorker) claimNextRecord(
 		return claimedSummarizationTask{}, false, err
 	}
 
-	if task.RecordID == uuid.Nil {
+	if len(task.TurnIDs) == 0 {
 		return claimedSummarizationTask{}, false, nil
 	}
 	return task, true, nil
 }
 
-func (w *SummarizationWorker) completeRecord(
+func mergeTurnMessagesJSONL(turns []model.SessionTurn, maxChars int) string {
+	var out strings.Builder
+	for _, turn := range turns {
+		chunk := strings.TrimSpace(turn.MessagesJSONL)
+		if chunk == "" {
+			continue
+		}
+		next := chunk
+		if out.Len() > 0 {
+			next = "\n" + next
+		}
+		if maxChars > 0 && out.Len()+len(next) > maxChars {
+			remaining := maxChars - out.Len()
+			if remaining <= 0 {
+				break
+			}
+			out.WriteString(next[:remaining])
+			break
+		}
+		out.WriteString(next)
+	}
+	if out.Len() > 0 && !strings.HasSuffix(out.String(), "\n") {
+		out.WriteString("\n")
+	}
+	return out.String()
+}
+
+func (w *SummarizationWorker) completeTurns(
 	ctx context.Context,
 	sessionID uuid.UUID,
-	recordID uuid.UUID,
+	turnIDs []uuid.UUID,
 	mergedOverview string,
 ) error {
+	if len(turnIDs) == 0 {
+		return nil
+	}
 	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		locked, err := trySessionAdvisoryXactLock(tx, sessionID)
 		if err != nil {
@@ -240,23 +294,26 @@ func (w *SummarizationWorker) completeRecord(
 			return fmt.Errorf("update session overview: %w", err)
 		}
 
-		if err := tx.Model(&model.SessionRecord{}).
-			Where("id = ? AND session_id = ?", recordID, sessionID).
+		if err := tx.Model(&model.SessionTurn{}).
+			Where("id IN ? AND session_id = ?", turnIDs, sessionID).
 			Updates(map[string]any{
-				"record_status":        model.SessionRecordStatusSummarized,
+				"turn_status":          model.SessionTurnStatusSummarized,
 				"summarize_started_at": nil,
 			}).Error; err != nil {
-			return fmt.Errorf("mark record summarized: %w", err)
+			return fmt.Errorf("mark turns summarized: %w", err)
 		}
 		return nil
 	})
 }
 
-func (w *SummarizationWorker) markRecordFailed(
+func (w *SummarizationWorker) markTurnsFailed(
 	ctx context.Context,
 	sessionID uuid.UUID,
-	recordID uuid.UUID,
+	turnIDs []uuid.UUID,
 ) error {
+	if len(turnIDs) == 0 {
+		return nil
+	}
 	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		locked, err := trySessionAdvisoryXactLock(tx, sessionID)
 		if err != nil {
@@ -266,29 +323,29 @@ func (w *SummarizationWorker) markRecordFailed(
 			return nil
 		}
 
-		if err := tx.Model(&model.SessionRecord{}).
-			Where("id = ? AND session_id = ?", recordID, sessionID).
+		if err := tx.Model(&model.SessionTurn{}).
+			Where("id IN ? AND session_id = ?", turnIDs, sessionID).
 			Updates(map[string]any{
-				"record_status":        model.SessionRecordStatusFailed,
+				"turn_status":          model.SessionTurnStatusFailed,
 				"summarize_started_at": nil,
 			}).Error; err != nil {
-			return fmt.Errorf("mark record failed: %w", err)
+			return fmt.Errorf("mark turns failed: %w", err)
 		}
 		return nil
 	})
 }
 
-func canClaimRecord(record model.SessionRecord, staleBefore time.Time) bool {
-	switch record.RecordStatus {
-	case model.SessionRecordStatusNotSummarized:
+func canClaimTurn(turn model.SessionTurn, staleBefore time.Time) bool {
+	switch turn.TurnStatus {
+	case model.SessionTurnStatusNotSummarized:
 		return true
-	case model.SessionRecordStatusSummarizing:
-		if record.SummarizeStartedAt == nil {
+	case model.SessionTurnStatusSummarizing:
+		if turn.SummarizeStartedAt == nil {
 			return true
 		}
-		return record.SummarizeStartedAt.Before(staleBefore)
-	case model.SessionRecordStatusFailed:
-		// Cost guard: failed records require manual intervention/reset.
+		return turn.SummarizeStartedAt.Before(staleBefore)
+	case model.SessionTurnStatusFailed:
+		// Cost guard: failed turns require manual intervention/reset.
 		return false
 	default:
 		return false

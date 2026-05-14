@@ -2,6 +2,8 @@ BEGIN;
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
+DROP TABLE IF EXISTS public.session_turns;
+DROP TABLE IF EXISTS public.session_rounds;
 DROP TABLE IF EXISTS public.session_records;
 DROP TABLE IF EXISTS public.sessions;
 DROP TABLE IF EXISTS public.memories;
@@ -19,20 +21,21 @@ CREATE TABLE public.sessions (
 
 CREATE INDEX sessions_scope_key_idx ON public.sessions (scope_key);
 
-CREATE TABLE public.session_records (
+CREATE TABLE public.session_turns (
   id                   uuid PRIMARY KEY,
   session_id           uuid NOT NULL REFERENCES public.sessions(id) ON DELETE CASCADE,
-  record_index         integer NOT NULL CHECK (record_index >= 0),
-  record_status        text NOT NULL DEFAULT 'not_summarized'
-                        CHECK (record_status IN ('not_summarized', 'summarizing', 'summarized', 'failed')),
+  turn_status          text NOT NULL DEFAULT 'not_summarized'
+                        CHECK (turn_status IN ('not_summarized', 'summarizing', 'summarized', 'failed')),
   summarize_started_at timestamptz,
   messages_jsonl       text NOT NULL,
   created_at           timestamptz NOT NULL DEFAULT now(),
-  updated_at           timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (session_id, record_index)
+  updated_at           timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX session_records_status_created_idx
-  ON public.session_records (record_status, session_id, created_at);
+CREATE INDEX session_turns_status_created_idx
+  ON public.session_turns (turn_status, session_id, created_at);
+
+CREATE INDEX session_turns_session_created_idx
+  ON public.session_turns (session_id, created_at);
 
 COMMIT;

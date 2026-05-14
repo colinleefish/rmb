@@ -4,12 +4,12 @@
 
 This document captures deferred embedding design decisions.
 Embeddings are out of implementation scope for phase 1.
-Phase 1 only implements `sessions` and `session_records`.
+Phase 1 only implements `sessions` and `session_turns`.
 
 ## Current Decision
 
-- Do not embed `session_records` in phase 1.
-- Keep `session_records` as raw JSONL source (`messages_jsonl`).
+- Do not embed `session_turns` in phase 1.
+- Keep `session_turns` as raw JSONL source (`messages_jsonl`).
 - Keep session-level rolling summary in `sessions.overview_text`.
 
 ## Candidate Embeddings Table (future)

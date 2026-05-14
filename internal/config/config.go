@@ -47,6 +47,8 @@ type SummarizerConfig struct {
 	PollInterval          time.Duration
 	BatchSize             int
 	StaleSummarizingAfter time.Duration
+	MaxTurnsPerMerge      int
+	MaxCharsPerMerge      int
 }
 
 type fileConfig struct {
@@ -70,6 +72,8 @@ type fileConfig struct {
 		PollInterval          string `toml:"poll_interval"`
 		BatchSize             *int   `toml:"batch_size"`
 		StaleSummarizingAfter string `toml:"stale_summarizing_after"`
+		MaxTurnsPerMerge      *int   `toml:"max_turns_per_merge"`
+		MaxCharsPerMerge      *int   `toml:"max_chars_per_merge"`
 	} `toml:"summarizer"`
 }
 
@@ -96,6 +100,8 @@ func Load() (Config, error) {
 			PollInterval:          15 * time.Second,
 			BatchSize:             8,
 			StaleSummarizingAfter: 3 * time.Minute,
+			MaxTurnsPerMerge:      4,
+			MaxCharsPerMerge:      16000,
 		},
 	}
 
@@ -245,6 +251,12 @@ func loadFileConfig(cfg *Config, path string, explicitPath bool) error {
 		}
 		cfg.Summarizer.StaleSummarizingAfter = v
 	}
+	if fc.Summarizer.MaxTurnsPerMerge != nil {
+		cfg.Summarizer.MaxTurnsPerMerge = *fc.Summarizer.MaxTurnsPerMerge
+	}
+	if fc.Summarizer.MaxCharsPerMerge != nil {
+		cfg.Summarizer.MaxCharsPerMerge = *fc.Summarizer.MaxCharsPerMerge
+	}
 
 	return nil
 }
@@ -319,6 +331,20 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("parse MYPAST_SUMMARIZER_STALE_AFTER: %w", err)
 		}
 		cfg.Summarizer.StaleSummarizingAfter = d
+	}
+	if v := os.Getenv("MYPAST_SUMMARIZER_MAX_TURNS_PER_MERGE"); v != "" {
+		parsed, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_SUMMARIZER_MAX_TURNS_PER_MERGE: %w", err)
+		}
+		cfg.Summarizer.MaxTurnsPerMerge = parsed
+	}
+	if v := os.Getenv("MYPAST_SUMMARIZER_MAX_CHARS_PER_MERGE"); v != "" {
+		parsed, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_SUMMARIZER_MAX_CHARS_PER_MERGE: %w", err)
+		}
+		cfg.Summarizer.MaxCharsPerMerge = parsed
 	}
 	return nil
 }

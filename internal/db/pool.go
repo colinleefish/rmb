@@ -36,7 +36,7 @@ func New(ctx context.Context, dsn string) (*gorm.DB, error) {
 }
 
 func AutoMigrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(&model.Session{}, &model.SessionRecord{}); err != nil {
+	if err := db.AutoMigrate(&model.Session{}, &model.SessionTurn{}); err != nil {
 		return fmt.Errorf("auto migrate: %w", err)
 	}
 	return nil

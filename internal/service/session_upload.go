@@ -93,7 +93,8 @@ func (s *SessionUploadService) Upload(ctx context.Context, input SessionUploadIn
 	scopeKey := normalizeNullableText(input.ScopeKey)
 
 	var session model.Session
-	var record model.SessionRecord
+	var turn model.SessionTurn
+	var archiveIdx int
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		lockedSession, err := s.findOrCreateSessionForUpdate(tx, sessionID, title, scopeKey)
 		if err != nil {
@@ -101,43 +102,48 @@ func (s *SessionUploadService) Upload(ctx context.Context, input SessionUploadIn
 		}
 		session = lockedSession
 
-		recordID, err := newUUIDv7()
-		if err != nil {
-			return err
-		}
-		nextIndex, err := s.nextRecordIndex(tx, session.ID)
+		turnID, err := newUUIDv7()
 		if err != nil {
 			return err
 		}
 
-		record = model.SessionRecord{
-			ID:            recordID,
+		turn = model.SessionTurn{
+			ID:            turnID,
 			SessionID:     session.ID,
-			RecordIndex:   nextIndex,
-			RecordStatus:  model.SessionRecordStatusNotSummarized,
+			TurnStatus:    model.SessionTurnStatusNotSummarized,
 			MessagesJSONL: archiveMessagesContent,
 		}
-		if err := tx.Create(&record).Error; err != nil {
-			return fmt.Errorf("insert session record: %w", err)
+		if err := tx.Create(&turn).Error; err != nil {
+			return fmt.Errorf("insert session turn: %w", err)
 		}
 
+		var turnCount int64
+		if err := tx.Model(&model.SessionTurn{}).
+			Where("session_id = ? AND id <= ?", session.ID, turn.ID).
+			Count(&turnCount).Error; err != nil {
+			return fmt.Errorf("count archive index: %w", err)
+		}
+		if turnCount <= 0 {
+			return fmt.Errorf("count archive index: unexpected non-positive turn count")
+		}
+		archiveIdx = int(turnCount) - 1
 		return nil
 	})
 	if err != nil {
 		return SessionUploadResult{}, err
 	}
 
-	archiveMessagesURI := buildArchiveMessagesURI(rootURI, record.RecordIndex)
+	archiveMessagesURI := buildArchiveMessagesURI(rootURI, archiveIdx)
 
 	return SessionUploadResult{
 		URI:        archiveMessagesURI,
 		ParentURI:  parentURIFromURI(archiveMessagesURI),
 		RootURI:    rootURI,
 		Category:   sessionCategory,
-		CreatedAt:  record.CreatedAt,
-		UpdatedAt:  record.UpdatedAt,
+		CreatedAt:  turn.CreatedAt,
+		UpdatedAt:  turn.UpdatedAt,
 		MessageCnt: len(input.Messages),
-		ArchiveIdx: record.RecordIndex,
+		ArchiveIdx: archiveIdx,
 	}, nil
 }
 
@@ -196,17 +202,6 @@ func (s *SessionUploadService) findOrCreateSessionForUpdate(
 	}
 
 	return session, nil
-}
-
-func (s *SessionUploadService) nextRecordIndex(tx *gorm.DB, sessionID uuid.UUID) (int, error) {
-	var nextIndex int
-	if err := tx.Model(&model.SessionRecord{}).
-		Where("session_id = ?", sessionID).
-		Select("COALESCE(MAX(record_index), -1) + 1").
-		Scan(&nextIndex).Error; err != nil {
-		return 0, fmt.Errorf("allocate record_index: %w", err)
-	}
-	return nextIndex, nil
 }
 
 func normalizeNullableText(raw string) *string {
