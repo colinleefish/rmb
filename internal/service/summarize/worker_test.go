@@ -1,10 +1,11 @@
-package service
+package summarize
 
 import (
 	"testing"
 	"time"
 
 	"github.com/colinleefish/mypast/internal/model"
+	"github.com/google/uuid"
 )
 
 func TestCanClaimTurn(t *testing.T) {
@@ -81,5 +82,23 @@ func TestMergeTurnMessagesJSONL(t *testing.T) {
 	limited := mergeTurnMessagesJSONL(turns, len("{\"id\":1}\n"))
 	if limited != "{\"id\":1}\n" {
 		t.Fatalf("unexpected limited jsonl: %q", limited)
+	}
+}
+
+func TestShouldLogFailedHeadTurnRateLimited(t *testing.T) {
+	w := &Worker{
+		failedHeadLogAt: make(map[uuid.UUID]time.Time),
+	}
+	sessionID := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+	base := time.Date(2026, time.May, 14, 12, 0, 0, 0, time.UTC)
+
+	if !w.shouldLogFailedHeadTurn(sessionID, base) {
+		t.Fatalf("first failed-head log should be emitted")
+	}
+	if w.shouldLogFailedHeadTurn(sessionID, base.Add(failedHeadLogInterval-time.Second)) {
+		t.Fatalf("failed-head log should be rate-limited")
+	}
+	if !w.shouldLogFailedHeadTurn(sessionID, base.Add(failedHeadLogInterval)) {
+		t.Fatalf("failed-head log should emit after interval")
 	}
 }

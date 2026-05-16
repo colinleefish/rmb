@@ -15,7 +15,9 @@ import (
 	"github.com/colinleefish/mypast/internal/http/router"
 	"github.com/colinleefish/mypast/internal/llm"
 	"github.com/colinleefish/mypast/internal/server"
-	"github.com/colinleefish/mypast/internal/service"
+	"github.com/colinleefish/mypast/internal/service/health"
+	"github.com/colinleefish/mypast/internal/service/session"
+	"github.com/colinleefish/mypast/internal/service/summarize"
 )
 
 func main() {
@@ -43,8 +45,8 @@ func main() {
 				return fmt.Errorf("db migrate: %w", err)
 			}
 
-			healthSvc := service.NewHealthService(database)
-			sessionUploadSvc := service.NewSessionUploadService(database)
+			healthSvc := health.NewService(database)
+			sessionUploadSvc := session.NewUploadService(database)
 
 			if cfg.Summarizer.Enabled {
 				llmClient, err := llm.NewOpenAICompatibleClient(llm.OpenAICompatibleConfig{
@@ -59,7 +61,7 @@ func main() {
 					return fmt.Errorf("init llm client: %w", err)
 				}
 
-				worker := service.NewSummarizationWorker(database, llmClient, cfg.Summarizer)
+				worker := summarize.NewWorker(database, llmClient, cfg.Summarizer)
 				go func() {
 					if err := worker.Run(ctx); err != nil {
 						log.Printf("summarization worker exited with error: %v", err)

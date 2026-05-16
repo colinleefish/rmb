@@ -1,4 +1,4 @@
-package service
+package health
 
 import (
 	"context"
@@ -7,24 +7,24 @@ import (
 	"gorm.io/gorm"
 )
 
-type HealthStatus struct {
+type Status struct {
 	Status   string `json:"status"`
 	DB       string `json:"db"`
 	PGVector string `json:"pgvector"`
 }
 
-type HealthService struct {
+type Service struct {
 	db *gorm.DB
 }
 
-func NewHealthService(db *gorm.DB) *HealthService {
-	return &HealthService{db: db}
+func NewService(db *gorm.DB) *Service {
+	return &Service{db: db}
 }
 
-func (s *HealthService) Check(ctx context.Context) (HealthStatus, error) {
+func (s *Service) Check(ctx context.Context) (Status, error) {
 	var pgVersion string
 	if err := s.db.WithContext(ctx).Raw(`SELECT version()`).Scan(&pgVersion).Error; err != nil {
-		return HealthStatus{}, fmt.Errorf("query postgres version: %w", err)
+		return Status{}, fmt.Errorf("query postgres version: %w", err)
 	}
 
 	var vectorVersion string
@@ -32,7 +32,7 @@ func (s *HealthService) Check(ctx context.Context) (HealthStatus, error) {
 		`SELECT extversion FROM pg_extension WHERE extname='vector'`,
 	).Scan(&vectorVersion).Error
 
-	return HealthStatus{
+	return Status{
 		Status:   "ok",
 		DB:       pgVersion,
 		PGVector: vectorVersion,

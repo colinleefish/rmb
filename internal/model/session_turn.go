@@ -18,7 +18,7 @@ type SessionTurn struct {
 	SessionID          uuid.UUID  `gorm:"type:uuid;not null;index:idx_session_turns_status_created,priority:2;index:idx_session_turns_session_created,priority:1"`
 	TurnStatus         string     `gorm:"type:text;not null;default:not_summarized;index:idx_session_turns_status_created,priority:1;check:turn_status IN ('not_summarized','summarizing','summarized','failed')"`
 	SummarizeStartedAt *time.Time `gorm:"type:timestamptz"`
-	MessagesJSONL      string     `gorm:"type:text;not null"`
+	MessagesJSONL      string     `gorm:"column:messages_jsonl;type:text;not null"`
 	CreatedAt          time.Time  `gorm:"type:timestamptz;not null;default:now()"`
 	UpdatedAt          time.Time  `gorm:"type:timestamptz;not null;default:now()"`
 }

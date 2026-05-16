@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colinleefish/mypast/internal/service"
+	"github.com/colinleefish/mypast/internal/service/session"
 	"github.com/gin-gonic/gin"
 )
 
 type SessionUploadHandler struct {
-	service *service.SessionUploadService
+	service *session.UploadService
 }
 
 type sessionUploadRequest struct {
@@ -26,7 +26,7 @@ type sessionMessageRequest struct {
 	Content string `json:"content"`
 }
 
-func NewSessionUploadHandler(svc *service.SessionUploadService) *SessionUploadHandler {
+func NewSessionUploadHandler(svc *session.UploadService) *SessionUploadHandler {
 	return &SessionUploadHandler{service: svc}
 }
 
@@ -55,15 +55,15 @@ func (h *SessionUploadHandler) Upload(c *gin.Context) {
 		startedAt = &ts
 	}
 
-	messages := make([]service.SessionMessage, 0, len(req.Messages))
+	messages := make([]session.Message, 0, len(req.Messages))
 	for _, msg := range req.Messages {
-		messages = append(messages, service.SessionMessage{
+		messages = append(messages, session.Message{
 			Role:    msg.Role,
 			Content: msg.Content,
 		})
 	}
 
-	result, err := h.service.Upload(c.Request.Context(), service.SessionUploadInput{
+	result, err := h.service.Upload(c.Request.Context(), session.UploadInput{
 		SessionID: sessionID,
 		ScopeKey:  req.ScopeKey,
 		Title:     req.Title,
@@ -71,7 +71,7 @@ func (h *SessionUploadHandler) Upload(c *gin.Context) {
 		Messages:  messages,
 	})
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidSessionUploadInput) {
+		if errors.Is(err, session.ErrInvalidUploadInput) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}

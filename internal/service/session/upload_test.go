@@ -1,4 +1,4 @@
-package service
+package session
 
 import (
 	"encoding/json"
@@ -44,7 +44,7 @@ func TestValidateSessionID(t *testing.T) {
 func TestBuildMessagesJSONL(t *testing.T) {
 	uploaded := time.Date(2026, time.May, 9, 10, 0, 0, 0, time.UTC)
 
-	raw, err := buildMessagesJSONL([]SessionMessage{
+	raw, err := buildMessagesJSONL([]Message{
 		{Role: "user", Content: "it fails on submit"},
 		{Role: "assistant", Content: ""},
 	}, uploaded)

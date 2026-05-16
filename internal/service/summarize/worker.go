@@ -1,4 +1,4 @@
-package service
+package summarize
 
 import (
 	"context"
@@ -18,34 +18,40 @@ type OverviewMerger interface {
 	MergeOverview(ctx context.Context, previousOverview string, messagesJSONL string) (string, error)
 }
 
-type SummarizationWorker struct {
+type Worker struct {
 	db     *gorm.DB
 	llm    OverviewMerger
 	config config.SummarizerConfig
 	now    func() time.Time
+
+	failedHeadLogAt map[uuid.UUID]time.Time
 }
 
-type claimedSummarizationTask struct {
+type claimedTask struct {
 	SessionID        uuid.UUID
 	TurnIDs          []uuid.UUID
 	PreviousOverview string
 	MessagesJSONL    string
 }
 
-func NewSummarizationWorker(
+func NewWorker(
 	db *gorm.DB,
 	llmClient OverviewMerger,
 	cfg config.SummarizerConfig,
-) *SummarizationWorker {
-	return &SummarizationWorker{
+) *Worker {
+	return &Worker{
 		db:     db,
 		llm:    llmClient,
 		config: cfg,
 		now:    time.Now,
+
+		failedHeadLogAt: make(map[uuid.UUID]time.Time),
 	}
 }
 
-func (w *SummarizationWorker) Run(ctx context.Context) error {
+const failedHeadLogInterval = 5 * time.Minute
+
+func (w *Worker) Run(ctx context.Context) error {
 	if !w.config.Enabled {
 		log.Printf("summarization worker disabled")
 		return nil
@@ -81,7 +87,7 @@ func (w *SummarizationWorker) Run(ctx context.Context) error {
 	}
 }
 
-func (w *SummarizationWorker) runOneCycle(ctx context.Context) {
+func (w *Worker) runOneCycle(ctx context.Context) {
 	sessionIDs, err := w.selectCandidateSessions(ctx)
 	if err != nil {
 		log.Printf("summarization worker select candidates failed: %v", err)
@@ -94,7 +100,7 @@ func (w *SummarizationWorker) runOneCycle(ctx context.Context) {
 	}
 }
 
-func (w *SummarizationWorker) selectCandidateSessions(ctx context.Context) ([]uuid.UUID, error) {
+func (w *Worker) selectCandidateSessions(ctx context.Context) ([]uuid.UUID, error) {
 	limit := w.config.BatchSize
 	if limit <= 0 {
 		limit = 8
@@ -126,7 +132,7 @@ func (w *SummarizationWorker) selectCandidateSessions(ctx context.Context) ([]uu
 	return out, nil
 }
 
-func (w *SummarizationWorker) processSession(ctx context.Context, sessionID uuid.UUID) error {
+func (w *Worker) processSession(ctx context.Context, sessionID uuid.UUID) error {
 	task, ok, err := w.claimNextTurns(ctx, sessionID)
 	if err != nil {
 		return err
@@ -146,15 +152,20 @@ func (w *SummarizationWorker) processSession(ctx context.Context, sessionID uuid
 		if markErr := w.markTurnsFailed(ctx, task.SessionID, task.TurnIDs); markErr != nil {
 			return fmt.Errorf("mark failed after llm error: %w", markErr)
 		}
+		log.Printf(
+			"summarization worker marked turns failed session=%s turns=%d",
+			task.SessionID,
+			len(task.TurnIDs),
+		)
 		return nil
 	}
 	return w.completeTurns(ctx, task.SessionID, task.TurnIDs, merged)
 }
 
-func (w *SummarizationWorker) claimNextTurns(
+func (w *Worker) claimNextTurns(
 	ctx context.Context,
 	sessionID uuid.UUID,
-) (claimedSummarizationTask, bool, error) {
+) (claimedTask, bool, error) {
 	now := w.now().UTC()
 	staleBefore := now.Add(-w.config.StaleSummarizingAfter)
 	maxTurns := w.config.MaxTurnsPerMerge
@@ -163,7 +174,7 @@ func (w *SummarizationWorker) claimNextTurns(
 	}
 	maxChars := w.config.MaxCharsPerMerge
 
-	task := claimedSummarizationTask{}
+	task := claimedTask{}
 	err := w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		locked, err := trySessionAdvisoryXactLock(tx, sessionID)
 		if err != nil {
@@ -196,8 +207,16 @@ func (w *SummarizationWorker) claimNextTurns(
 		}
 
 		claimable := make([]model.SessionTurn, 0, len(pending))
-		for _, turn := range pending {
+		for idx, turn := range pending {
 			if !canClaimTurn(turn, staleBefore) {
+				if idx == 0 && turn.TurnStatus == model.SessionTurnStatusFailed &&
+					w.shouldLogFailedHeadTurn(session.ID, now) {
+					log.Printf(
+						"summarization worker session blocked by failed head turn session=%s turn=%s",
+						session.ID,
+						turn.ID,
+					)
+				}
 				break
 			}
 			claimable = append(claimable, turn)
@@ -205,6 +224,7 @@ func (w *SummarizationWorker) claimNextTurns(
 		if len(claimable) == 0 {
 			return nil
 		}
+		delete(w.failedHeadLogAt, session.ID)
 
 		turnIDs := make([]uuid.UUID, 0, len(claimable))
 		for _, turn := range claimable {
@@ -225,7 +245,7 @@ func (w *SummarizationWorker) claimNextTurns(
 			mergedJSONL = "(empty)\n"
 		}
 
-		task = claimedSummarizationTask{
+		task = claimedTask{
 			SessionID:        session.ID,
 			TurnIDs:          turnIDs,
 			MessagesJSONL:    mergedJSONL,
@@ -234,11 +254,11 @@ func (w *SummarizationWorker) claimNextTurns(
 		return nil
 	})
 	if err != nil {
-		return claimedSummarizationTask{}, false, err
+		return claimedTask{}, false, err
 	}
 
 	if len(task.TurnIDs) == 0 {
-		return claimedSummarizationTask{}, false, nil
+		return claimedTask{}, false, nil
 	}
 	return task, true, nil
 }
@@ -270,7 +290,7 @@ func mergeTurnMessagesJSONL(turns []model.SessionTurn, maxChars int) string {
 	return out.String()
 }
 
-func (w *SummarizationWorker) completeTurns(
+func (w *Worker) completeTurns(
 	ctx context.Context,
 	sessionID uuid.UUID,
 	turnIDs []uuid.UUID,
@@ -306,7 +326,7 @@ func (w *SummarizationWorker) completeTurns(
 	})
 }
 
-func (w *SummarizationWorker) markTurnsFailed(
+func (w *Worker) markTurnsFailed(
 	ctx context.Context,
 	sessionID uuid.UUID,
 	turnIDs []uuid.UUID,
@@ -368,4 +388,16 @@ func derefString(v *string) string {
 		return ""
 	}
 	return *v
+}
+
+func (w *Worker) shouldLogFailedHeadTurn(sessionID uuid.UUID, now time.Time) bool {
+	if w.failedHeadLogAt == nil {
+		w.failedHeadLogAt = make(map[uuid.UUID]time.Time)
+	}
+	last, ok := w.failedHeadLogAt[sessionID]
+	if ok && now.Sub(last) < failedHeadLogInterval {
+		return false
+	}
+	w.failedHeadLogAt[sessionID] = now
+	return true
 }

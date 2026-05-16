@@ -1,4 +1,4 @@
-package service
+package session
 
 import (
 	"context"
@@ -19,26 +19,26 @@ import (
 const sessionCategory = "sessions"
 
 var (
-	ErrInvalidSessionUploadInput = errors.New("invalid session upload input")
-	uuidPattern                  = regexp.MustCompile(
+	ErrInvalidUploadInput = errors.New("invalid session upload input")
+	uuidPattern           = regexp.MustCompile(
 		`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`,
 	)
 )
 
-type SessionMessage struct {
+type Message struct {
 	Role    string
 	Content string
 }
 
-type SessionUploadInput struct {
+type UploadInput struct {
 	SessionID string
 	ScopeKey  string
 	Title     string
 	StartedAt *time.Time
-	Messages  []SessionMessage
+	Messages  []Message
 }
 
-type SessionUploadResult struct {
+type UploadResult struct {
 	URI        string
 	ParentURI  string
 	RootURI    string
@@ -49,32 +49,32 @@ type SessionUploadResult struct {
 	ArchiveIdx int
 }
 
-type SessionUploadService struct {
+type UploadService struct {
 	db  *gorm.DB
 	now func() time.Time
 }
 
-func NewSessionUploadService(db *gorm.DB) *SessionUploadService {
-	return &SessionUploadService{
+func NewUploadService(db *gorm.DB) *UploadService {
+	return &UploadService{
 		db:  db,
 		now: time.Now,
 	}
 }
 
-func (s *SessionUploadService) Upload(ctx context.Context, input SessionUploadInput) (SessionUploadResult, error) {
+func (s *UploadService) Upload(ctx context.Context, input UploadInput) (UploadResult, error) {
 	sessionID, err := validateSessionID(input.SessionID)
 	if err != nil {
-		return SessionUploadResult{}, err
+		return UploadResult{}, err
 	}
 	if len(input.Messages) == 0 {
-		return SessionUploadResult{}, fmt.Errorf("%w: messages must not be empty", ErrInvalidSessionUploadInput)
+		return UploadResult{}, fmt.Errorf("%w: messages must not be empty", ErrInvalidUploadInput)
 	}
 
 	for i, msg := range input.Messages {
 		if strings.TrimSpace(msg.Role) == "" {
-			return SessionUploadResult{}, fmt.Errorf(
+			return UploadResult{}, fmt.Errorf(
 				"%w: messages[%d].role is required",
-				ErrInvalidSessionUploadInput,
+				ErrInvalidUploadInput,
 				i,
 			)
 		}
@@ -86,7 +86,7 @@ func (s *SessionUploadService) Upload(ctx context.Context, input SessionUploadIn
 	input.SessionID = sessionID
 	archiveMessagesContent, err := buildMessagesJSONL(input.Messages, now)
 	if err != nil {
-		return SessionUploadResult{}, err
+		return UploadResult{}, err
 	}
 
 	title := normalizeNullableText(input.Title)
@@ -130,12 +130,12 @@ func (s *SessionUploadService) Upload(ctx context.Context, input SessionUploadIn
 		return nil
 	})
 	if err != nil {
-		return SessionUploadResult{}, err
+		return UploadResult{}, err
 	}
 
 	archiveMessagesURI := buildArchiveMessagesURI(rootURI, archiveIdx)
 
-	return SessionUploadResult{
+	return UploadResult{
 		URI:        archiveMessagesURI,
 		ParentURI:  parentURIFromURI(archiveMessagesURI),
 		RootURI:    rootURI,
@@ -147,7 +147,7 @@ func (s *SessionUploadService) Upload(ctx context.Context, input SessionUploadIn
 	}, nil
 }
 
-func (s *SessionUploadService) findOrCreateSessionForUpdate(
+func (s *UploadService) findOrCreateSessionForUpdate(
 	tx *gorm.DB,
 	sessionKey string,
 	title *string,
@@ -252,7 +252,7 @@ type sessionMessageLine struct {
 	CreatedAt string `json:"created_at"`
 }
 
-func buildMessagesJSONL(messages []SessionMessage, now time.Time) (string, error) {
+func buildMessagesJSONL(messages []Message, now time.Time) (string, error) {
 	lines := make([]string, 0, len(messages))
 	for i, msg := range messages {
 		record := sessionMessageLine{
@@ -273,10 +273,10 @@ func buildMessagesJSONL(messages []SessionMessage, now time.Time) (string, error
 func validateSessionID(raw string) (string, error) {
 	sessionID := strings.TrimSpace(raw)
 	if sessionID == "" {
-		return "", fmt.Errorf("%w: session_id is required", ErrInvalidSessionUploadInput)
+		return "", fmt.Errorf("%w: session_id is required", ErrInvalidUploadInput)
 	}
 	if !uuidPattern.MatchString(sessionID) {
-		return "", fmt.Errorf("%w: session_id must be a valid UUID", ErrInvalidSessionUploadInput)
+		return "", fmt.Errorf("%w: session_id must be a valid UUID", ErrInvalidUploadInput)
 	}
 	return strings.ToLower(sessionID), nil
 }

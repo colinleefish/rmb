@@ -3,16 +3,16 @@ package handler
 import (
 	"net/http"
 
-	"github.com/colinleefish/mypast/internal/service"
+	"github.com/colinleefish/mypast/internal/service/health"
 	"github.com/gin-gonic/gin"
 )
 
 type HealthHandler struct {
-	health *service.HealthService
+	health *health.Service
 }
 
-func NewHealthHandler(health *service.HealthService) *HealthHandler {
-	return &HealthHandler{health: health}
+func NewHealthHandler(svc *health.Service) *HealthHandler {
+	return &HealthHandler{health: svc}
 }
 
 func (h *HealthHandler) Get(c *gin.Context) {
