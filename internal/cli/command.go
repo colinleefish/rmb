@@ -48,9 +48,9 @@ func (r Runner) runHookSubmit(ctx context.Context, args []string) error {
 		stdout = os.Stdout
 	}
 
-	var payload []byte
-	if buf, err := io.ReadAll(stdin); err == nil {
-		payload = buf
+	payload, err := io.ReadAll(stdin)
+	if err != nil {
+		return fmt.Errorf("read hook-submit stdin: %w", err)
 	}
 
 	return hook.Submit(ctx, hook.SubmitInput{

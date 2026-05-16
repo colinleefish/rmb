@@ -48,6 +48,10 @@ func AutoMigrate(db *gorm.DB) error {
 	return nil
 }
 
+// renameLegacySessionTurnMessagesColumn migrates from earlier dev-time column
+// names (messages_json_l, message_json_l) to the canonical messages_jsonl.
+// One-shot; safe to remove once all environments have been migrated.
+// TODO(cleanup): drop after all envs are confirmed on messages_jsonl.
 func renameLegacySessionTurnMessagesColumn(db *gorm.DB) error {
 	migrator := db.Migrator()
 	if !migrator.HasTable(&model.SessionTurn{}) {

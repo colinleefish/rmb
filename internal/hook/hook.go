@@ -1,7 +1,7 @@
 // Package hook is the adapter layer that translates agent transcript hook
 // payloads (Cursor afterAgentResponse, Claude Code Stop, etc.) into mypast
 // session upload API calls. Source-specific payload parsing lives in
-// cursor.go and claude.go; shared event detection lives in detect.go.
+// cursor.go (Cursor) and claude.go (Claude Code).
 package hook
 
 import (
@@ -40,11 +40,10 @@ const defaultMyPastURL = "http://127.0.0.1:8080"
 // It routes to source-specific parsing based on --source, then POSTs to the
 // mypast upload API.
 //
-// Routing logic:
-//   - source=cursor → must pass isCursorPayload; use cursor extraction
-//   - source=cc     → must NOT pass isCursorPayload (Cursor-fired cc hook is a
-//     no-op); must pass isClaudePayload; use claude extraction
-//   - unknown       → falls back to event-name heuristics + cursor extraction
+// Routing:
+//   - source=cursor    → must pass isCursorPayload; use cursor extraction
+//   - source=cc|claude → must pass isClaudePayload; use claude extraction
+//   - anything else    → error (CLI enforces non-empty --source)
 func Submit(ctx context.Context, in SubmitInput) error {
 	out := in.OutputSink
 	if out == nil {
@@ -53,7 +52,7 @@ func Submit(ctx context.Context, in SubmitInput) error {
 
 	source := strings.ToLower(strings.TrimSpace(in.Source))
 	if source == "" {
-		source = "unknown"
+		return fmt.Errorf("hook-submit: source is required")
 	}
 
 	targetURL := resolveMyPastURL()
@@ -90,7 +89,7 @@ func Submit(ctx context.Context, in SubmitInput) error {
 		sessionID, messages, parseReason, err = buildMessagesFromClaudePayload(in.StdinJSON)
 
 	default:
-		return logf("skip", "unknown source "+source)
+		return fmt.Errorf("hook-submit: unknown source %q", source)
 	}
 
 	if err != nil {

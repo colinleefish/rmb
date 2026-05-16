@@ -149,18 +149,29 @@ func TestIsClaudePayload(t *testing.T) {
 	}
 }
 
-func TestBuildMessagesFromClaudePayload(t *testing.T) {
-	// CC transcript schema: type at top-level, message.role nested, content
-	// can be a string OR a list of typed blocks. Lots of non-conversation
-	// entries are mixed in and must be skipped.
+func TestBuildMessagesFromClaudePayload_RaceFreePairing(t *testing.T) {
+	// Simulates the real CC race: at hook fire time, the transcript has the
+	// CURRENT user prompt (on disk) but the CURRENT assistant text has NOT
+	// been flushed yet. The previous turn's assistant IS on disk. The
+	// transcript also contains tool_result and slash-command user records
+	// that must be skipped.
 	transcriptPath := filepath.Join(t.TempDir(), "session.jsonl")
 	rawTranscript := strings.Join([]string{
 		`{"type":"permission-mode","sessionId":"x"}`,
 		`{"type":"file-history-snapshot","sessionId":"x"}`,
+		// Previous turn — fully recorded
+		`{"type":"user","message":{"role":"user","content":"first question"}}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"first reply"}]}}`,
+		// Tool round: assistant runs a tool, gets a tool_result back as
+		// type=user — must NOT be picked as the user prompt
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Bash","input":{}}]}}`,
+		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","content":"file1\nfile2"}]}}`,
+		// Slash-command artifact — must NOT be picked
+		`{"type":"user","message":{"role":"user","content":"<command-name>/help</command-name>"}}`,
+		// CURRENT user prompt — this is what we want
 		`{"type":"user","message":{"role":"user","content":"what time"}}`,
-		`{"type":"system"}`,
-		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","text":"hmm"},{"type":"text","text":"it's noon"}]}}`,
-		`{"type":"attachment"}`,
+		// NOTE: the current assistant reply ("it's noon") is NOT yet in the
+		// transcript — that's the race we're working around.
 	}, "\n") + "\n"
 	if err := os.WriteFile(transcriptPath, []byte(rawTranscript), 0o600); err != nil {
 		t.Fatalf("write transcript: %v", err)
@@ -183,14 +194,67 @@ func TestBuildMessagesFromClaudePayload(t *testing.T) {
 	if sid != "dad2a60d-c2f5-4682-a008-c0ee4f415338" {
 		t.Fatalf("session_id = %q", sid)
 	}
-	if reason != "latest user/assistant from transcript" {
+	if reason != "user from transcript + assistant from payload" {
 		t.Fatalf("reason = %q", reason)
 	}
-	if len(msgs) != 2 || msgs[0].Role != "user" || msgs[0].Content != "what time" {
-		t.Fatalf("msgs = %v", msgs)
+	if len(msgs) != 2 {
+		t.Fatalf("len = %d, want 2; msgs = %v", len(msgs), msgs)
+	}
+	if msgs[0].Role != "user" || msgs[0].Content != "what time" {
+		t.Fatalf("msgs[0] = %#v, want user/what time", msgs[0])
 	}
 	if msgs[1].Role != "assistant" || msgs[1].Content != "it's noon" {
-		t.Fatalf("msgs[1] = %v", msgs[1])
+		t.Fatalf("msgs[1] = %#v, want assistant/it's noon", msgs[1])
+	}
+}
+
+func TestBuildMessagesFromClaudePayload_AssistantOnlyWhenNoUser(t *testing.T) {
+	// Brand-new session: transcript has metadata but no real user prompt yet.
+	transcriptPath := filepath.Join(t.TempDir(), "session.jsonl")
+	rawTranscript := strings.Join([]string{
+		`{"type":"permission-mode","sessionId":"x"}`,
+		`{"type":"file-history-snapshot","sessionId":"x"}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(transcriptPath, []byte(rawTranscript), 0o600); err != nil {
+		t.Fatalf("write transcript: %v", err)
+	}
+
+	payload := map[string]any{
+		"session_id":             "abc",
+		"transcript_path":        transcriptPath,
+		"cwd":                    "/home/user",
+		"last_assistant_message": "hello",
+		"stop_hook_active":       false,
+	}
+	raw, _ := json.Marshal(payload)
+
+	_, msgs, reason, err := buildMessagesFromClaudePayload(raw)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if reason != "last_assistant_message only (no user found)" {
+		t.Fatalf("reason = %q", reason)
+	}
+	if len(msgs) != 1 || msgs[0].Role != "assistant" || msgs[0].Content != "hello" {
+		t.Fatalf("msgs = %v", msgs)
+	}
+}
+
+func TestBuildMessagesFromClaudePayload_EmptyAssistantErrors(t *testing.T) {
+	payload := map[string]any{
+		"session_id":             "abc",
+		"transcript_path":        "/nonexistent.jsonl",
+		"cwd":                    "/home/user",
+		"last_assistant_message": "",
+	}
+	raw, _ := json.Marshal(payload)
+
+	_, _, _, err := buildMessagesFromClaudePayload(raw)
+	if err == nil {
+		t.Fatal("expected error when last_assistant_message empty")
+	}
+	if !strings.Contains(err.Error(), "last_assistant_message is empty") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -263,10 +327,11 @@ func TestSubmit_CC_SkipsNonClaudePayload(t *testing.T) {
 }
 
 func TestSubmit_CC_UploadsWhenFiredByClaudeCode(t *testing.T) {
+	// Mimics the real CC race: user prompt on disk, but the new assistant
+	// reply isn't flushed yet — it only arrives via last_assistant_message.
 	transcriptPath := filepath.Join(t.TempDir(), "session.jsonl")
 	rawTranscript := strings.Join([]string{
 		`{"type":"user","message":{"role":"user","content":"ping"}}`,
-		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"pong"}]}}`,
 	}, "\n") + "\n"
 	if err := os.WriteFile(transcriptPath, []byte(rawTranscript), 0o600); err != nil {
 		t.Fatalf("write transcript: %v", err)
