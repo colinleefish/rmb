@@ -184,6 +184,7 @@ func (s *Service) ListScenes(ctx context.Context) ([]model.Scene, error) {
 func (s *Service) ListMemories(ctx context.Context) ([]model.Memory, error) {
 	var rows []model.Memory
 	if err := s.db.WithContext(ctx).
+		Where("superseded_at IS NULL").
 		Order("updated_at desc").
 		Limit(defaultListLimit).
 		Find(&rows).Error; err != nil {

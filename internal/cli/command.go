@@ -10,7 +10,9 @@ import (
 	"github.com/colinleefish/mypast/internal/config"
 	"github.com/colinleefish/mypast/internal/db"
 	"github.com/colinleefish/mypast/internal/hook"
+	"github.com/colinleefish/mypast/internal/service/extract"
 	"github.com/colinleefish/mypast/internal/service/inspect"
+	"github.com/google/uuid"
 )
 
 type ServeFunc func(context.Context) error
@@ -32,6 +34,8 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 		return r.runHookSubmit(ctx, args[1:])
 	case "cat", "tree", "meta":
 		return r.runInspect(ctx, args[0], args[1:])
+	case "t1":
+		return r.runT1(ctx, args[1:])
 	case "store", "read", "list", "delete", "search", "load-context":
 		return fmt.Errorf("%q command is planned but not implemented yet", args[0])
 	default:
@@ -64,6 +68,62 @@ func (r Runner) runHookSubmit(ctx context.Context, args []string) error {
 		StdinJSON:  payload,
 		OutputSink: stdout,
 	})
+}
+
+func (r Runner) runT1(ctx context.Context, args []string) error {
+	if len(args) == 0 || args[0] != "backfill" {
+		return fmt.Errorf("usage: mypast t1 backfill [--session=<uuid>]")
+	}
+
+	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
+
+	database, err := db.New(ctx, r.Config.DB.URL)
+	if err != nil {
+		return fmt.Errorf("db connect: %w", err)
+	}
+	sqlDB, err := database.DB()
+	if err != nil {
+		return fmt.Errorf("get db handle: %w", err)
+	}
+	defer sqlDB.Close()
+
+	if err := db.Migrate(ctx, database); err != nil {
+		return fmt.Errorf("db migrate: %w", err)
+	}
+
+	if sessionKey != "" {
+		if err := extract.EnqueueSessionByKey(ctx, database, sessionKey); err != nil {
+			return err
+		}
+		fmt.Fprintln(r.stdout(), "enqueued t1 for session", sessionKey)
+		return nil
+	}
+
+	type row struct {
+		SessionID uuid.UUID
+	}
+	var rows []row
+	if err := database.WithContext(ctx).Raw(`
+		SELECT DISTINCT session_id
+		FROM session_turns
+		WHERE t1_extracted_at IS NULL
+	`).Scan(&rows).Error; err != nil {
+		return fmt.Errorf("list sessions with pending turns: %w", err)
+	}
+	for _, row := range rows {
+		if err := extract.EnqueueSession(ctx, database, row.SessionID); err != nil {
+			return err
+		}
+	}
+	fmt.Fprintf(r.stdout(), "enqueued t1 for %d session(s)\n", len(rows))
+	return nil
+}
+
+func (r Runner) stdout() io.Writer {
+	if r.Stdout != nil {
+		return r.Stdout
+	}
+	return os.Stdout
 }
 
 func (r Runner) runInspect(ctx context.Context, command string, args []string) error {
@@ -124,6 +184,8 @@ Usage:
   mypast cat <uri>            Print body / messages_jsonl for a URI
   mypast tree <uri-prefix>    List child URIs under a prefix
   mypast meta <uri>           Print row metadata as JSON
+  mypast t1 backfill          Enqueue T1 extraction for sessions with unprocessed turns
+                              Optional: --session=<uuid>
   mypast store <uri>          Planned
   mypast read <uri>           Planned
   mypast list <prefix>        Planned

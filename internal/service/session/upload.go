@@ -48,17 +48,33 @@ type UploadResult struct {
 	UpdatedAt  time.Time
 	MessageCnt int
 	ArchiveIdx int
+	TaskID     *uuid.UUID
+}
+
+// ValidateSessionKey normalizes and validates an agent session UUID string.
+func ValidateSessionKey(raw string) (string, error) {
+	return validateSessionID(raw)
 }
 
 type UploadService struct {
-	db  *gorm.DB
-	now func() time.Time
+	db               *gorm.DB
+	now              func() time.Time
+	pipelineOnUpload bool
 }
 
 func NewUploadService(db *gorm.DB) *UploadService {
 	return &UploadService{
-		db:  db,
-		now: time.Now,
+		db:               db,
+		now:              time.Now,
+		pipelineOnUpload: true,
+	}
+}
+
+func NewUploadServiceWithOptions(db *gorm.DB, pipelineOnUpload bool) *UploadService {
+	return &UploadService{
+		db:               db,
+		now:              time.Now,
+		pipelineOnUpload: pipelineOnUpload,
 	}
 }
 
@@ -96,6 +112,7 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (UploadRe
 	var session model.Session
 	var turn model.SessionTurn
 	var archiveIdx int
+	var taskID *uuid.UUID
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		lockedSession, err := s.findOrCreateSessionForUpdate(tx, sessionID, title, scopeKey)
 		if err != nil {
@@ -128,6 +145,26 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (UploadRe
 			return fmt.Errorf("count archive index: unexpected non-positive turn count")
 		}
 		archiveIdx = int(turnCount) - 1
+
+		if s.pipelineOnUpload {
+			if err := s.markPipelinePending(tx, session.ID); err != nil {
+				return err
+			}
+			id, err := newUUIDv7()
+			if err != nil {
+				return err
+			}
+			task := model.Task{
+				ID:        id,
+				Kind:      model.TaskKindT1,
+				Status:    model.TaskStatusPending,
+				SessionID: &session.ID,
+			}
+			if err := tx.Create(&task).Error; err != nil {
+				return fmt.Errorf("insert t1 task: %w", err)
+			}
+			taskID = &id
+		}
 		return nil
 	})
 	if err != nil {
@@ -145,7 +182,32 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (UploadRe
 		UpdatedAt:  turn.UpdatedAt,
 		MessageCnt: len(input.Messages),
 		ArchiveIdx: archiveIdx,
+		TaskID:     taskID,
 	}, nil
+}
+
+func (s *UploadService) markPipelinePending(tx *gorm.DB, sessionID uuid.UUID) error {
+	var ps model.PipelineState
+	err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where("session_id = ?", sessionID).
+		Take(&ps).Error
+	if err == gorm.ErrRecordNotFound {
+		ps = model.PipelineState{
+			SessionID:       sessionID,
+			T1Status:        model.PipelineStatusPending,
+			T2Status:        model.PipelineStatusIdle,
+			T3Status:        model.PipelineStatusIdle,
+			WarmupThreshold: 2,
+		}
+		return tx.Create(&ps).Error
+	}
+	if err != nil {
+		return fmt.Errorf("load pipeline_state: %w", err)
+	}
+	return tx.Model(&ps).Updates(map[string]any{
+		"t1_status":               model.PipelineStatusPending,
+		"t1_turns_since_advanced": gorm.Expr("t1_turns_since_advanced + 1"),
+	}).Error
 }
 
 func (s *UploadService) findOrCreateSessionForUpdate(

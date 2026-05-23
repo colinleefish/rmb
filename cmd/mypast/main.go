@@ -17,6 +17,7 @@ import (
 	"github.com/colinleefish/mypast/internal/server"
 	"github.com/colinleefish/mypast/internal/service/browse"
 	"github.com/colinleefish/mypast/internal/service/health"
+	"github.com/colinleefish/mypast/internal/service/extract"
 	"github.com/colinleefish/mypast/internal/service/session"
 	"github.com/colinleefish/mypast/internal/service/summarize"
 )
@@ -50,7 +51,7 @@ func main() {
 			healthSvc := health.NewService(database)
 			sessionUploadSvc := session.NewUploadService(database)
 
-			if cfg.Summarizer.Enabled {
+			if cfg.Extraction.Enabled || cfg.Summarizer.Enabled {
 				llmClient, err := llm.NewOpenAICompatibleClient(llm.OpenAICompatibleConfig{
 					Provider:   cfg.LLM.Provider,
 					APIBase:    cfg.LLM.APIBase,
@@ -63,12 +64,23 @@ func main() {
 					return fmt.Errorf("init llm client: %w", err)
 				}
 
-				worker := summarize.NewWorker(database, llmClient, cfg.Summarizer)
-				go func() {
-					if err := worker.Run(ctx); err != nil {
-						log.Printf("summarization worker exited with error: %v", err)
-					}
-				}()
+				if cfg.Extraction.Enabled {
+					t1Worker := extract.NewWorker(database, llmClient, cfg.Extraction)
+					go func() {
+						if err := t1Worker.Run(ctx); err != nil {
+							log.Printf("t1 extraction worker exited with error: %v", err)
+						}
+					}()
+				}
+
+				if cfg.Summarizer.Enabled {
+					worker := summarize.NewWorker(database, llmClient, cfg.Summarizer)
+					go func() {
+						if err := worker.Run(ctx); err != nil {
+							log.Printf("summarization worker exited with error: %v", err)
+						}
+					}()
+				}
 			}
 
 			browseSvc := browse.NewService(database)

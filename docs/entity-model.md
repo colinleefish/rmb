@@ -143,10 +143,13 @@ T3 routing is mechanical: roll up atoms/scenes **by category** into the matching
 | Piece | Status |
 |-------|--------|
 | `sessions`, `session_turns` | **Live** — hooks + upload API |
-| `atoms`, `scenes`, `memories` | **Schema only** — empty until T1/T2/T3 workers |
-| `pipeline_state`, `tasks` | **Schema only** |
+| `atoms` | **Live** — T1 worker fills rows |
+| `scenes` | **Schema only** — Phase C |
+| `memories` | **Schema ready** — versioned (`00003`); empty until T3 worker |
+| `pipeline_state`, `tasks` | **Live** — wired on upload; T1 tasks |
 | Observer UI | **Live** — `/ui/` lists all tables |
-| T1/T2/T3 workers | **Not built** |
+| T1 worker | **Live** — see [`plan.md`](./plan.md) |
+| T2/T3 workers | **Not built** |
 
 ## See also
 

@@ -234,7 +234,7 @@ func (s *Service) treeScope(ctx context.Context, u uri.URI, w io.Writer) error {
 	case uri.ScopeProfile:
 		var count int64
 		if err := s.db.WithContext(ctx).Model(&model.Memory{}).
-			Where("category = ?", uri.ScopeProfile).
+			Where("category = ? AND superseded_at IS NULL", uri.ScopeProfile).
 			Count(&count).Error; err != nil {
 			return err
 		}
@@ -260,7 +260,10 @@ func (s *Service) treeScope(ctx context.Context, u uri.URI, w io.Writer) error {
 		return nil
 	default:
 		var rows []model.Memory
-		q := s.db.WithContext(ctx).Where("category = ?", u.Scope).Order("updated_at desc").Limit(200)
+		q := s.db.WithContext(ctx).
+			Where("category = ? AND superseded_at IS NULL", u.Scope).
+			Order("updated_at desc").
+			Limit(200)
 		if len(u.Segments) == 1 {
 			q = q.Where("uri = ?", uri.BuildMemory(u.Scope, u.Segments[0]))
 		}
@@ -278,7 +281,9 @@ func (s *Service) treeScope(ctx context.Context, u uri.URI, w io.Writer) error {
 
 func (s *Service) catMemoryByURI(ctx context.Context, target string, w io.Writer) error {
 	var row model.Memory
-	if err := s.db.WithContext(ctx).Where("uri = ?", target).Take(&row).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Where("uri = ? AND superseded_at IS NULL", target).
+		Take(&row).Error; err != nil {
 		return fmt.Errorf("load memory: %w", err)
 	}
 	text := ""
@@ -305,11 +310,14 @@ func (s *Service) catScene(ctx context.Context, sceneID string, w io.Writer) err
 
 func (s *Service) metaMemory(ctx context.Context, target string) (map[string]any, error) {
 	var row model.Memory
-	if err := s.db.WithContext(ctx).Where("uri = ?", target).Take(&row).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Where("uri = ? AND superseded_at IS NULL", target).
+		Take(&row).Error; err != nil {
 		return nil, fmt.Errorf("load memory: %w", err)
 	}
 	return map[string]any{
 		"uri":                row.URI,
+		"version":            row.Version,
 		"category":           row.Category,
 		"slug":               row.Slug,
 		"abstract":           row.Abstract,

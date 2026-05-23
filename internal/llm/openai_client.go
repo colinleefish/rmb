@@ -119,17 +119,57 @@ func (c *OpenAICompatibleClient) MergeOverview(
 		},
 	}
 
+	merged, err := c.completeWithRetry(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("llm merge overview failed: %w", err)
+	}
+	return strings.TrimSpace(merged), nil
+}
+
+// ExtractAtoms asks the model to return JSON atoms for a batch of session turns.
+func (c *OpenAICompatibleClient) ExtractAtoms(ctx context.Context, messagesJSONL string) (string, error) {
+	req := chatCompletionRequest{
+		Model:       c.model,
+		Temperature: 0.1,
+		Messages: []chatMessage{
+			{
+				Role: "system",
+				Content: "You extract durable facts from agent chat logs. " +
+					"Respond with a single JSON object only: {\"atoms\":[...]}. " +
+					"Each atom has category (profile|preferences|entities|events), " +
+					"priority (int 0-100, use -1 only for critical AI behavior rules), " +
+					"scene_name (short label), slug (optional, for preferences/entities/events), " +
+					"content (one factual sentence), source_turn_indices (0-based indexes into the batch). " +
+					"Do not merge or rewrite prior facts—emit separate atoms. " +
+					"events are immutable milestones; never deduplicate them away.",
+			},
+			{
+				Role:    "user",
+				Content: buildExtractAtomsPrompt(messagesJSONL),
+			},
+		},
+	}
+	out, err := c.completeWithRetry(ctx, req)
+	if err != nil {
+		return "", fmt.Errorf("llm extract atoms failed: %w", err)
+	}
+	return out, nil
+}
+
+func (c *OpenAICompatibleClient) completeWithRetry(
+	ctx context.Context,
+	req chatCompletionRequest,
+) (string, error) {
 	var lastErr error
 	for attempt := 1; attempt <= c.maxRetries; attempt++ {
-		merged, retryable, err := c.chatCompletion(ctx, req)
+		content, retryable, err := c.chatCompletion(ctx, req)
 		if err == nil {
-			return strings.TrimSpace(merged), nil
+			return content, nil
 		}
 		lastErr = err
 		if !retryable || attempt == c.maxRetries {
 			break
 		}
-
 		backoff := time.Duration(attempt*attempt) * 300 * time.Millisecond
 		timer := time.NewTimer(backoff)
 		select {
@@ -139,8 +179,21 @@ func (c *OpenAICompatibleClient) MergeOverview(
 		case <-timer.C:
 		}
 	}
+	return "", lastErr
+}
 
-	return "", fmt.Errorf("llm merge overview failed: %w", lastErr)
+func buildExtractAtomsPrompt(messagesJSONL string) string {
+	chunk := strings.TrimSpace(messagesJSONL)
+	if chunk == "" {
+		chunk = "(empty)"
+	}
+	return strings.TrimSpace(`Extract structured memory atoms from this chat batch (JSONL, one message per line).
+
+Return JSON only:
+{"atoms":[{"category":"...","priority":50,"scene_name":"...","slug":"...","content":"...","source_turn_indices":[0]}]}
+
+Chat batch:
+` + chunk)
 }
 
 func buildMergeOverviewPrompt(previousOverview string, messagesJSONL string) string {

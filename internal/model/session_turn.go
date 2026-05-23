@@ -19,6 +19,7 @@ type SessionTurn struct {
 	TurnStatus         string     `gorm:"type:text;not null;default:not_summarized;index:idx_session_turns_status_created,priority:1;check:turn_status IN ('not_summarized','summarizing','summarized','failed')"`
 	SummarizeStartedAt *time.Time `gorm:"type:timestamptz"`
 	MessagesJSONL      string     `gorm:"column:messages_jsonl;type:text;not null"`
+	T1ExtractedAt      *time.Time `gorm:"column:t1_extracted_at;type:timestamptz"`
 	CreatedAt          time.Time  `gorm:"type:timestamptz;not null;default:now()"`
 	UpdatedAt          time.Time  `gorm:"type:timestamptz;not null;default:now()"`
 }

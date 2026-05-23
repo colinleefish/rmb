@@ -1,16 +1,23 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Memory struct {
-	URI              string    `gorm:"column:uri;type:text;primaryKey"`
-	Category         string    `gorm:"column:category;type:text;not null;index"`
-	Slug             *string   `gorm:"column:slug;type:text"`
-	Abstract         *string   `gorm:"column:abstract;type:text"`
-	Body             *string   `gorm:"column:body;type:text"`
-	SourceSceneURIs  []string  `gorm:"column:source_scene_uris;type:text[];not null"`
-	CreatedAt        time.Time `gorm:"column:created_at;type:timestamptz;not null"`
-	UpdatedAt        time.Time `gorm:"column:updated_at;type:timestamptz;not null"`
+	ID              uuid.UUID  `gorm:"column:id;type:uuid;primaryKey"`
+	URI             string     `gorm:"column:uri;type:text;not null;index"`
+	Category        string     `gorm:"column:category;type:text;not null;index"`
+	Slug            *string    `gorm:"column:slug;type:text"`
+	Version         int        `gorm:"column:version;not null;default:1"`
+	SupersededAt    *time.Time `gorm:"column:superseded_at;type:timestamptz"`
+	Abstract        *string    `gorm:"column:abstract;type:text"`
+	Body            *string    `gorm:"column:body;type:text"`
+	SourceSceneURIs []string   `gorm:"column:source_scene_uris;type:text[];not null"`
+	CreatedAt       time.Time  `gorm:"column:created_at;type:timestamptz;not null"`
+	UpdatedAt       time.Time  `gorm:"column:updated_at;type:timestamptz;not null"`
 }
 
 func (Memory) TableName() string { return "memories" }

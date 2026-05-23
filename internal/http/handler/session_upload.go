@@ -79,7 +79,7 @@ func (h *SessionUploadHandler) Upload(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	body := gin.H{
 		"uri":           result.URI,
 		"parent_uri":    result.ParentURI,
 		"root_uri":      result.RootURI,
@@ -88,5 +88,11 @@ func (h *SessionUploadHandler) Upload(c *gin.Context) {
 		"archive_index": result.ArchiveIdx,
 		"created_at":    result.CreatedAt,
 		"updated_at":    result.UpdatedAt,
-	})
+	}
+	if result.TaskID != nil {
+		body["task_id"] = result.TaskID.String()
+		c.JSON(http.StatusAccepted, body)
+		return
+	}
+	c.JSON(http.StatusOK, body)
 }

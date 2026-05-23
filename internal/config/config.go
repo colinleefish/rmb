@@ -23,6 +23,7 @@ type Config struct {
 	Auth       AuthConfig
 	LLM        LLMConfig
 	Summarizer SummarizerConfig
+	Extraction ExtractionConfig
 }
 
 type AuthConfig struct {
@@ -61,6 +62,17 @@ type SummarizerConfig struct {
 	MaxCharsPerMerge      int
 }
 
+type ExtractionConfig struct {
+	Enabled          bool
+	PollInterval     time.Duration
+	EveryN           int
+	IdleSeconds      time.Duration
+	Warmup           bool
+	BatchSessions    int
+	MaxTurnsPerBatch int
+	MaxCharsPerBatch int
+}
+
 type fileConfig struct {
 	DB struct {
 		URL string `toml:"url"`
@@ -89,6 +101,16 @@ type fileConfig struct {
 		MaxTurnsPerMerge      *int   `toml:"max_turns_per_merge"`
 		MaxCharsPerMerge      *int   `toml:"max_chars_per_merge"`
 	} `toml:"summarizer"`
+	Extraction struct {
+		Enabled          *bool  `toml:"enabled"`
+		PollInterval     string `toml:"poll_interval"`
+		EveryN           *int   `toml:"every_n"`
+		IdleSeconds      string `toml:"idle_seconds"`
+		Warmup           *bool  `toml:"warmup"`
+		BatchSessions    *int   `toml:"batch_sessions"`
+		MaxTurnsPerBatch *int   `toml:"max_turns_per_batch"`
+		MaxCharsPerBatch *int   `toml:"max_chars_per_batch"`
+	} `toml:"extraction"`
 }
 
 func Load() (Config, error) {
@@ -121,6 +143,16 @@ func Load() (Config, error) {
 			StaleSummarizingAfter: 3 * time.Minute,
 			MaxTurnsPerMerge:      4,
 			MaxCharsPerMerge:      16000,
+		},
+		Extraction: ExtractionConfig{
+			Enabled:          true,
+			PollInterval:     15 * time.Second,
+			EveryN:           8,
+			IdleSeconds:      10 * time.Minute,
+			Warmup:           true,
+			BatchSessions:    8,
+			MaxTurnsPerBatch: 8,
+			MaxCharsPerBatch: 24000,
 		},
 	}
 
@@ -297,6 +329,38 @@ func loadFileConfig(cfg *Config, path string, explicitPath bool) error {
 	if fc.Summarizer.MaxCharsPerMerge != nil {
 		cfg.Summarizer.MaxCharsPerMerge = *fc.Summarizer.MaxCharsPerMerge
 	}
+	if fc.Extraction.Enabled != nil {
+		cfg.Extraction.Enabled = *fc.Extraction.Enabled
+	}
+	if fc.Extraction.PollInterval != "" {
+		v, err := time.ParseDuration(fc.Extraction.PollInterval)
+		if err != nil {
+			return fmt.Errorf("parse extraction.poll_interval in %q: %w", path, err)
+		}
+		cfg.Extraction.PollInterval = v
+	}
+	if fc.Extraction.EveryN != nil {
+		cfg.Extraction.EveryN = *fc.Extraction.EveryN
+	}
+	if fc.Extraction.IdleSeconds != "" {
+		v, err := time.ParseDuration(fc.Extraction.IdleSeconds)
+		if err != nil {
+			return fmt.Errorf("parse extraction.idle_seconds in %q: %w", path, err)
+		}
+		cfg.Extraction.IdleSeconds = v
+	}
+	if fc.Extraction.Warmup != nil {
+		cfg.Extraction.Warmup = *fc.Extraction.Warmup
+	}
+	if fc.Extraction.BatchSessions != nil {
+		cfg.Extraction.BatchSessions = *fc.Extraction.BatchSessions
+	}
+	if fc.Extraction.MaxTurnsPerBatch != nil {
+		cfg.Extraction.MaxTurnsPerBatch = *fc.Extraction.MaxTurnsPerBatch
+	}
+	if fc.Extraction.MaxCharsPerBatch != nil {
+		cfg.Extraction.MaxCharsPerBatch = *fc.Extraction.MaxCharsPerBatch
+	}
 
 	return nil
 }
@@ -391,6 +455,68 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("parse MYPAST_SUMMARIZER_MAX_CHARS_PER_MERGE: %w", err)
 		}
 		cfg.Summarizer.MaxCharsPerMerge = parsed
+	}
+	if v := os.Getenv("MYPAST_EXTRACTION_ENABLED"); v != "" {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "on":
+			cfg.Extraction.Enabled = true
+		case "0", "false", "no", "off":
+			cfg.Extraction.Enabled = false
+		default:
+			return fmt.Errorf("parse MYPAST_EXTRACTION_ENABLED: invalid boolean %q", v)
+		}
+	}
+	if v := os.Getenv("MYPAST_EXTRACTION_POLL_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_EXTRACTION_POLL_INTERVAL: %w", err)
+		}
+		cfg.Extraction.PollInterval = d
+	}
+	if v := os.Getenv("MYPAST_EXTRACTION_EVERY_N"); v != "" {
+		parsed, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_EXTRACTION_EVERY_N: %w", err)
+		}
+		cfg.Extraction.EveryN = parsed
+	}
+	if v := os.Getenv("MYPAST_EXTRACTION_IDLE_SECONDS"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_EXTRACTION_IDLE_SECONDS: %w", err)
+		}
+		cfg.Extraction.IdleSeconds = d
+	}
+	if v := os.Getenv("MYPAST_EXTRACTION_WARMUP"); v != "" {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "on":
+			cfg.Extraction.Warmup = true
+		case "0", "false", "no", "off":
+			cfg.Extraction.Warmup = false
+		default:
+			return fmt.Errorf("parse MYPAST_EXTRACTION_WARMUP: invalid boolean %q", v)
+		}
+	}
+	if v := os.Getenv("MYPAST_EXTRACTION_BATCH_SESSIONS"); v != "" {
+		parsed, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_EXTRACTION_BATCH_SESSIONS: %w", err)
+		}
+		cfg.Extraction.BatchSessions = parsed
+	}
+	if v := os.Getenv("MYPAST_EXTRACTION_MAX_TURNS_PER_BATCH"); v != "" {
+		parsed, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_EXTRACTION_MAX_TURNS_PER_BATCH: %w", err)
+		}
+		cfg.Extraction.MaxTurnsPerBatch = parsed
+	}
+	if v := os.Getenv("MYPAST_EXTRACTION_MAX_CHARS_PER_BATCH"); v != "" {
+		parsed, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_EXTRACTION_MAX_CHARS_PER_BATCH: %w", err)
+		}
+		cfg.Extraction.MaxCharsPerBatch = parsed
 	}
 	return nil
 }

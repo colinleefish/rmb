@@ -11,8 +11,9 @@ What works today:
 - HTTP API for uploading conversation turns (`POST /api/v1/sessions/:id/upload`).
 - `mypast hook-submit --source=<cursor|cc>` for ingesting hook payloads from
   Cursor and Claude Code, with race-free user/assistant pairing.
-- Background summarizer worker that merges new turns into a per-session
-  overview via an OpenAI-compatible chat-completions endpoint.
+- **T1 extraction worker** (Phase B): async atom extraction from turns into
+  `atoms` (append-only; `MYPAST_EXTRACTION_ENABLED=true` by default).
+- Legacy summarizer (`overview_text`) is off by default (`MYPAST_SUMMARIZER_ENABLED=false`).
 
 Inspection CLI: `mypast cat`, `mypast tree`, `mypast meta` (Phase A).
 
@@ -21,6 +22,8 @@ scenes, memories, pipeline state, and tasks).
 
 Production (`mem.colinleefish.com`): Caddy in Docker terminates TLS and proxies to
 `mypast` on `:8080` — see `deploy/Caddyfile` and `docker-compose.prod.yml`.
+
+**Roadmap:** [`docs/plan.md`](docs/plan.md) (Phase A–E, current status, next steps).
 
 Planned (see `TODO.md`): storage CLI (`store/read/list/delete/search`),
 embedding worker, hybrid recall, MCP wrapper.
