@@ -32,6 +32,11 @@ SSH_OPTS=(-i "$DEPLOY_SSH_KEY_FILE" -o StrictHostKeyChecking=accept-new -o Batch
 
 ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<EOF
 set -euo pipefail
+# Server is in China; GitHub needs a local proxy (same port as ssproxy on your laptop).
+export https_proxy=http://localhost:1080
+export http_proxy=http://localhost:1080
+export HTTPS_PROXY=http://localhost:1080
+export HTTP_PROXY=http://localhost:1080
 cd "$DEPLOY_PATH"
 git fetch origin main
 git checkout main

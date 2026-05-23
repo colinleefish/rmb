@@ -136,11 +136,25 @@ Runs CI, then SSHs to the server, `git reset --hard` to `main`, `docker compose 
 - Latest `main` pushed to GitHub (server pulls via deploy key).
 - SSH access to `root@mem.colinleefish.com` (default key: `~/.ssh/colinleefish_ed25519`).
 - Optional overrides: `scripts/deploy.env` (copy from `scripts/deploy.env.example`; gitignored).
+- HTTP(S) proxy on port **1080** (local machine and production server) for GitHub access from China.
+
+**Proxy (China → GitHub)**
+
+| Where | When | Setting |
+|-------|------|---------|
+| **Your machine** | `git push` / `git fetch` to GitHub | `ssproxy` then git (sets `http(s)_proxy=http://127.0.0.1:1080`) |
+| **Production server** | `git fetch` during `make deploy` | `https_proxy=http://localhost:1080` (and `http_proxy`; set automatically in `scripts/deploy.sh`) |
+
+Example push from China:
+
+```bash
+ssproxy && git push origin main
+```
 
 ### When the user says ship / deploy / release
 
 1. `make ci` — fix any failures.
-2. Commit and push to `main` (ask first if unclear).
+2. Commit and push to `main` with `ssproxy && git push` when GitHub is unreachable directly (ask first if unclear).
 3. `make deploy`.
 4. Report whether `/healthz` passed and link https://mem.colinleefish.com
 

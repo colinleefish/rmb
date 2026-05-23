@@ -20,6 +20,16 @@ Runs `go test ./...` and a compile check.
 - `main` pushed to GitHub (server pulls via deploy key).
 - SSH key with access to `root@mem.colinleefish.com` (default: `~/.ssh/colinleefish_ed25519`).
 - Optional overrides: copy `scripts/deploy.env.example` → `scripts/deploy.env`.
+- HTTP(S) proxy on port **1080** on both your machine and the server (GitHub is blocked from China).
+
+### Proxy (China → GitHub)
+
+| Where | When | Setting |
+|-------|------|---------|
+| **Your machine** | push / fetch to GitHub | `ssproxy && git push origin main` (`http(s)_proxy=http://127.0.0.1:1080`) |
+| **Production server** | `git fetch` in deploy | `https_proxy=http://localhost:1080` (set in `scripts/deploy.sh`) |
+
+Deploy SSH session exports `http_proxy` / `https_proxy` to `http://localhost:1080` before `git fetch`.
 
 ```bash
 make deploy
@@ -33,7 +43,7 @@ Deploy runs CI first, then `git reset --hard` to `main` on the server and rebuil
 When the user asks to **ship**, **deploy**, or **release** after code changes:
 
 1. Run `make ci` and fix failures.
-2. Commit and push to `main` (ask the user if unclear).
+2. Commit and push to `main` with `ssproxy && git push` when needed (ask the user if unclear).
 3. Run `make deploy`.
 4. Report `healthz` result and link https://mem.colinleefish.com
 
