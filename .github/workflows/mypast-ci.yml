@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     env:
       GOPROXY: https://goproxy.cn,direct
     steps:
