@@ -9,7 +9,7 @@ Personal-project pipeline: **tests on GitHub-hosted runners**, **deploy over SSH
 - **CD** does not pull images from GHCR. The server **builds the image locally** (`docker compose … --build`), reusing `GOPROXY=https://goproxy.cn` in the `Dockerfile` — good for mainland builds.
 - If GitHub is slow from your desk, pushes still queue Actions; you only need reliable git/SSH to GitHub occasionally.
 
-**Optional later:** a [self-hosted runner](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/about-self-hosted-runners) on the same machine as production removes cross-border SSH from the deploy job (useful if the server has no public SSH or Actions → SSH is flaky).
+**Self-hosted runner:** `prd-liguanghui` (10.254.4.18 via JumpServer). Registered in repo → Settings → Actions → Runners.
 
 ## Workflows
 
@@ -17,6 +17,8 @@ Personal-project pipeline: **tests on GitHub-hosted runners**, **deploy over SSH
 |----------|------|------|
 | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) | PR → `main`, push → `main` | `go test ./...`, compile check |
 | [`.github/workflows/deploy.yml`](../.github/workflows/deploy.yml) | Push → `main`, **Run workflow** button | Test, then SSH deploy + `healthz` |
+
+Both run on the **self-hosted runner** `prd-liguanghui` (labels: `self-hosted`, `linux`, `liguanghui`). Go **1.26.1** is installed at `/usr/local/go`. Deploy still targets **mem.colinleefish.com** over SSH from that runner.
 
 Deploy is pinned to the exact commit (`GITHUB_SHA`), not “whatever `main` looks like later”.
 

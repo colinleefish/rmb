@@ -1,4 +1,4 @@
-# Deploy to production after tests pass on main (or manual run).
+# Deploy to mem.colinleefish.com after tests pass on main (self-hosted runner).
 name: Deploy
 
 on:
@@ -12,49 +12,59 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, liguanghui]
+    env:
+      GOPROXY: https://goproxy.cn,direct
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
+      - name: Verify Go
+        run: go version
 
       - run: go test ./...
       - run: go build -o /dev/null ./cmd/mypast
 
   deploy:
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, liguanghui]
     environment: production
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1.2.2
+      - name: Deploy to mem.colinleefish.com
         env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
           GITHUB_SHA: ${{ github.sha }}
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ secrets.DEPLOY_PORT || 22 }}
-          envs: DEPLOY_PATH,GITHUB_SHA
-          script_stop: true
-          script: |
-            set -euo pipefail
-            test -n "${DEPLOY_PATH:-}"
-            cd "$DEPLOY_PATH"
-            git fetch origin main
-            git checkout main
-            git reset --hard "$GITHUB_SHA"
-            docker compose -f docker-compose.prod.yml up -d --build
-            for i in 1 2 3 4 5 6 7 8 9 10; do
-              if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
-                echo "healthz OK"
-                exit 0
-              fi
-              sleep 3
-            done
-            echo "healthz failed after deploy" >&2
-            exit 1
+        run: |
+          set -euo pipefail
+          test -n "${DEPLOY_HOST:-}"
+          test -n "${DEPLOY_USER:-}"
+          test -n "${DEPLOY_SSH_KEY:-}"
+          test -n "${DEPLOY_PATH:-}"
+
+          KEY_FILE="$(mktemp)"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+
+          SSH_OPTS=(-i "$KEY_FILE" -o StrictHostKeyChecking=accept-new -o BatchMode=yes -p "$DEPLOY_PORT")
+
+          ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<EOF
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          git fetch origin main
+          git checkout main
+          git reset --hard "$GITHUB_SHA"
+          docker compose -f docker-compose.prod.yml up -d --build
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
+              echo "healthz OK"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "healthz failed after deploy" >&2
+          exit 1
+          EOF

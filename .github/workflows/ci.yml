@@ -1,4 +1,4 @@
-# Run tests on pull requests and on pushes to main (before deploy workflow runs).
+# Run tests on pull requests and on pushes to main (self-hosted runner in Beijing).
 name: CI
 
 on:
@@ -13,14 +13,14 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, liguanghui]
+    env:
+      GOPROXY: https://goproxy.cn,direct
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
+      - name: Verify Go
+        run: go version
 
       - name: Test
         run: go test ./...
