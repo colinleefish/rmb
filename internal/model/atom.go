@@ -3,6 +3,7 @@ package model
 import (
 	"time"
 
+	"github.com/colinleefish/mypast/internal/db/pgarray"
 	"github.com/google/uuid"
 )
 
@@ -14,7 +15,7 @@ type Atom struct {
 	SceneName      *string   `gorm:"column:scene_name;type:text"`
 	Slug           *string   `gorm:"column:slug;type:text"`
 	Content        string    `gorm:"column:content;type:text;not null"`
-	SourceTurnIDs  []uuid.UUID `gorm:"column:source_turn_ids;type:uuid[];not null"`
+	SourceTurnIDs  pgarray.UUIDArray `gorm:"column:source_turn_ids;type:uuid[];not null"`
 	CreatedAt      time.Time `gorm:"column:created_at;type:timestamptz;not null"`
 	UpdatedAt      time.Time `gorm:"column:updated_at;type:timestamptz;not null"`
 }

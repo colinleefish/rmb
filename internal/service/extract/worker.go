@@ -9,6 +9,7 @@ import (
 
 	"github.com/colinleefish/mypast/internal/config"
 	"github.com/colinleefish/mypast/internal/db"
+	"github.com/colinleefish/mypast/internal/db/pgarray"
 	"github.com/colinleefish/mypast/internal/model"
 	"github.com/colinleefish/mypast/internal/service/session"
 	"github.com/colinleefish/mypast/internal/uri"
@@ -138,7 +139,10 @@ func (w *Worker) processSession(ctx context.Context, sessionID uuid.UUID) error 
 		return w.markSessionFailed(ctx, sessionID, fmt.Errorf("parse extract response: %w", err))
 	}
 
-	return w.persistBatch(ctx, sessionID, batch, parsed)
+	if err := w.persistBatch(ctx, sessionID, batch, parsed); err != nil {
+		return w.markSessionFailed(ctx, sessionID, err)
+	}
+	return nil
 }
 
 func (w *Worker) prepareBatch(ctx context.Context, sessionID uuid.UUID) (*extractBatch, error) {
@@ -280,7 +284,7 @@ func (w *Worker) persistBatch(
 				SceneName:     scenePtr,
 				Slug:          slugPtr,
 				Content:       a.Content,
-				SourceTurnIDs: sourceIDs,
+				SourceTurnIDs: pgarray.UUIDArray(sourceIDs),
 				CreatedAt:     now,
 				UpdatedAt:     now,
 			}
@@ -410,6 +414,10 @@ func resolveSourceTurnIDs(indices []int, turnIndex map[int]uuid.UUID) ([]uuid.UU
 	seen := make(map[uuid.UUID]struct{}, len(indices))
 	for _, i := range indices {
 		id, ok := turnIndex[i]
+		if !ok && i > 0 {
+			// Some models use 1-based indices despite the 0-based prompt.
+			id, ok = turnIndex[i-1]
+		}
 		if !ok {
 			return nil, fmt.Errorf("invalid turn index %d", i)
 		}
