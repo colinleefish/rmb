@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   test:
-    runs-on: [self-hosted, liguanghui]
+    runs-on: self-hosted
     env:
       GOPROXY: https://goproxy.cn,direct
     steps:

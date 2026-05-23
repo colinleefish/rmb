@@ -9,7 +9,7 @@ Personal-project pipeline: **tests on GitHub-hosted runners**, **deploy over SSH
 - **CD** does not pull images from GHCR. The server **builds the image locally** (`docker compose … --build`), reusing `GOPROXY=https://goproxy.cn` in the `Dockerfile` — good for mainland builds.
 - If GitHub is slow from your desk, pushes still queue Actions; you only need reliable git/SSH to GitHub occasionally.
 
-**Self-hosted runner:** `prd-liguanghui` (10.254.4.18 via JumpServer). Registered in repo → Settings → Actions → Runners.
+**Self-hosted runner:** `prd-liguanghui` (10.254.4.18 via JumpServer). Registered in repo → Settings → Actions → Runners. Outbound traffic uses `HTTP_PROXY` / `HTTPS_PROXY` = `http://proxy.hungrystudio.pp.ua:1080` (in `actions-runner/.env` and systemd).
 
 ## Workflows
 
