@@ -37,6 +37,16 @@ func TestShouldRunT1_idle(t *testing.T) {
 	}
 }
 
+func TestShouldRunT1_failedWithTurns(t *testing.T) {
+	now := time.Now()
+	if !shouldRunT1(now, "failed", 1, 0, 2, 8, true, time.Minute, now) {
+		t.Fatal("expected failed pipeline with unprocessed turns to retry")
+	}
+	if shouldRunT1(now, "failed", 0, 0, 2, 8, true, time.Minute, now) {
+		t.Fatal("expected failed with no unprocessed turns to skip")
+	}
+}
+
 func TestShouldRunT1_noTurns(t *testing.T) {
 	now := time.Now()
 	if shouldRunT1(now, "pending", 0, 0, 2, 8, true, time.Minute, now) {

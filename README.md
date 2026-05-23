@@ -183,8 +183,9 @@ Key variables (see `.env.example` for the full list):
 | `MYPAST_SUMMARIZER_POLL_INTERVAL`     | `15s`                                                              |
 | `MYPAST_SUMMARIZER_MAX_TURNS_PER_MERGE` | `4`                                                              |
 
-For `hook-submit` invocations, the target API URL is read from `MYPAST_URL`
-or `~/.mypast.conf` (key `MYPAST_URL=`), defaulting to `http://127.0.0.1:8080`.
+For `hook-submit`, the target API URL is read from `MYPAST_URL` or
+`~/.mypast.conf` (key `MYPAST_URL=`), defaulting to `http://127.0.0.1:8080`.
+To mirror turns to **local + production**, register **two hook entries** — see [`docs/hooks-dual.md`](docs/hooks-dual.md).
 
 ## Hook Integration
 

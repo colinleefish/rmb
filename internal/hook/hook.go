@@ -154,6 +154,24 @@ func postUpload(
 	return resp.StatusCode, nil
 }
 
+func resolveMyPastURL() string {
+	if v := strings.TrimSpace(os.Getenv("MYPAST_URL")); v != "" {
+		return v
+	}
+	confPath := strings.TrimSpace(os.Getenv("MYPAST_CONF"))
+	if confPath == "" {
+		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
+			confPath = filepath.Join(home, ".mypast.conf")
+		}
+	}
+	if confPath != "" {
+		if v := readEnvValueFromFile(confPath, "MYPAST_URL"); v != "" {
+			return v
+		}
+	}
+	return defaultMyPastURL
+}
+
 func resolveMyPastAuth() (string, string) {
 	user := strings.TrimSpace(os.Getenv("MYPAST_USERNAME"))
 	pass := strings.TrimSpace(os.Getenv("MYPAST_PASSWORD"))
@@ -183,24 +201,6 @@ func resolveMyPastAuth() (string, string) {
 		}
 	}
 	return user, pass
-}
-
-func resolveMyPastURL() string {
-	if v := strings.TrimSpace(os.Getenv("MYPAST_URL")); v != "" {
-		return v
-	}
-	confPath := strings.TrimSpace(os.Getenv("MYPAST_CONF"))
-	if confPath == "" {
-		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-			confPath = filepath.Join(home, ".mypast.conf")
-		}
-	}
-	if confPath != "" {
-		if v := readEnvValueFromFile(confPath, "MYPAST_URL"); v != "" {
-			return v
-		}
-	}
-	return defaultMyPastURL
 }
 
 func readEnvValueFromFile(path string, key string) string {

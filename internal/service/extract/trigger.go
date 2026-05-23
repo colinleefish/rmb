@@ -21,7 +21,8 @@ func shouldRunT1(
 	if unprocessedTurns <= 0 {
 		return false
 	}
-	if t1Status == model.PipelineStatusPending {
+	// Retry after a failed extraction once turns are still unprocessed.
+	if t1Status == model.PipelineStatusPending || t1Status == model.PipelineStatusFailed {
 		return true
 	}
 

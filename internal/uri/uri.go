@@ -162,38 +162,57 @@ func BuildMemory(category, segment string) string {
 	return Scheme + "://" + category + "/" + segment
 }
 
-func SanitizeSegment(raw string) (string, error) {
+// SanitizeSlug normalizes a label into a strict URI slug: lowercase ASCII,
+// hyphen-separated words, CJK preserved. Underscores, spaces, and dots become hyphens.
+func SanitizeSlug(raw string) (string, error) {
 	s := strings.TrimSpace(raw)
 	if s == "" {
 		return "", fmt.Errorf("%w: empty segment", ErrInvalidURI)
 	}
 
 	var b strings.Builder
-	prevUnderscore := false
+	prevSep := false
 	for _, r := range s {
-		if isPreservedRune(r) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
 			b.WriteRune(r)
-			prevUnderscore = false
-			continue
-		}
-		if !prevUnderscore {
-			b.WriteByte('_')
-			prevUnderscore = true
+			prevSep = false
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r - 'A' + 'a')
+			prevSep = false
+		case r == '-':
+			if b.Len() > 0 && !prevSep {
+				b.WriteByte('-')
+				prevSep = true
+			}
+		case isSlugPreservedRune(r):
+			b.WriteRune(r)
+			prevSep = false
+		default:
+			if b.Len() > 0 && !prevSep {
+				b.WriteByte('-')
+				prevSep = true
+			}
 		}
 	}
 
-	out := strings.Trim(b.String(), "_")
+	out := strings.Trim(b.String(), "-")
 	if out == "" {
 		return "", fmt.Errorf("%w: segment sanitizes to empty", ErrInvalidURI)
 	}
 	if len(out) > MaxSegment {
 		out = out[:MaxSegment]
-		out = strings.TrimRight(out, "_")
+		out = strings.TrimRight(out, "-")
 	}
 	if _, forbidden := reservedSlug[strings.ToLower(out)]; forbidden {
 		return "", fmt.Errorf("%w: segment %q is reserved", ErrInvalidURI, out)
 	}
 	return out, nil
+}
+
+// SanitizeSegment is an alias for SanitizeSlug (memory URI path segments).
+func SanitizeSegment(raw string) (string, error) {
+	return SanitizeSlug(raw)
 }
 
 func splitSegments(path string) []string {
@@ -275,16 +294,10 @@ func validateShape(scope string, segments []string) error {
 	return nil
 }
 
-func isPreservedRune(r rune) bool {
-	if unicode.Is(unicode.Han, r) ||
+func isSlugPreservedRune(r rune) bool {
+	return unicode.Is(unicode.Han, r) ||
 		unicode.Is(unicode.Hiragana, r) ||
 		unicode.Is(unicode.Katakana, r) ||
 		unicode.Is(unicode.Hangul, r) ||
-		unicode.Is(unicode.Cyrillic, r) {
-		return true
-	}
-	return (r >= 'a' && r <= 'z') ||
-		(r >= 'A' && r <= 'Z') ||
-		(r >= '0' && r <= '9') ||
-		r == '-' || r == '_' || r == '.'
+		unicode.Is(unicode.Cyrillic, r)
 }

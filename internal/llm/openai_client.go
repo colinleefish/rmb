@@ -138,7 +138,8 @@ func (c *OpenAICompatibleClient) ExtractAtoms(ctx context.Context, messagesJSONL
 					"Respond with a single JSON object only: {\"atoms\":[...]}. " +
 					"Each atom has category (profile|preferences|entities|events), " +
 					"priority (int 0-100, use -1 only for critical AI behavior rules), " +
-					"scene_name (short label), slug (optional, for preferences/entities/events), " +
+					"scene_name (short label), slug (optional kebab-case, e.g. ai-tone or 2026-05-17-deploy; " +
+					"for preferences/entities/events only), " +
 					"content (one factual sentence), source_turn_indices (0-based indexes into the batch). " +
 					"Do not merge or rewrite prior facts—emit separate atoms. " +
 					"events are immutable milestones; never deduplicate them away.",
@@ -190,7 +191,7 @@ func buildExtractAtomsPrompt(messagesJSONL string) string {
 	return strings.TrimSpace(`Extract structured memory atoms from this chat batch (JSONL, one message per line).
 
 Return JSON only:
-{"atoms":[{"category":"...","priority":50,"scene_name":"...","slug":"...","content":"...","source_turn_indices":[0]}]}
+{"atoms":[{"category":"...","priority":50,"scene_name":"...","slug":"ai-tone","content":"...","source_turn_indices":[0]}]}
 
 Chat batch:
 ` + chunk)

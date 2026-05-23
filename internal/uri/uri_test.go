@@ -33,18 +33,41 @@ func TestBuildSessionTurn(t *testing.T) {
 	}
 }
 
-func TestSanitizeSegmentCJK(t *testing.T) {
-	got, err := SanitizeSegment("李广慧")
+func TestSanitizeSlugCJK(t *testing.T) {
+	got, err := SanitizeSlug("李广慧")
 	if err != nil {
-		t.Fatalf("SanitizeSegment: %v", err)
+		t.Fatalf("SanitizeSlug: %v", err)
 	}
 	if got != "李广慧" {
 		t.Fatalf("got %q", got)
 	}
 }
 
+func TestSanitizeSlugKebab(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"go_style", "go-style"},
+		{"Go Style", "go-style"},
+		{"ai-tone", "ai-tone"},
+		{"UPPER_SNAKE", "upper-snake"},
+		{"2026-05-17-postgres-only", "2026-05-17-postgres-only"},
+		{"colin_mom", "colin-mom"},
+	}
+	for _, tc := range tests {
+		got, err := SanitizeSlug(tc.in)
+		if err != nil {
+			t.Fatalf("SanitizeSlug(%q): %v", tc.in, err)
+		}
+		if got != tc.want {
+			t.Fatalf("SanitizeSlug(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestParseRejectsReservedSlug(t *testing.T) {
-	if _, err := SanitizeSegment("profile"); err == nil {
+	if _, err := SanitizeSlug("profile"); err == nil {
 		t.Fatalf("expected reserved slug error")
 	}
 }

@@ -254,7 +254,7 @@ func (w *Worker) persistBatch(
 
 			var slugPtr *string
 			if a.Slug != "" && a.Category != model.AtomCategoryProfile {
-				sanitized, err := uri.SanitizeSegment(a.Slug)
+				sanitized, err := uri.SanitizeSlug(a.Slug)
 				if err == nil {
 					slugPtr = &sanitized
 				}
@@ -430,6 +430,8 @@ func resolveSourceTurnIDs(indices []int, turnIndex map[int]uuid.UUID) ([]uuid.UU
 	return out, nil
 }
 
+// completePendingTasks marks all outstanding T1 tasks for the session done, including
+// previously failed rows, so the UI does not show stale failures after a later success.
 func (w *Worker) completePendingTasks(tx *gorm.DB, sessionID uuid.UUID, resultURI string) error {
 	updates := map[string]any{
 		"status":    model.TaskStatusDone,
@@ -441,7 +443,11 @@ func (w *Worker) completePendingTasks(tx *gorm.DB, sessionID uuid.UUID, resultUR
 	}
 	return tx.Model(&model.Task{}).
 		Where("session_id = ? AND kind = ? AND status IN ?",
-			sessionID, model.TaskKindT1, []string{model.TaskStatusPending, model.TaskStatusRunning}).
+			sessionID, model.TaskKindT1, []string{
+				model.TaskStatusPending,
+				model.TaskStatusRunning,
+				model.TaskStatusFailed,
+			}).
 		Updates(updates).Error
 }
 
