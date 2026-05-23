@@ -108,7 +108,7 @@ mypast://{scope}/{path}
 | 行                         | 选择该风格的原因 |
 | -------------------------- | ----------------- |
 | T0 turn（序号）            | turn 是按时间排的；编号就是名字。 |
-| T1 atom（UUID）            | atom 会在 dedup 中被合并。内容会变；从内容派生的 slug 会撒谎。 |
+| T1 atom（UUID）            | 默认追加；仅显式 `mypast atom merge` 可合并。内容不应被 worker 静默改写。 |
 | T2 scene（UUID + `display_name`） | scene 行随 atom 累积而更新；URI 用 UUID 保持稳定，名字单独露出供展示。 |
 | T3 `preferences` / `entities`（slug） | 这些天生就是有名字的话题 / 实体。URI 描述*话题*或*身份*，不是当下的内容——所以 body 演化时 slug 保持稳定。 |
 | T3 `events`（日期 + slug） | event 按分类规则不可变；日期前缀自然有序。 |
@@ -123,14 +123,25 @@ mypast://{scope}/{path}
 
 ## 6. 记忆分类法（T1 与 T3 共用）
 
-4 类，抽取层（T1）和存储层（T3）同名。T3 路由是机械的：按 category 聚合 atom，向同名 memory upsert。
+4 类，抽取层（T1）和存储层（T3）同名。T3 路由是机械的：按 category 聚合 atom/scene，**向目标 memory URI 追加新版本**（见 §7 `memories` 版本列），禁止原地改写 `body`。
 
-| 分类          | 可合并            | 捕获什么                                                             | 例子                                                                       |
-| ------------- | ----------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| `profile`     | 是（单行）        | 稳定的身份属性——基本信息、健康 / 禁忌、核心特质                      | "Colin 住在北京。" "对花生过敏。"                                          |
-| `preferences` | 是（追加 + 去重） | 反复出现的"更喜欢 X / 想要 X / 习惯这样做"，**包括对 AI 的行为规则** | "偏好单二进制 Go 服务。" "回复永远要短。"                                  |
-| `entities`    | 是（追加 + 去重） | 第三方：人、项目、公司、地点                                         | "财务 Lisa 喜欢用邮件。" "Tesla 总部在 Austin，代码 TSLA。"                |
-| `events`      | **否**            | 带时间的事实、决定、里程碑——历史记录，不可变                         | "2026-05-17：mypast 选择 Postgres-only 存储（弃用 ~/.mypast/ 文件方案）。" |
+### 6.1 整合立场（持续整合论文）
+
+对照 arXiv:2605.12978（*Useful Memories Become Faulty When Continuously Updated by LLMs*）与 [`memory-consolidation-review.zh.md`](./memory-consolidation-review.zh.md)：
+
+- **T0（`session_turns`）** 是 append-only 情景证据，任何 worker **不得**改写。
+- **抽象层（T1–T3）** 由 LLM 生成，默认 **Retain**：新事实优先 **插入新行**；整合（merge / 覆盖 body）必须是 **稀疏、显式、可观测** 的动作，而不是 worker 默认分支。
+- **T1 dedup 中的 merge 是受控、稀疏的，不是 worker 默认行为。** 默认：embedding top-K 仅用于打 `near_duplicate_of` 或降权，**插入新 atom**；merge 仅通过 `mypast atom merge`（或等价人工任务）触发。
+- **`events`（T1 与 T3）** 一律只追加、不 merge、不删除、不原地更新。
+- **T3 `profile` / slug 行** 禁止 in-place 更新 `body`；每次 rollup **INSERT 新版本**，旧行 `superseded_at` 置位；读取与检索默认 `WHERE superseded_at IS NULL`。
+- **漂移检测：** `mypast eval`（§12）在 T3 rollup 后对比「T0+FTS」与「全栈」召回，差值转负即报警。
+
+| 分类          | T1 worker                         | T3 worker                                      | 捕获什么                                                             | 例子                                                                       |
+| ------------- | --------------------------------- | ---------------------------------------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `profile`     | 插入 atom；不 merge               | 追加新版本（逻辑 URI `mypast://profile`）      | 稳定的身份属性——基本信息、健康 / 禁忌、核心特质                      | "Colin 住在北京。" "对花生过敏。"                                          |
+| `preferences` | 插入 atom；不 merge               | 按 slug 追加新版本                             | 反复出现的"更喜欢 X / 想要 X / 习惯这样做"，**包括对 AI 的行为规则** | "偏好单二进制 Go 服务。" "回复永远要短。"                                  |
+| `entities`    | 插入 atom；不 merge               | 按 slug 追加新版本                             | 第三方：人、项目、公司、地点                                         | "财务 Lisa 喜欢用邮件。" "Tesla 总部在 Austin，代码 TSLA。"                |
+| `events`      | **只插入**；禁止 merge / 更新     | **只插入**；禁止 merge / 更新 / supersede 旧行 | 带时间的事实、决定、里程碑——历史记录，不可变                         | "2026-05-17：mypast 选择 Postgres-only 存储（弃用 ~/.mypast/ 文件方案）。" |
 
 **TDAI 的 `instruction` 并入 `preferences`。** "回复永远要短" 在使用语义上就是一条对 AI 行为的偏好。如果未来需要区分 AI 行为规则和日常生活偏好（例如系统 prompt 只想加载行为规则），在 `preferences` 上加一列 `subkind text`，取值 `lifestyle | ai-behavior`，而不是再多开一个分类。
 
@@ -150,12 +161,23 @@ mypast://{scope}/{path}
 | `sessions`           | session 聚合 | （已有，扩展）session 元数据；**新增** `abstract text` 与 `embedding vector(1024)`，由 T2 后置步骤刷新                                          |
 | `session_turns`      | T0   | （已有）`messages_jsonl text`                                                                                                                           |
 | **`atoms`**          | T1   | `uri`、`session_id`、`category`（4 值 CHECK）、`priority int`、`scene_name`、`slug text?`（带 slug 类别的 atom 携带，T3 直接路由用）、`content text`、`source_turn_ids uuid[]`、`embedding vector(1024)`、时间戳 |
-| **`scenes`**         | T2   | `uri`、`session_id`、`display_name text?`（LLM 生成的可读名）、`abstract text`、`body text`、`source_atom_uris text[]`、`embedding vector(1024)`、时间戳 |
-| **`memories`**       | T3   | `uri`、`category`（4 值 CHECK）、`slug text?` 带 `UNIQUE (category, slug) WHERE slug IS NOT NULL`、`abstract text`、`body text`、`source_scene_uris text[]`、`embedding vector(1024)`、时间戳 |
+| **`scenes`**         | T2   | `uri`、`session_id`、`display_name text?`、`abstract text`、`body text`、`source_atom_uris text[]`、`embedding vector(1024)`、**`version int`**、**`superseded_at timestamptz?`**、时间戳（见 §7.1；worker 默认追加版本而非原地改 body） |
+| **`memories`**       | T3   | **`id uuid` PK**、`uri`（逻辑 URI，稳定）、`category`、`slug text?`、**`version int`**、**`superseded_at timestamptz?`**、`abstract text`、`body text`、`source_scene_uris text[]`、`embedding vector(1024)`、时间戳；**活跃行** `UNIQUE (uri) WHERE superseded_at IS NULL`；slug 活跃行 `UNIQUE (category, slug) WHERE slug IS NOT NULL AND superseded_at IS NULL`（迁移草图：`00003_memories_versioning.sql`） |
 | **`pipeline_state`** | —    | `session_id`、`t1_status`、`t1_advanced_at`、`t2_status`、`t2_advanced_at`、`t3_status`、`t3_advanced_at`、`warmup_threshold int`                       |
 | **`tasks`**          | —    | `id`、`kind`（`t1` / `t2` / `t3` / `backfill`）、`status`、`progress`、`result_uri`、`error`、`session_id?`、时间戳                                     |
 
-T1 及以上一律以 `uri text primary key` 索引；`body text` 列建 FTS；`embedding` 列为 `vector(1024)`。
+T0–T2 仍以 `uri text primary key`；**`memories` 以 `id uuid` 为主键**（同一逻辑 `uri` 可有多版本行）。`body text` 列建 FTS；`embedding` 列为 `vector(1024)`。
+
+### 7.1 `memories` 版本化（实施前迁移）
+
+Phase A 的 `memories` 表以 `uri` 为 PK，**在 Phase D（T3 worker）之前** 应用 `00003_memories_versioning.sql`：
+
+- 增加 `id uuid`、`version int`、`superseded_at timestamptz`。
+- 逻辑 URI 仍对用户可见（`mypast cat mypast://profile` → 最新 `superseded_at IS NULL` 的行）。
+- Worker **禁止** `UPDATE … SET body = …`；rollup 一律 `INSERT` + 将上一活跃行 `superseded_at = now()`。
+- `mypast cat` / 检索 / `mypast meta` 默认只读活跃行；`mypast cat <uri> --version=N` 或 `--all-versions` 用于审计（CLI 随 Phase D 落地）。
+
+`scenes` 可选同样模式（T2 频繁改 body 时有同类风险）；Phase C 可先原地更新，若 eval 显示漂移再升为版本化。
 
 观察用 CLI：
 
@@ -183,17 +205,20 @@ T1 worker（按 session）
        或 (warmup：2 → 4 → 8 → … → everyN)
   动作：读未处理 T0 turns
        → 一次 LLM 调用：情境切分 + atom 抽取（TDAI 提示词，4 类）
-       → 新 atom 与既有比对去重（embedding top-K + LLM 合并决策）
-       → 插入 / 更新 atoms；设置 pipeline_state.t2_status='pending'
+       → 与既有 atom 比对（embedding top-K）：默认 **INSERT 新 atom**
+           · 近重复：写 metadata（如 `near_duplicate_uri`）或降权，**不** LLM merge
+           · `events` 类别：永远 INSERT，不参与 dedup merge
+           · merge 仅 `mypast atom merge <uri-a> <uri-b>`（显式、稀疏）
+       → 设置 pipeline_state.t2_status='pending'
 
 T2 worker（按 session）
   触发：向下单向定时器
         fire = max(now + delay_after_t1, last_t2 + min_interval)
         硬上限 last_t2 + max_interval
   动作：读 session 内有变化的 atom
-       → LLM 调用：生成 / 更新 scene 行（abstract + body）
-       → upsert scenes
-       → 后置：基于该 session 的 scene abstract 刷新
+       → LLM 调用：生成 scene（abstract + body）
+       → 默认 **追加 scene 版本**（或 atom 增量足够大时才改写；见 §7.1）
+       → 后置：基于该 session **活跃** scene abstract 刷新
          sessions.{abstract, embedding}
          （短 LLM 调用；scene 很少时也可纯模板拼接）
        → 设置 pipeline_state.t3_status='pending'
@@ -203,7 +228,8 @@ T3 worker（全局互斥）
        或 定期 rollup
   动作：收集变化的 scenes
        → LLM 调用：蒸馏到分类记忆行（abstract + body）
-       → upsert memories
+       → **INSERT 新 memories 行** + supersede 同 URI 的上一活跃行（禁止 UPDATE body）
+       → 可选：触发 `mypast eval`（见 §12）
 ```
 
 ## 9. 触发与节制
@@ -236,19 +262,46 @@ T3 worker（全局互斥）
 步骤：
 
 1. **阶段 A（仅新增）** —— 新增 Postgres 表（`atoms`、`scenes`、`memories`、`pipeline_state`、`tasks`），以及 `sessions` 表的新列（`abstract`、`embedding`）。其余已有表不动。观察用 CLI 同步落地。
-2. **阶段 B** —— 上线 T1 worker；新 turn 进入即填 `atoms`。旧 turn 可用 `mypast t1 backfill` 回灌。
+2. **阶段 B** —— 上线 T1 worker（§6.1 追加策略）；新 turn 进入即填 `atoms`。旧 turn 可用 `mypast t1 backfill` 回灌。生产环境 **关闭** legacy `overview_text` summarizer（`MYPAST_SUMMARIZER_ENABLED=false`），避免与 T2 `abstract` 双轨叙事。
 3. **阶段 C** —— 上线 T2 worker，包括基于 scene 刷新 `sessions.{abstract, embedding}` 的后置步骤；`scenes` 和 session 级 facet 开始有产物。
-4. **阶段 D** —— 上线 T3 worker；`memories` 开始有产物。
-5. **阶段 E** —— 弃用 `sessions.overview_text`；当前 summarizer worker 退役。session 级叙事改由 `sessions.abstract` 加各 scene 的 `body`（通过 `mypast tree mypast://sessions/<sid>` 列出）承担。
+4. **阶段 B+（Phase D 之前）** —— 应用 `00003_memories_versioning.sql`，再上线 T3。
+5. **阶段 D** —— 上线 T3 worker；`memories` 开始有产物；rollup 后跑 `mypast eval`。
+6. **阶段 E** —— 弃用 `sessions.overview_text` 列与 summarizer worker。session 级叙事改由 `sessions.abstract` 加各 scene 的 `body`（通过 `mypast tree mypast://sessions/<sid>` 列出）承担。
 
 各阶段独立可发布。采集面（`POST /sessions/:id/upload`）始终不变。
 
 ## 12. 待决问题
 
-实施前确认清单：
+### 12.1 已锁定（整合策略）
 
-1. **Embedding 模型与维度。** 当前未配。建议：与 summarizer 共用 OpenAI 兼容 provider，维度默认 1024。请确认。
-2. **Warmup ramp 数值。** TDAI 默认 1 → 2 → 4 → … → N=5，成本上偏激进。建议改为 `2 → 4 → 8 → N=8`。请确认。
+以下在实施 T1/T3 worker **之前** 视为已定，详见 §6.1 与 [`memory-consolidation-review.zh.md`](./memory-consolidation-review.zh.md)：
+
+| 决策 | 立场 |
+|------|------|
+| T0 证据 | append-only，worker 不改写 |
+| T1 dedup | 默认 **追加 atom**；merge **非** worker 默认 |
+| T1/T3 `events` | 只插入，不 merge |
+| T3 `memories` | 版本化行 + `superseded_at`；禁止 in-place `body` 更新 |
+| 论文依据 | Zhang et al., arXiv:2605.12978v1 — 持续 LLM 整合不可靠；保留情景层、稀疏整合 |
+
+### 12.2 实施前仍须确认
+
+1. **Embedding 模型与维度。** 建议：与 LLM 抽取共用 OpenAI 兼容 provider，维度 **1024**（与 Phase A 迁移一致）。
+2. **Warmup ramp 数值。** 建议 `2 → 4 → 8 → N=8`（`extraction.every_n=8`），替代 TDAI 的 1→2→4→5。
+3. **`mypast eval` 探针集。** 至少 5 条固定 recall 查询（手写即可），每次 T3 rollup 后对比：
+   - **基线：** 仅 `session_turns` + FTS；
+   - **全栈：** T0–T3 向量 + FTS + 溯源下钻。
+   若全栈命中持续低于基线 → 告警 / 暂停 T3 rollup，调查整合漂移。
+
+### 12.3 `mypast eval`（最小规格）
+
+```
+mypast eval [--queries=path] [--baseline=t0-fts|full]
+```
+
+- 默认读取 `scripts/eval_queries.txt`（或仓库内等价路径），每行一条自然语言查询 + 期望 URI 前缀（可选）。
+- 输出：各查询的 hit@k、基线 vs 全栈差分；非零 exit code 表示回归。
+- 首版可不接 CI；T3 worker 完成后台触发或文档要求人工跑。
 
 ## 13. 参考
 
@@ -263,3 +316,4 @@ T3 worker（全局互斥）
   - `docs/en/concepts/04-viking-uri.md` —— URI 方案
   - `docs/en/concepts/08-session.md` —— 两阶段提交 + 8 类记忆
   - `docs/en/concepts/07-retrieval.md` —— 带分数传播的分层检索
+- 持续整合对照：[`memory-consolidation-review.zh.md`](./memory-consolidation-review.zh.md)（arXiv:2605.12978）

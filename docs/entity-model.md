@@ -95,12 +95,13 @@ many scenes (across sessions)
 
 ### `memories` (T3)
 
-- **One row** = long-term memory in one of four categories (same names as atoms).
+- **Logical URI** = long-term memory in one of four categories (same names as atoms).
+- **Versioning:** multiple physical rows per URI; `superseded_at IS NULL` = active (see `design-l0-l4.md` §7.1, migration `00003_memories_versioning.sql`). Workers INSERT + supersede — no in-place `body` updates.
 - **Links:** `source_scene_uris[]` → scenes that contributed; not session-scoped.
 - **Special cases:**
   - `profile` → singleton at `mypast://profile`
   - `preferences` / `entities` → semantic slug URIs when possible
-  - `events` → dated slug, append-only (no merge)
+  - `events` → dated slug, append-only (no merge at T1 or T3)
 - **Content:** `abstract` + `body`, same facet idea as scenes.
 
 ### `pipeline_state` (per session)

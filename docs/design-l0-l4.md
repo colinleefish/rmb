@@ -108,7 +108,7 @@ Semantic vs opaque is decided per tier based on whether the row has an intrinsic
 | Row | Why this style |
 |---|---|
 | T0 turn (ordinal) | Turns are chronological; numbering IS the name. |
-| T1 atom (UUID) | Atoms get merged during dedup. Content mutates; a content-derived slug would lie. |
+| T1 atom (UUID) | Append by default; merge only via explicit `mypast atom merge`. Workers must not silently rewrite content. |
 | T2 scene (UUID + `display_name`) | Scene rows update as atoms accumulate; URI stable via UUID, name surfaced separately for display. |
 | T3 `preferences` / `entities` (slug) | Inherently named topics / entities. URI describes the *topic* or *identity*, not the current content — so the slug stays stable as the body evolves. |
 | T3 `events` (date + slug) | Events are immutable by category rule; date prefix sorts naturally. |
@@ -123,14 +123,25 @@ Semantic vs opaque is decided per tier based on whether the row has an intrinsic
 
 ## 6. Memory taxonomy (T1 and T3 share these)
 
-Four categories, same names at extraction (T1) and storage (T3). T3 routing is mechanical: aggregate atoms by category, upsert memory of the same category.
+Four categories, same names at extraction (T1) and storage (T3). T3 routing is mechanical: aggregate atoms/scenes by category, then **append a new version** at the target memory URI (see §7 `memories` versioning) — never in-place `body` updates.
 
-| Category | Mergeable | What it captures | Example |
-|---|---|---|---|
-| `profile` | yes (singleton row) | Stable identity attributes — basics, demographics, health/taboos, core traits | "Colin lives in Beijing." "Allergic to peanuts." |
-| `preferences` | yes (append + dedup) | Recurring "prefers X / wants X / works this way", **including AI-behavior rules** | "Prefers single-binary Go services." "Always wants short answers." |
-| `entities` | yes (append + dedup) | Third parties: people, projects, companies, places | "Lisa from accounting prefers email." "Tesla HQ in Austin, ticker TSLA." |
-| `events` | **no** | Dated facts, decisions, milestones — immutable historical record | "2026-05-17: chose Postgres-only storage for mypast (rejected ~/.mypast/ files)." |
+### 6.1 Consolidation stance (continuous consolidation paper)
+
+Aligned with arXiv:2605.12978 (*Useful Memories Become Faulty When Continuously Updated by LLMs*) and [`memory-consolidation-review.zh.md`](./memory-consolidation-review.zh.md):
+
+- **T0 (`session_turns`)** is append-only episodic evidence; no worker may rewrite it.
+- **Abstract tiers (T1–T3)** are LLM-produced; default policy is **Retain**: insert new rows; consolidation (merge / overwrite `body`) must be **sparse, explicit, and observable** — not the worker default path.
+- **T1 dedup merge is controlled and sparse, not the worker default.** Default: embedding top-K only tags `near_duplicate_uri` or downweights; **insert a new atom**. Merge runs only via `mypast atom merge` (or an equivalent human-triggered task).
+- **`events` (T1 and T3):** append only — no merge, delete, or in-place update.
+- **T3 `profile` / slug rows:** no in-place `body` updates; each rollup **INSERT**s a new row and sets `superseded_at` on the previous active row; reads use `WHERE superseded_at IS NULL`.
+- **Drift detection:** `mypast eval` (§12) after T3 rollup compares "T0+FTS" vs "full stack"; sustained regression triggers an alert.
+
+| Category | T1 worker | T3 worker | What it captures | Example |
+|---|---|---|---|---|
+| `profile` | insert atom; no merge | append new version (`mypast://profile`) | Stable identity — basics, health/taboos, core traits | "Colin lives in Beijing." "Allergic to peanuts." |
+| `preferences` | insert atom; no merge | append new version per slug | Recurring "prefers X / wants X", **including AI-behavior rules** | "Prefers single-binary Go services." "Always wants short answers." |
+| `entities` | insert atom; no merge | append new version per slug | Third parties: people, projects, companies, places | "Lisa from accounting prefers email." |
+| `events` | **insert only** | **insert only** | Dated facts, decisions, milestones — immutable | "2026-05-17: chose Postgres-only storage." |
 
 **`instruction` rolls into `preferences`.** "Always give short answers" is operationally a preference about AI conduct. If you ever need to separate AI-behavior rules from lifestyle preferences for retrieval (e.g. only load behavior rules into system prompt), add a `subkind text` column on `preferences` with values `lifestyle | ai-behavior` rather than a fifth category.
 
@@ -149,12 +160,23 @@ Everything lives in Postgres. No filesystem tree.
 | `sessions` | session aggregate | (exists, extended) — session metadata; **adds** `abstract text` and `embedding vector(1024)` populated by a small post-T2 step |
 | `session_turns` | T0 | (exists) — `messages_jsonl text` |
 | **`atoms`** | T1 | `uri`, `session_id`, `category` (4-value CHECK), `priority int`, `scene_name`, `slug text?` (carried up to T3 for slug-bearing categories), `content text`, `source_turn_ids uuid[]`, `embedding vector(1024)`, timestamps |
-| **`scenes`** | T2 | `uri`, `session_id`, `display_name text?` (LLM-generated human label), `abstract text`, `body text`, `source_atom_uris text[]`, `embedding vector(1024)`, timestamps |
-| **`memories`** | T3 | `uri`, `category` (4-value CHECK), `slug text?` with `UNIQUE (category, slug) WHERE slug IS NOT NULL`, `abstract text`, `body text`, `source_scene_uris text[]`, `embedding vector(1024)`, timestamps |
+| **`scenes`** | T2 | `uri`, `session_id`, `display_name text?`, `abstract text`, `body text`, `source_atom_uris text[]`, `embedding vector(1024)`, **`version int`**, **`superseded_at timestamptz?`**, timestamps (§7.1; worker prefers append-version over in-place body rewrite) |
+| **`memories`** | T3 | **`id uuid` PK**, `uri` (stable logical URI), `category`, `slug text?`, **`version int`**, **`superseded_at timestamptz?`**, `abstract text`, `body text`, `source_scene_uris text[]`, `embedding vector(1024)`, timestamps; **active row** `UNIQUE (uri) WHERE superseded_at IS NULL`; active slug `UNIQUE (category, slug) WHERE slug IS NOT NULL AND superseded_at IS NULL` (sketch: `00003_memories_versioning.sql`) |
 | **`pipeline_state`** | — | `session_id`, `t1_status`, `t1_advanced_at`, `t2_status`, `t2_advanced_at`, `t3_status`, `t3_advanced_at`, `warmup_threshold int` |
 | **`tasks`** | — | `id`, `kind` (`t1`/`t2`/`t3`/`backfill`), `status`, `progress`, `result_uri`, `error`, `session_id?`, timestamps |
 
-`uri text primary key` everywhere (T1+). `body text` columns are FTS-indexed; `embedding` columns are `vector(1024)`.
+T0–T2 keep `uri text primary key`; **`memories` uses `id uuid` as PK** (multiple version rows per logical `uri`). `body text` columns are FTS-indexed; `embedding` columns are `vector(1024)`.
+
+### 7.1 `memories` versioning (migrate before Phase D)
+
+Phase A created `memories` with `uri` as PK. **Before the T3 worker (Phase D)**, apply `00003_memories_versioning.sql`:
+
+- Add `id uuid`, `version int`, `superseded_at timestamptz`.
+- Logical URI stays user-visible (`mypast cat mypast://profile` → latest row where `superseded_at IS NULL`).
+- Workers **must not** `UPDATE … SET body = …`; rollup is always `INSERT` + supersede the previous active row.
+- `mypast cat` / retrieval / `mypast meta` default to the active row; `--version=N` / `--all-versions` for audit (CLI lands with Phase D).
+
+`scenes` may adopt the same pattern in Phase C if eval shows drift; in-place updates are acceptable initially.
 
 Inspection CLI:
 
@@ -182,19 +204,21 @@ T1 worker (per session)
         OR (warmup: 2 → 4 → 8 → ... → everyN)
   action: read pending T0 turns
         → one LLM call: scene-segment + extract atoms (TDAI prompt, 4-category)
-        → dedup new atoms vs existing (embedding top-K + LLM merge decision)
-        → insert/update atoms; set pipeline_state.t2_status='pending'
+        → compare to existing atoms (embedding top-K): default **INSERT new atom**
+            · near-duplicates: metadata (e.g. near_duplicate_uri) or downweight — **no** LLM merge
+            · `events`: always INSERT; never dedup-merge
+            · merge only via `mypast atom merge <uri-a> <uri-b>` (explicit, sparse)
+        → set pipeline_state.t2_status='pending'
 
 T2 worker (per session)
   trigger: downward-only timer
            fire = max(now + delay_after_t1, last_t2 + min_interval)
            hard ceiling at last_t2 + max_interval
   action: read changed atoms for session
-        → LLM call: generate / update scene rows (abstract + body)
-        → upsert scenes
+        → LLM call: generate scene (abstract + body)
+        → default **append scene version** (or rewrite only on large atom delta; §7.1)
         → post-step: re-derive sessions.{abstract, embedding}
-          from the session's scene abstracts (one short LLM call,
-          or template-only if scenes are few)
+          from **active** scene abstracts (short LLM call or template)
         → set pipeline_state.t3_status='pending'
 
 T3 worker (global mutex)
@@ -202,7 +226,8 @@ T3 worker (global mutex)
         OR scheduled rollup tick
   action: collect changed scenes
         → LLM call: distill into category-specific memory rows (abstract + body)
-        → upsert memories
+        → **INSERT new memories row** + supersede prior active row for same URI (no UPDATE body)
+        → optional: run `mypast eval` (§12)
 ```
 
 ## 9. Triggers and discipline
@@ -235,19 +260,43 @@ Current state:
 Migration steps:
 
 1. **Phase A (additive)** — add new Postgres tables (`atoms`, `scenes`, `memories`, `pipeline_state`, `tasks`) and the new columns on `sessions` (`abstract`, `embedding`). Existing tables otherwise untouched. Inspection CLI lands.
-2. **Phase B** — add T1 worker; populate `atoms` from new turns. Old turns can be backfilled with `mypast t1 backfill`.
-3. **Phase C** — add T2 worker, including the post-T2 step that refreshes `sessions.{abstract, embedding}` from the session's scenes. `scenes` and session facets start populating.
-4. **Phase D** — add T3 worker. `memories` starts populating.
-5. **Phase E** — deprecate `sessions.overview_text`; the current summarizer worker is retired. Session-level narrative now lives in `sessions.abstract` plus the per-scene `body` rows reachable via `mypast tree mypast://sessions/<sid>`.
+2. **Phase B** — add T1 worker (§6.1 append policy); populate `atoms` from new turns. Backfill via `mypast t1 backfill`. Disable legacy `overview_text` summarizer in production (`MYPAST_SUMMARIZER_ENABLED=false`) so it does not compete with T2 `abstract`.
+3. **Phase C** — add T2 worker; refresh `sessions.{abstract, embedding}` from scenes.
+4. **Phase B+ (before Phase D)** — apply `00003_memories_versioning.sql`, then ship T3.
+5. **Phase D** — add T3 worker; `memories` populate; run `mypast eval` after rollups.
+6. **Phase E** — drop `sessions.overview_text` and retire the summarizer worker. Session narrative = `sessions.abstract` + scene bodies via `mypast tree`.
 
 Each phase ships independently. Existing capture surface (`POST /sessions/:id/upload`) does not change.
 
 ## 12. Open decisions
 
-Pre-commit checklist before implementation:
+### 12.1 Locked (consolidation policy)
 
-1. **Embedding model and dimension.** Currently unset. Recommendation: start with the same OpenAI-compatible provider as the summarizer; default to 1024-dim. Confirm.
-2. **Warmup ramp values.** TDAI's default (1 → 2 → 4 → … → N=5) is aggressive on cost. Recommendation: ramp `2 → 4 → 8 → N=8`. Confirm.
+Fixed before implementing T1/T3 workers — see §6.1 and [`memory-consolidation-review.zh.md`](./memory-consolidation-review.zh.md):
+
+| Decision | Stance |
+|---|---|
+| T0 evidence | append-only; workers never rewrite |
+| T1 dedup | default **append atom**; merge **not** worker default |
+| T1/T3 `events` | insert only; no merge |
+| T3 `memories` | versioned rows + `superseded_at`; no in-place `body` update |
+| Paper | Zhang et al., arXiv:2605.12978v1 — continuous LLM consolidation is unreliable; keep episodic layer, consolidate sparingly |
+
+### 12.2 Still to confirm
+
+1. **Embedding model and dimension.** Recommendation: same OpenAI-compatible provider as extraction; **1024** dims (matches Phase A).
+2. **Warmup ramp.** Recommendation: `2 → 4 → 8 → N=8` (`extraction.every_n=8`), not TDAI's 1→2→4→5.
+3. **`mypast eval` probe set.** At least five fixed recall queries; after each T3 rollup compare T0+FTS baseline vs full stack. If full stack underperforms baseline → alert / pause T3.
+
+### 12.3 `mypast eval` (minimal spec)
+
+```
+mypast eval [--queries=path] [--baseline=t0-fts|full]
+```
+
+- Default queries file: `scripts/eval_queries.txt` (one query per line; optional expected URI prefix).
+- Output: per-query hit@k and baseline vs full-stack delta; non-zero exit on regression.
+- v1 may be manual-only; T3 worker may invoke it post-rollup.
 
 ## 13. References
 
@@ -262,3 +311,4 @@ Pre-commit checklist before implementation:
   - `docs/en/concepts/04-viking-uri.md` — URI scheme
   - `docs/en/concepts/08-session.md` — two-phase commit + 8-category memory
   - `docs/en/concepts/07-retrieval.md` — hierarchical retrieval with score propagation
+- Consolidation review: [`memory-consolidation-review.zh.md`](./memory-consolidation-review.zh.md) (arXiv:2605.12978)

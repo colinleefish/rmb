@@ -1,0 +1,10 @@
+# mypast eval — fixed recall probes (one per line).
+# Format: <query>\t<optional expected URI prefix>
+# Used after T3 rollup; compare T0+FTS baseline vs full stack.
+# See docs/design-l0-l4.md §12.3
+
+Where do I live?	mypast://profile
+What are my preferences for Go services?	mypast://preferences/
+Who is Lisa from accounting?	mypast://entities/
+What did we decide about Postgres-only storage?	mypast://events/
+How should the AI format replies?	mypast://preferences/
