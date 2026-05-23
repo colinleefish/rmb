@@ -22,10 +22,6 @@ scenes, memories, pipeline state, and tasks).
 Production (`mem.colinleefish.com`): Caddy in Docker terminates TLS and proxies to
 `mypast` on `:8080` — see `deploy/Caddyfile` and `docker-compose.prod.yml`.
 
-CI/CD: GitHub Actions runs tests on PR/push; merging to `main` deploys over SSH
-(`docker compose -f docker-compose.prod.yml up -d --build` on the server). Setup:
-[`docs/cicd.md`](docs/cicd.md).
-
 Planned (see `TODO.md`): storage CLI (`store/read/list/delete/search`),
 embedding worker, hybrid recall, MCP wrapper.
 
@@ -83,7 +79,7 @@ internal/
     session/           Upload service (turn insert, archive URI)
     summarize/         Background worker (claim → merge → mark summarized)
 docker/                init.sql for the pgvector container
-scripts/               one-off SQL utilities
+scripts/               ci.sh, deploy.sh, SQL utilities
 ```
 
 ## Running
@@ -109,6 +105,46 @@ docker compose up -d        # postgres + app on :8080
 ```
 
 Health check: `curl localhost:8080/healthz`.
+
+## CI / Deploy (agents)
+
+There is **no GitHub Actions**. CI and production deploy are **agent-driven**: run
+scripts from the repo root on a machine that can SSH to production.
+
+### CI
+
+```bash
+make ci
+```
+
+Runs `go test ./...` and a compile check (`scripts/ci.sh`). Use after code changes
+and before deploy. For test-only or PR prep, stop here.
+
+### Deploy
+
+**Production:** https://mem.colinleefish.com — app at `/opt/mypast`, Caddy + Docker
+(`docker-compose.prod.yml`).
+
+```bash
+make deploy
+```
+
+Runs CI, then SSHs to the server, `git reset --hard` to `main`, `docker compose … up -d --build`, and waits for `/healthz`.
+
+**Prerequisites**
+
+- Latest `main` pushed to GitHub (server pulls via deploy key).
+- SSH access to `root@mem.colinleefish.com` (default key: `~/.ssh/colinleefish_ed25519`).
+- Optional overrides: `scripts/deploy.env` (copy from `scripts/deploy.env.example`; gitignored).
+
+### When the user says ship / deploy / release
+
+1. `make ci` — fix any failures.
+2. Commit and push to `main` (ask first if unclear).
+3. `make deploy`.
+4. Report whether `/healthz` passed and link https://mem.colinleefish.com
+
+More detail: [`docs/deploy.md`](docs/deploy.md).
 
 ## Configuration
 
@@ -198,7 +234,15 @@ the `mypast://sessions/<id>/turns/<n>` URI for the new turn.
 
 ## Testing
 
+Same as CI (preferred):
+
+```bash
+make ci
 ```
+
+Or directly:
+
+```bash
 go test ./...
 ```
 
