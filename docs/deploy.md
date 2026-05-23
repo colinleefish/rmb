@@ -29,7 +29,8 @@ Runs `go test ./...` and a compile check.
 | **Your machine** | push / fetch to GitHub | `ssproxy && git push origin main` (`http(s)_proxy=http://127.0.0.1:1080`) |
 | **Production server** | `git fetch` in deploy | `https_proxy=http://localhost:1080` (set in `scripts/deploy.sh`) |
 
-Deploy SSH session exports `http_proxy` / `https_proxy` to `http://localhost:1080` before `git fetch`.
+Deploy uses `git -c http.proxy=… -c https.proxy=… fetch` (proxy scoped to Git only).
+The post-deploy `curl` to `127.0.0.1:8080/healthz` uses `--noproxy '*'` so it never goes through the proxy.
 
 ```bash
 make deploy

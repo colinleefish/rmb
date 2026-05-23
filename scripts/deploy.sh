@@ -32,18 +32,14 @@ SSH_OPTS=(-i "$DEPLOY_SSH_KEY_FILE" -o StrictHostKeyChecking=accept-new -o Batch
 
 ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<EOF
 set -euo pipefail
-# Server is in China; GitHub needs a local proxy (same port as ssproxy on your laptop).
-export https_proxy=http://localhost:1080
-export http_proxy=http://localhost:1080
-export HTTPS_PROXY=http://localhost:1080
-export HTTP_PROXY=http://localhost:1080
 cd "$DEPLOY_PATH"
-git fetch origin main
+# Proxy only for GitHub — do not export globally; curl would use it for 127.0.0.1:8080.
+git -c http.proxy=http://localhost:1080 -c https.proxy=http://localhost:1080 fetch origin main
 git checkout main
 git reset --hard "$SHA"
 docker compose -f docker-compose.prod.yml up -d --build
 for i in 1 2 3 4 5 6 7 8 9 10; do
-  if curl -fsS http://127.0.0.1:8080/healthz >/dev/null; then
+  if curl --noproxy '*' -fsS http://127.0.0.1:8080/healthz >/dev/null; then
     echo "healthz OK"
     exit 0
   fi

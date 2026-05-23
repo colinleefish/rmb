@@ -143,7 +143,7 @@ Runs CI, then SSHs to the server, `git reset --hard` to `main`, `docker compose 
 | Where | When | Setting |
 |-------|------|---------|
 | **Your machine** | `git push` / `git fetch` to GitHub | `ssproxy` then git (sets `http(s)_proxy=http://127.0.0.1:1080`) |
-| **Production server** | `git fetch` during `make deploy` | `https_proxy=http://localhost:1080` (and `http_proxy`; set automatically in `scripts/deploy.sh`) |
+| **Production server** | `git fetch` during `make deploy` | `git -c https.proxy=http://localhost:1080 … fetch` (proxy not exported globally; `healthz` curl bypasses proxy) |
 
 Example push from China:
 
