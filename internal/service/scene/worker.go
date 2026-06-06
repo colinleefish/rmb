@@ -129,27 +129,27 @@ func (w *Worker) processSession(ctx context.Context, sessionID uuid.UUID) error 
 	groups := groupAtomsBySceneName(batch.Atoms)
 	atomsJSON, err := serializeAtomsForLLM(groups)
 	if err != nil {
-		return w.markSessionFailed(ctx, sessionID, err)
+		return w.handleProcessError(ctx, sessionID, err)
 	}
 
 	raw, err := w.llm.BuildScenes(ctx, atomsJSON)
 	if err != nil {
-		return w.markSessionFailed(ctx, sessionID, fmt.Errorf("llm build scenes: %w", err))
+		return w.handleProcessError(ctx, sessionID, fmt.Errorf("llm build scenes: %w", err))
 	}
 
 	validURIs := atomURIs(batch.Atoms)
 	parsed, err := parseBuildScenesResponse(raw, validURIs)
 	if err != nil {
-		return w.markSessionFailed(ctx, sessionID, fmt.Errorf("parse build scenes: %w", err))
+		return w.handleProcessError(ctx, sessionID, fmt.Errorf("parse build scenes: %w", err))
 	}
 
 	abstract, err := w.llm.SummarizeSessionAbstract(ctx, joinSceneAbstracts(parsed))
 	if err != nil {
-		return w.markSessionFailed(ctx, sessionID, fmt.Errorf("llm session abstract: %w", err))
+		return w.handleProcessError(ctx, sessionID, fmt.Errorf("llm session abstract: %w", err))
 	}
 
 	if err := w.persistScenes(ctx, batch, parsed, abstract); err != nil {
-		return w.markSessionFailed(ctx, sessionID, err)
+		return w.handleProcessError(ctx, sessionID, err)
 	}
 	return nil
 }
