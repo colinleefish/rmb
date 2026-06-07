@@ -52,6 +52,33 @@ func groupAtomsBySceneName(atoms []model.Atom) []atomGroup {
 	return out
 }
 
+// chunkGroups splits scene-name groups into batches whose atom counts stay
+// under maxAtoms, so each BuildScenes LLM call produces a response small enough
+// to return as complete JSON. A single group larger than maxAtoms is emitted
+// alone (best effort) rather than split, to keep a scene_name intact.
+func chunkGroups(groups []atomGroup, maxAtoms int) [][]atomGroup {
+	if maxAtoms <= 0 || len(groups) == 0 {
+		return [][]atomGroup{groups}
+	}
+	var chunks [][]atomGroup
+	var cur []atomGroup
+	curCount := 0
+	for _, g := range groups {
+		n := len(g.Atoms)
+		if len(cur) > 0 && curCount+n > maxAtoms {
+			chunks = append(chunks, cur)
+			cur = nil
+			curCount = 0
+		}
+		cur = append(cur, g)
+		curCount += n
+	}
+	if len(cur) > 0 {
+		chunks = append(chunks, cur)
+	}
+	return chunks
+}
+
 func serializeAtomsForLLM(groups []atomGroup) (string, error) {
 	inputs := make([]atomInput, 0)
 	for _, group := range groups {

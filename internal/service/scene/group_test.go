@@ -27,6 +27,45 @@ func TestGroupAtomsBySceneName(t *testing.T) {
 	}
 }
 
+func TestChunkGroups(t *testing.T) {
+	mk := func(name string, n int) atomGroup {
+		atoms := make([]model.Atom, n)
+		return atomGroup{DisplayName: name, Atoms: atoms}
+	}
+	groups := []atomGroup{mk("a", 40), mk("b", 30), mk("c", 50), mk("d", 10)}
+
+	chunks := chunkGroups(groups, 60)
+	// a(40) -> chunk1; b(30) would push to 70 -> chunk2 starts with b(30),
+	// c(50) pushes to 80 -> chunk3 with c, d(10) fits -> c+d.
+	if len(chunks) != 3 {
+		t.Fatalf("got %d chunks want 3: %+v", len(chunks), chunks)
+	}
+	for i, c := range chunks {
+		total := 0
+		for _, g := range c {
+			total += len(g.Atoms)
+		}
+		if total > 60 && len(c) > 1 {
+			t.Fatalf("chunk %d exceeds max with multiple groups: %d", i, total)
+		}
+	}
+}
+
+func TestChunkGroups_oversizeGroupAlone(t *testing.T) {
+	big := atomGroup{DisplayName: "big", Atoms: make([]model.Atom, 200)}
+	chunks := chunkGroups([]atomGroup{big}, 60)
+	if len(chunks) != 1 || len(chunks[0]) != 1 {
+		t.Fatalf("oversize group should be emitted alone, got %+v", chunks)
+	}
+}
+
+func TestChunkGroups_disabled(t *testing.T) {
+	groups := []atomGroup{{DisplayName: "a", Atoms: make([]model.Atom, 5)}}
+	if got := chunkGroups(groups, 0); len(got) != 1 {
+		t.Fatalf("maxAtoms=0 should yield single chunk, got %d", len(got))
+	}
+}
+
 func TestSerializeAtomsForLLM(t *testing.T) {
 	groups := groupAtomsBySceneName([]model.Atom{
 		{URI: "mypast://sessions/x/atoms/1", Category: "entities", Priority: 50, Content: "fact"},

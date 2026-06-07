@@ -75,10 +75,11 @@ type ExtractionConfig struct {
 }
 
 type SceneConfig struct {
-	Enabled       bool
-	PollInterval  time.Duration
-	DelayAfterT1  time.Duration
-	BatchSessions int
+	Enabled          bool
+	PollInterval     time.Duration
+	DelayAfterT1     time.Duration
+	BatchSessions    int
+	MaxAtomsPerBatch int
 }
 
 type fileConfig struct {
@@ -120,10 +121,11 @@ type fileConfig struct {
 		MaxCharsPerBatch *int   `toml:"max_chars_per_batch"`
 	} `toml:"extraction"`
 	Scene struct {
-		Enabled       *bool  `toml:"enabled"`
-		PollInterval  string `toml:"poll_interval"`
-		DelayAfterT1  string `toml:"delay_after_t1"`
-		BatchSessions *int   `toml:"batch_sessions"`
+		Enabled          *bool  `toml:"enabled"`
+		PollInterval     string `toml:"poll_interval"`
+		DelayAfterT1     string `toml:"delay_after_t1"`
+		BatchSessions    *int   `toml:"batch_sessions"`
+		MaxAtomsPerBatch *int   `toml:"max_atoms_per_batch"`
 	} `toml:"scene"`
 }
 
@@ -169,10 +171,11 @@ func Load() (Config, error) {
 			MaxCharsPerBatch: 24000,
 		},
 		Scene: SceneConfig{
-			Enabled:       true,
-			PollInterval:  15 * time.Second,
-			DelayAfterT1:  90 * time.Second,
-			BatchSessions: 8,
+			Enabled:          true,
+			PollInterval:     15 * time.Second,
+			DelayAfterT1:     90 * time.Second,
+			BatchSessions:    8,
+			MaxAtomsPerBatch: 60,
 		},
 	}
 
@@ -401,6 +404,9 @@ func loadFileConfig(cfg *Config, path string, explicitPath bool) error {
 	if fc.Scene.BatchSessions != nil {
 		cfg.Scene.BatchSessions = *fc.Scene.BatchSessions
 	}
+	if fc.Scene.MaxAtomsPerBatch != nil {
+		cfg.Scene.MaxAtomsPerBatch = *fc.Scene.MaxAtomsPerBatch
+	}
 
 	return nil
 }
@@ -588,6 +594,13 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("parse MYPAST_SCENE_BATCH_SESSIONS: %w", err)
 		}
 		cfg.Scene.BatchSessions = parsed
+	}
+	if v := os.Getenv("MYPAST_SCENE_MAX_ATOMS_PER_BATCH"); v != "" {
+		parsed, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_SCENE_MAX_ATOMS_PER_BATCH: %w", err)
+		}
+		cfg.Scene.MaxAtomsPerBatch = parsed
 	}
 	return nil
 }
