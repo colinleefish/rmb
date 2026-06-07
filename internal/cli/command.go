@@ -10,14 +10,18 @@ import (
 
 	"github.com/colinleefish/mypast/internal/config"
 	"github.com/colinleefish/mypast/internal/db"
+	"github.com/colinleefish/mypast/internal/db/pgarray"
 	"github.com/colinleefish/mypast/internal/hook"
+	"github.com/colinleefish/mypast/internal/llm"
 	"github.com/colinleefish/mypast/internal/service/embed"
 	"github.com/colinleefish/mypast/internal/service/eval"
 	"github.com/colinleefish/mypast/internal/service/extract"
 	"github.com/colinleefish/mypast/internal/service/inspect"
 	"github.com/colinleefish/mypast/internal/service/memory"
+	"github.com/colinleefish/mypast/internal/service/recall"
 	"github.com/colinleefish/mypast/internal/service/scene"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type ServeFunc func(context.Context) error
@@ -49,7 +53,11 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 		return r.runEval(ctx, args[1:])
 	case "embed":
 		return r.runEmbed(ctx, args[1:])
-	case "store", "read", "list", "delete", "search", "load-context":
+	case "find":
+		return r.runFind(ctx, args[1:])
+	case "search":
+		return r.runSearch(ctx, args[1:])
+	case "store", "read", "list", "delete", "load-context":
 		return fmt.Errorf("%q command is planned but not implemented yet", args[0])
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usage())
@@ -267,6 +275,143 @@ func (r Runner) runEval(ctx context.Context, args []string) error {
 	return nil
 }
 
+func (r Runner) embedQuery(ctx context.Context, query string) (pgarray.Vector, error) {
+	client, err := llm.NewEmbeddingClient(r.Config.Embed)
+	if err != nil {
+		return nil, fmt.Errorf("embedding client: %w", err)
+	}
+	vecs, err := client.Embed(ctx, []string{query})
+	if err != nil {
+		return nil, err
+	}
+	if len(vecs) != 1 {
+		return nil, fmt.Errorf("expected 1 query vector, got %d", len(vecs))
+	}
+	return pgarray.Vector(vecs[0]), nil
+}
+
+// runFind is single-query vector recall over long-term memories.
+func (r Runner) runFind(ctx context.Context, args []string) error {
+	query := strings.TrimSpace(strings.Join(positionalArgs(args), " "))
+	if query == "" {
+		return fmt.Errorf("usage: mypast find <query> [--k=<n>]")
+	}
+	k := parseK(args, 5)
+
+	queryVec, err := r.embedQuery(ctx, query)
+	if err != nil {
+		return err
+	}
+
+	database, closeDB, err := r.openDB(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+
+	matches, err := recall.VectorMemories(ctx, database, queryVec, k)
+	if err != nil {
+		return err
+	}
+	printMatches(r.stdout(), matches)
+	return nil
+}
+
+// runSearch is hybrid recall: vector + FTS across memories and scenes, fused
+// with reciprocal rank fusion. The design's LLM intent analysis and hierarchical
+// score propagation are deferred; this delivers cross-tier hybrid recall now.
+func (r Runner) runSearch(ctx context.Context, args []string) error {
+	query := strings.TrimSpace(strings.Join(positionalArgs(args), " "))
+	if query == "" {
+		return fmt.Errorf("usage: mypast search <query> [--k=<n>]")
+	}
+	k := parseK(args, 8)
+
+	queryVec, err := r.embedQuery(ctx, query)
+	if err != nil {
+		return err
+	}
+
+	database, closeDB, err := r.openDB(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+
+	perList := k * 2
+	vecMem, err := recall.VectorMemories(ctx, database, queryVec, perList)
+	if err != nil {
+		return err
+	}
+	vecScene, err := recall.VectorScenes(ctx, database, queryVec, perList)
+	if err != nil {
+		return err
+	}
+	ftsMem, err := recall.FTSMemories(ctx, database, query, perList)
+	if err != nil {
+		return err
+	}
+	ftsScene, err := recall.FTSScenes(ctx, database, query, perList)
+	if err != nil {
+		return err
+	}
+
+	fused := recall.FuseRRF([][]recall.Match{vecMem, ftsMem, vecScene, ftsScene}, 60, k)
+	printMatches(r.stdout(), fused)
+	return nil
+}
+
+func printMatches(out io.Writer, matches []recall.Match) {
+	if len(matches) == 0 {
+		fmt.Fprintln(out, "no matches")
+		return
+	}
+	for i, m := range matches {
+		fmt.Fprintf(out, "%2d. [%s] %s\n", i+1, orDash(m.Tier), m.URI)
+		if s := strings.TrimSpace(m.Snippet); s != "" {
+			fmt.Fprintf(out, "      %s\n", s)
+		}
+	}
+}
+
+// openDB opens, migrates, and returns the database with a close func.
+func (r Runner) openDB(ctx context.Context) (*gorm.DB, func(), error) {
+	database, err := db.New(ctx, r.Config.DB.URL)
+	if err != nil {
+		return nil, nil, fmt.Errorf("db connect: %w", err)
+	}
+	sqlDB, err := database.DB()
+	if err != nil {
+		return nil, nil, fmt.Errorf("get db handle: %w", err)
+	}
+	if err := db.Migrate(ctx, database); err != nil {
+		sqlDB.Close()
+		return nil, nil, fmt.Errorf("db migrate: %w", err)
+	}
+	return database, func() { sqlDB.Close() }, nil
+}
+
+// positionalArgs returns args that are not flags (do not start with "--").
+func positionalArgs(args []string) []string {
+	var out []string
+	for _, a := range args {
+		if strings.HasPrefix(a, "--") {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+func parseK(args []string, def int) int {
+	if v := strings.TrimSpace(parseFlagValue(args, "--k")); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			return parsed
+		}
+	}
+	return def
+}
+
 func (r Runner) runEmbed(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] != "status" {
 		return fmt.Errorf("usage: mypast embed status")
@@ -379,11 +524,14 @@ Usage:
   mypast eval                 Run recall probes (FTS) over memories vs raw turns
                               Optional: --queries=<path> --k=<n>
   mypast embed status         Show embedding coverage across atoms/scenes/memories
+  mypast find <query>         Vector recall over long-term memories
+                              Optional: --k=<n>
+  mypast search <query>       Hybrid recall (vector + FTS) across memories and scenes
+                              Optional: --k=<n>
   mypast store <uri>          Planned
   mypast read <uri>           Planned
   mypast list <prefix>        Planned
   mypast delete <uri>         Planned
-  mypast search <query>       Planned
   mypast load-context         Planned
 `)
 }
