@@ -127,7 +127,21 @@ func main() {
 			sessionUploadHandler := handler.NewSessionUploadHandler(sessionUploadSvc)
 			browseHandler := handler.NewBrowseHandler(browseSvc)
 
-			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler)
+			// Recall endpoints (find/search) need a query embedder. Build a
+			// dedicated embedding client when configured; otherwise the routes
+			// are omitted and the server logs that recall is unavailable.
+			var recallHandler *handler.RecallHandler
+			if cfg.Embed.APIKey != "" {
+				if recallEmbed, err := llm.NewEmbeddingClient(cfg.Embed); err != nil {
+					log.Printf("recall endpoints unavailable; embedding client error: %v", err)
+				} else {
+					recallHandler = handler.NewRecallHandler(database, recallEmbed)
+				}
+			} else {
+				log.Printf("recall endpoints unavailable; MYPAST_EMBED_API_KEY not set")
+			}
+
+			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler)
 			if err != nil {
 				return fmt.Errorf("build router: %w", err)
 			}

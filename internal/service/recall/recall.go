@@ -15,10 +15,10 @@ import (
 // Match is a single retrieval hit. Tier is the pyramid layer ("memories",
 // "scenes", "turns") and Rank is method-specific (ts_rank or cosine similarity).
 type Match struct {
-	URI     string  `gorm:"column:uri"`
-	Tier    string  `gorm:"column:tier"`
-	Rank    float64 `gorm:"column:rank"`
-	Snippet string  `gorm:"column:snippet"`
+	URI     string  `gorm:"column:uri" json:"uri"`
+	Tier    string  `gorm:"column:tier" json:"tier"`
+	Rank    float64 `gorm:"column:rank" json:"rank"`
+	Snippet string  `gorm:"column:snippet" json:"snippet"`
 }
 
 // FTSMemories runs full-text search over active memories (body + abstract),
@@ -122,6 +122,51 @@ func VectorScenes(ctx context.Context, db *gorm.DB, queryVec pgarray.Vector, k i
 		return nil, fmt.Errorf("vector scenes: %w", err)
 	}
 	return out, nil
+}
+
+// QueryEmbedder embeds a single query string for vector recall.
+type QueryEmbedder func(ctx context.Context, query string) (pgarray.Vector, error)
+
+// Find runs single-query vector recall over long-term memories.
+func Find(ctx context.Context, db *gorm.DB, embed QueryEmbedder, query string, k int) ([]Match, error) {
+	if k <= 0 {
+		k = 5
+	}
+	vec, err := embed(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	return VectorMemories(ctx, db, vec, k)
+}
+
+// Search runs hybrid recall: vector + FTS across memories and scenes, fused with
+// reciprocal rank fusion.
+func Search(ctx context.Context, db *gorm.DB, embed QueryEmbedder, query string, k int) ([]Match, error) {
+	if k <= 0 {
+		k = 8
+	}
+	vec, err := embed(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	perList := k * 2
+	vecMem, err := VectorMemories(ctx, db, vec, perList)
+	if err != nil {
+		return nil, err
+	}
+	vecScene, err := VectorScenes(ctx, db, vec, perList)
+	if err != nil {
+		return nil, err
+	}
+	ftsMem, err := FTSMemories(ctx, db, query, perList)
+	if err != nil {
+		return nil, err
+	}
+	ftsScene, err := FTSScenes(ctx, db, query, perList)
+	if err != nil {
+		return nil, err
+	}
+	return FuseRRF([][]Match{vecMem, ftsMem, vecScene, ftsScene}, 60, k), nil
 }
 
 // FuseRRF combines ranked result lists using Reciprocal Rank Fusion. The fused

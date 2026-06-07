@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/colinleefish/mypast/internal/client"
 	"github.com/colinleefish/mypast/internal/config"
 	"github.com/colinleefish/mypast/internal/db"
 	"github.com/colinleefish/mypast/internal/db/pgarray"
@@ -297,7 +298,8 @@ func (r Runner) embedQuery(ctx context.Context, query string) (pgarray.Vector, e
 	return pgarray.Vector(vecs[0]), nil
 }
 
-// runFind is single-query vector recall over long-term memories.
+// runFind is single-query vector recall over long-term memories. When MYPAST_URL
+// is configured it calls a remote server; otherwise it queries the local DB.
 func (r Runner) runFind(ctx context.Context, args []string) error {
 	query := strings.TrimSpace(strings.Join(positionalArgs(args), " "))
 	if query == "" {
@@ -305,11 +307,19 @@ func (r Runner) runFind(ctx context.Context, args []string) error {
 	}
 	k := parseK(args, 5)
 
+	if cl, ok := client.Resolve(); ok {
+		matches, err := cl.Find(ctx, query, k)
+		if err != nil {
+			return err
+		}
+		printMatches(r.stdout(), matches)
+		return nil
+	}
+
 	queryVec, err := r.embedQuery(ctx, query)
 	if err != nil {
 		return err
 	}
-
 	database, closeDB, err := r.openDB(ctx)
 	if err != nil {
 		return err
@@ -325,8 +335,9 @@ func (r Runner) runFind(ctx context.Context, args []string) error {
 }
 
 // runSearch is hybrid recall: vector + FTS across memories and scenes, fused
-// with reciprocal rank fusion. The design's LLM intent analysis and hierarchical
-// score propagation are deferred; this delivers cross-tier hybrid recall now.
+// with reciprocal rank fusion. When MYPAST_URL is configured it calls a remote
+// server; otherwise it queries the local DB. The design's LLM intent analysis
+// and hierarchical score propagation are deferred.
 func (r Runner) runSearch(ctx context.Context, args []string) error {
 	query := strings.TrimSpace(strings.Join(positionalArgs(args), " "))
 	if query == "" {
@@ -334,11 +345,19 @@ func (r Runner) runSearch(ctx context.Context, args []string) error {
 	}
 	k := parseK(args, 8)
 
+	if cl, ok := client.Resolve(); ok {
+		matches, err := cl.Search(ctx, query, k)
+		if err != nil {
+			return err
+		}
+		printMatches(r.stdout(), matches)
+		return nil
+	}
+
 	queryVec, err := r.embedQuery(ctx, query)
 	if err != nil {
 		return err
 	}
-
 	database, closeDB, err := r.openDB(ctx)
 	if err != nil {
 		return err

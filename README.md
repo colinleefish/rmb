@@ -254,6 +254,32 @@ the `mypast://sessions/<id>/turns/<n>` URI for the new turn.
 
 `GET /healthz` — DB ping + `pg_extension` lookup for `vector`.
 
+### Recall API
+
+`GET /api/v1/find?q=<query>&k=<n>` — vector recall over long-term memories.
+
+`GET /api/v1/search?q=<query>&k=<n>` — hybrid (vector + FTS) recall across
+memories and scenes, fused with reciprocal rank fusion.
+
+Both return `{ "items": [ { "uri", "tier", "rank", "snippet" } ] }` and require
+the server to have an embedding client configured (`MYPAST_EMBED_API_KEY`).
+
+## CLI: local vs remote
+
+Most CLI commands (`cat`, `tree`, `meta`, `t1/t2/t3 backfill`, `embed status`)
+talk **directly to the database** (`MYPAST_DB_URL`) — run them on the server or
+against a local dev DB.
+
+`find` and `search` are **dual-mode**:
+
+- **Remote (client):** if `MYPAST_URL` is set (env or `~/.mypast.conf`), they
+  call the server's recall API over HTTP with basic auth — run them from your
+  laptop against production.
+- **Local:** otherwise they query the database directly and embed the query
+  locally via `MYPAST_EMBED_*`.
+
+`hook-submit` is always an HTTP client (posts to `MYPAST_URL`).
+
 ## Testing
 
 Same as CI (preferred):

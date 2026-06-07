@@ -1,0 +1,74 @@
+package handler
+
+import (
+	"context"
+	"net/http"
+	"strconv"
+
+	"github.com/colinleefish/mypast/internal/db/pgarray"
+	"github.com/colinleefish/mypast/internal/service/recall"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+)
+
+// queryEmbedder embeds a single query string (server-side) for vector recall.
+type queryEmbedder interface {
+	Embed(ctx context.Context, inputs []string) ([][]float32, error)
+}
+
+// RecallHandler exposes find/search over HTTP, reusing the recall service.
+type RecallHandler struct {
+	db    *gorm.DB
+	embed queryEmbedder
+}
+
+func NewRecallHandler(db *gorm.DB, embed queryEmbedder) *RecallHandler {
+	return &RecallHandler{db: db, embed: embed}
+}
+
+func (h *RecallHandler) embedQuery(ctx context.Context, query string) (pgarray.Vector, error) {
+	vecs, err := h.embed.Embed(ctx, []string{query})
+	if err != nil {
+		return nil, err
+	}
+	return pgarray.Vector(vecs[0]), nil
+}
+
+func (h *RecallHandler) Find(c *gin.Context) {
+	h.handle(c, recall.Find)
+}
+
+func (h *RecallHandler) Search(c *gin.Context) {
+	h.handle(c, recall.Search)
+}
+
+func (h *RecallHandler) handle(
+	c *gin.Context,
+	fn func(context.Context, *gorm.DB, recall.QueryEmbedder, string, int) ([]recall.Match, error),
+) {
+	if h.embed == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "embeddings not configured"})
+		return
+	}
+	query := c.Query("q")
+	if query == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "q is required"})
+		return
+	}
+	k := 0
+	if v := c.Query("k"); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil || parsed <= 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "k must be a positive integer"})
+			return
+		}
+		k = parsed
+	}
+
+	matches, err := fn(c.Request.Context(), h.db, h.embedQuery, query, k)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": matches})
+}

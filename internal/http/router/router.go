@@ -16,6 +16,7 @@ func New(
 	healthHandler *handler.HealthHandler,
 	sessionUploadHandler *handler.SessionUploadHandler,
 	browseHandler *handler.BrowseHandler,
+	recallHandler *handler.RecallHandler,
 ) (*gin.Engine, error) {
 	r := gin.Default()
 
@@ -50,6 +51,11 @@ func New(
 		api.GET("/memories", browseHandler.ListMemories)
 		api.GET("/pipeline-state", browseHandler.ListPipelineStates)
 		api.GET("/tasks", browseHandler.ListTasks)
+	}
+
+	if recallHandler != nil {
+		protected.GET("/api/v1/find", recallHandler.Find)
+		protected.GET("/api/v1/search", recallHandler.Search)
 	}
 
 	return r, nil
