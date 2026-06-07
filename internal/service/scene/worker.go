@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/colinleefish/mypast/internal/config"
@@ -11,7 +12,6 @@ import (
 	"github.com/colinleefish/mypast/internal/db/pgarray"
 	"github.com/colinleefish/mypast/internal/model"
 	"github.com/colinleefish/mypast/internal/service/session"
-	"github.com/colinleefish/mypast/internal/uri"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -245,21 +245,20 @@ func (w *Worker) persistScenes(
 			return nil
 		}
 
-		if err := tx.Where("session_id = ?", batch.SessionID).Delete(&model.Scene{}).Error; err != nil {
-			return fmt.Errorf("delete old scenes: %w", err)
-		}
-
 		now := w.now().UTC()
+		dupCount := make(map[string]int, len(scenes))
+		keepURIs := make([]string, 0, len(scenes))
 		for _, s := range scenes {
-			sceneID, err := uuid.NewV7()
-			if err != nil {
-				return fmt.Errorf("generate scene id: %w", err)
-			}
+			nameKey := strings.ToLower(strings.TrimSpace(s.DisplayName))
+			dupCount[nameKey]++
+			sceneURI := sceneURIForName(batch.SessionID, s.DisplayName, dupCount[nameKey])
+			keepURIs = append(keepURIs, sceneURI)
+
 			displayName := s.DisplayName
 			abstract := s.Abstract
 			body := s.Body
 			row := model.Scene{
-				URI:            uri.BuildScene(sceneID.String()),
+				URI:            sceneURI,
 				SessionID:      batch.SessionID,
 				DisplayName:    &displayName,
 				Abstract:       &abstract,
@@ -268,9 +267,24 @@ func (w *Worker) persistScenes(
 				CreatedAt:      now,
 				UpdatedAt:      now,
 			}
-			if err := tx.Create(&row).Error; err != nil {
-				return fmt.Errorf("insert scene: %w", err)
+			// Stable URI: reuse the existing row (preserve created_at), refresh content.
+			if err := tx.Clauses(clause.OnConflict{
+				Columns: []clause.Column{{Name: "uri"}},
+				DoUpdates: clause.AssignmentColumns([]string{
+					"display_name", "abstract", "body", "source_atom_uris", "updated_at",
+				}),
+			}).Create(&row).Error; err != nil {
+				return fmt.Errorf("upsert scene: %w", err)
 			}
+		}
+
+		// Prune scenes for this session whose name no longer appears.
+		prune := tx.Where("session_id = ?", batch.SessionID)
+		if len(keepURIs) > 0 {
+			prune = prune.Where("uri NOT IN ?", keepURIs)
+		}
+		if err := prune.Delete(&model.Scene{}).Error; err != nil {
+			return fmt.Errorf("prune stale scenes: %w", err)
 		}
 
 		abstract := sessionAbstract

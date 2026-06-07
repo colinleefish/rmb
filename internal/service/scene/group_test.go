@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/colinleefish/mypast/internal/model"
+	"github.com/google/uuid"
 )
 
 func strPtr(s string) *string { return &s }
@@ -24,6 +25,22 @@ func TestGroupAtomsBySceneName(t *testing.T) {
 	}
 	if groups[1].DisplayName != "Hook Config" || len(groups[1].Atoms) != 2 {
 		t.Fatalf("unexpected hook group: %+v", groups[1])
+	}
+}
+
+func TestSceneURIForName_stable(t *testing.T) {
+	sid := uuid.MustParse("019e53d8-e94d-770a-9e81-601d892f9502")
+	a := sceneURIForName(sid, "Hook Config", 1)
+	b := sceneURIForName(sid, "hook config", 1) // case/space-insensitive
+	if a != b {
+		t.Fatalf("expected stable URI across case/space: %q vs %q", a, b)
+	}
+	if a == sceneURIForName(sid, "Hook Config", 2) {
+		t.Fatal("duplicate index should yield a different URI")
+	}
+	other := uuid.MustParse("019e5441-fe41-7cdf-88cd-feb35930a739")
+	if a == sceneURIForName(other, "Hook Config", 1) {
+		t.Fatal("different sessions must yield different URIs")
 	}
 }
 
