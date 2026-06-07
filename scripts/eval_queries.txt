@@ -1,10 +1,16 @@
-# mypast eval — fixed recall probes (one per line).
+# mypast eval - fixed recall probes (one per line).
 # Format: <query>\t<optional expected URI prefix>
-# Used after T3 rollup; compare T0+FTS baseline vs full stack.
+# v1 is lexical (FTS): compares memories recall vs raw-turn baseline.
 # See docs/design-l0-l4.md §12.3
+#
+# Probes below are derived from real distilled memories. Keep phrasing keyword-ish
+# (FTS is English-stemmed). Update as the memory set evolves.
 
-Where do I live?	mypast://profile
-What are my preferences for Go services?	mypast://preferences/
-Who is Lisa from accounting?	mypast://entities/
-What did we decide about Postgres-only storage?	mypast://events/
-How should the AI format replies?	mypast://preferences/
+Where is the Shadowsocks config on the tokyo endpoint?	mypast://entities/
+What is the total May billing amount?	mypast://entities/
+What is the UCloud monthly cost?	mypast://entities/
+What service actually runs on uc-starlink-hfrog-minio-registry?	mypast://entities/
+How is the tokyo-endpoint accessed?	mypast://entities/
+Where is the TortoiseSVN cleanup command located?	mypast://entities/
+What is the two-layer scene model?	mypast://entities/
+What bucket naming convention do toolhub and agentserver use?	mypast://entities/

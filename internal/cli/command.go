@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/colinleefish/mypast/internal/config"
 	"github.com/colinleefish/mypast/internal/db"
 	"github.com/colinleefish/mypast/internal/hook"
+	"github.com/colinleefish/mypast/internal/service/eval"
 	"github.com/colinleefish/mypast/internal/service/extract"
 	"github.com/colinleefish/mypast/internal/service/inspect"
 	"github.com/colinleefish/mypast/internal/service/memory"
@@ -42,6 +44,8 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 		return r.runT2(ctx, args[1:])
 	case "t3":
 		return r.runT3(ctx, args[1:])
+	case "eval":
+		return r.runEval(ctx, args[1:])
 	case "store", "read", "list", "delete", "search", "load-context":
 		return fmt.Errorf("%q command is planned but not implemented yet", args[0])
 	default:
@@ -199,6 +203,74 @@ func (r Runner) runT3(ctx context.Context, args []string) error {
 	return nil
 }
 
+func (r Runner) runEval(ctx context.Context, args []string) error {
+	path := strings.TrimSpace(parseFlagValue(args, "--queries"))
+	if path == "" {
+		path = "scripts/eval_queries.txt"
+	}
+	k := 5
+	if v := strings.TrimSpace(parseFlagValue(args, "--k")); v != "" {
+		parsed, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("parse --k: %w", err)
+		}
+		k = parsed
+	}
+
+	probes, err := eval.LoadProbes(path)
+	if err != nil {
+		return err
+	}
+
+	database, err := db.New(ctx, r.Config.DB.URL)
+	if err != nil {
+		return fmt.Errorf("db connect: %w", err)
+	}
+	sqlDB, err := database.DB()
+	if err != nil {
+		return fmt.Errorf("get db handle: %w", err)
+	}
+	defer sqlDB.Close()
+
+	if err := db.Migrate(ctx, database); err != nil {
+		return fmt.Errorf("db migrate: %w", err)
+	}
+
+	report, err := eval.Run(ctx, database, probes, k)
+	if err != nil {
+		return err
+	}
+
+	out := r.stdout()
+	fmt.Fprintf(out, "eval: %d probes (k=%d)\n\n", len(report.Results), k)
+	for _, res := range report.Results {
+		status := "MISS"
+		if res.FullHit {
+			status = "HIT "
+		}
+		if res.Regression {
+			status = "REGR"
+		}
+		fmt.Fprintf(out, "[%s] %s\n", status, res.Probe.Query)
+		fmt.Fprintf(out, "        expect=%s baseline=%v matched=%s\n",
+			orDash(res.Probe.ExpectedPrefix), res.BaselineHas, orDash(res.MatchedURI))
+	}
+	fmt.Fprintf(out, "\nsummary: %d/%d full hits, %d regressions\n",
+		report.FullHits, len(report.Results), report.Regressions)
+
+	if report.Regressions > 0 {
+		return fmt.Errorf("eval failed: %d regression(s)", report.Regressions)
+	}
+	return nil
+}
+
+func orDash(s string) string {
+	if strings.TrimSpace(s) == "" {
+		return "-"
+	}
+	return s
+}
+
 func (r Runner) stdout() io.Writer {
 	if r.Stdout != nil {
 		return r.Stdout
@@ -270,6 +342,8 @@ Usage:
                               Optional: --session=<uuid>
   mypast t3 backfill          Enqueue T3 memory rollup for sessions with scenes
                               Optional: --session=<uuid>
+  mypast eval                 Run recall probes (FTS) over memories vs raw turns
+                              Optional: --queries=<path> --k=<n>
   mypast store <uri>          Planned
   mypast read <uri>           Planned
   mypast list <prefix>        Planned
