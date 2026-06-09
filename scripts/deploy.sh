@@ -28,7 +28,9 @@ echo "==> CI before deploy"
 SHA="$(git rev-parse "$GIT_REF")"
 echo "==> Deploy $SHA to ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}"
 
-SSH_OPTS=(-i "$DEPLOY_SSH_KEY_FILE" -o StrictHostKeyChecking=accept-new -o BatchMode=yes -p "$DEPLOY_PORT")
+# IdentitiesOnly=yes forces use of the configured key only, so a loaded ssh-agent
+# with many keys cannot trip the server's MaxAuthTries and cause auth failures.
+SSH_OPTS=(-i "$DEPLOY_SSH_KEY_FILE" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes -p "$DEPLOY_PORT")
 
 ssh "${SSH_OPTS[@]}" "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<EOF
 set -euo pipefail
