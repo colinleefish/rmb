@@ -17,6 +17,7 @@ func New(
 	sessionUploadHandler *handler.SessionUploadHandler,
 	browseHandler *handler.BrowseHandler,
 	recallHandler *handler.RecallHandler,
+	inspectHandler *handler.InspectHandler,
 ) (*gin.Engine, error) {
 	r := gin.Default()
 
@@ -56,6 +57,12 @@ func New(
 	if recallHandler != nil {
 		protected.GET("/api/v1/find", recallHandler.Find)
 		protected.GET("/api/v1/search", recallHandler.Search)
+	}
+
+	if inspectHandler != nil {
+		protected.GET("/api/v1/inspect/cat", inspectHandler.Cat)
+		protected.GET("/api/v1/inspect/tree", inspectHandler.Tree)
+		protected.GET("/api/v1/inspect/meta", inspectHandler.Meta)
 	}
 
 	return r, nil

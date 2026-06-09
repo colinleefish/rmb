@@ -59,6 +59,41 @@ func (c *Client) Search(ctx context.Context, query string, k int) ([]recall.Matc
 	return c.recall(ctx, "/api/v1/search", query, k)
 }
 
+// Inspect calls cat/tree/meta on the remote server and returns the textual
+// output verbatim (identical to local CLI output). kind is "cat", "tree", or "meta".
+func (c *Client) Inspect(ctx context.Context, kind, uri string) (string, error) {
+	q := url.Values{}
+	q.Set("uri", uri)
+	endpoint := c.baseURL + "/api/v1/inspect/" + kind + "?" + q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return "", fmt.Errorf("build request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("call inspect/%s: %w", kind, err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if resp.StatusCode != http.StatusOK {
+		// Error responses are JSON {"error": "..."}; surface the message.
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &e) == nil && e.Error != "" {
+			return "", fmt.Errorf("remote inspect/%s: %s", kind, e.Error)
+		}
+		return "", fmt.Errorf("remote inspect/%s returned %d", kind, resp.StatusCode)
+	}
+	return string(body), nil
+}
+
 func (c *Client) recall(ctx context.Context, path, query string, k int) ([]recall.Match, error) {
 	q := url.Values{}
 	q.Set("q", query)

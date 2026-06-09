@@ -483,9 +483,25 @@ func (r Runner) stdout() io.Writer {
 	return os.Stdout
 }
 
+// runInspect runs cat/tree/meta. When MYPAST_URL is configured it calls a remote
+// server; otherwise it queries the local database.
 func (r Runner) runInspect(ctx context.Context, command string, args []string) error {
 	if len(args) != 1 {
 		return fmt.Errorf("%s requires exactly one URI argument", command)
+	}
+
+	stdout := r.Stdout
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+
+	if cl, ok := client.Resolve(); ok {
+		out, err := cl.Inspect(ctx, command, args[0])
+		if err != nil {
+			return err
+		}
+		_, err = io.WriteString(stdout, out)
+		return err
 	}
 
 	database, err := db.New(ctx, r.Config.DB.URL)
@@ -500,11 +516,6 @@ func (r Runner) runInspect(ctx context.Context, command string, args []string) e
 
 	if err := db.Migrate(ctx, database); err != nil {
 		return fmt.Errorf("db migrate: %w", err)
-	}
-
-	stdout := r.Stdout
-	if stdout == nil {
-		stdout = os.Stdout
 	}
 
 	svc := inspect.NewService(database)

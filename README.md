@@ -264,13 +264,16 @@ memories and scenes, fused with reciprocal rank fusion.
 Both return `{ "items": [ { "uri", "tier", "rank", "snippet" } ] }` and require
 the server to have an embedding client configured (`MYPAST_EMBED_API_KEY`).
 
+`GET /api/v1/inspect/{cat,tree,meta}?uri=<uri>` — text output of the inspection
+commands (used by the CLI's remote mode).
+
 ## CLI: local vs remote
 
-Most CLI commands (`cat`, `tree`, `meta`, `t1/t2/t3 backfill`, `embed status`)
-talk **directly to the database** (`MYPAST_DB_URL`) — run them on the server or
+Operational CLI commands (`t1/t2/t3 backfill`, `embed status`, `eval`) talk
+**directly to the database** (`MYPAST_DB_URL`) — run them on the server or
 against a local dev DB.
 
-`find` and `search` are **dual-mode**:
+`find`, `search`, `cat`, `tree`, and `meta` are **dual-mode**:
 
 - **Remote (client):** if `MYPAST_URL` is set (env or `~/.mypast.conf`), they
   call the server's recall API over HTTP with basic auth — run them from your

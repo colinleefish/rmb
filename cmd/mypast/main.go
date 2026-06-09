@@ -19,6 +19,7 @@ import (
 	"github.com/colinleefish/mypast/internal/service/health"
 	"github.com/colinleefish/mypast/internal/service/embed"
 	"github.com/colinleefish/mypast/internal/service/extract"
+	"github.com/colinleefish/mypast/internal/service/inspect"
 	"github.com/colinleefish/mypast/internal/service/memory"
 	"github.com/colinleefish/mypast/internal/service/scene"
 	"github.com/colinleefish/mypast/internal/service/session"
@@ -141,7 +142,9 @@ func main() {
 				log.Printf("recall endpoints unavailable; MYPAST_EMBED_API_KEY not set")
 			}
 
-			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler)
+			inspectHandler := handler.NewInspectHandler(inspect.NewService(database))
+
+			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler, inspectHandler)
 			if err != nil {
 				return fmt.Errorf("build router: %w", err)
 			}
