@@ -50,7 +50,7 @@ func parseBuildScenesResponse(raw string, validURIs map[string]struct{}) ([]pars
 	}
 
 	out := make([]parsedScene, 0, len(resp.Scenes))
-	for i, s := range resp.Scenes {
+	for _, s := range resp.Scenes {
 		abstract := strings.TrimSpace(s.Abstract)
 		body := strings.TrimSpace(s.Body)
 		if abstract == "" || body == "" {
@@ -61,6 +61,9 @@ func parseBuildScenesResponse(raw string, validURIs map[string]struct{}) ([]pars
 			displayName = defaultSceneName
 		}
 
+		// Tolerate hallucinated/unknown atom URIs: drop them rather than failing
+		// the whole batch (one bad URI must not wedge a session into a retry
+		// loop). A scene with no valid URIs left is skipped.
 		uris := make([]string, 0, len(s.AtomURIs))
 		seen := make(map[string]struct{})
 		for _, u := range s.AtomURIs {
@@ -69,7 +72,7 @@ func parseBuildScenesResponse(raw string, validURIs map[string]struct{}) ([]pars
 				continue
 			}
 			if _, ok := validURIs[u]; !ok {
-				return nil, fmt.Errorf("scenes[%d]: unknown atom uri %q", i, u)
+				continue
 			}
 			if _, dup := seen[u]; dup {
 				continue
@@ -78,7 +81,7 @@ func parseBuildScenesResponse(raw string, validURIs map[string]struct{}) ([]pars
 			uris = append(uris, u)
 		}
 		if len(uris) == 0 {
-			return nil, fmt.Errorf("scenes[%d]: no valid atom_uris", i)
+			continue
 		}
 
 		out = append(out, parsedScene{

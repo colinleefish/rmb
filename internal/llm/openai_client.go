@@ -213,6 +213,8 @@ func (c *OpenAICompatibleClient) SummarizeSessionAbstract(
 }
 
 // DistillMemory rolls a category/slug bucket of atoms into a long-term memory.
+// Temperature 0 keeps output stable across rollups so the skip-if-unchanged
+// guard fires for unchanged inputs (avoids stacking near-duplicate versions).
 func (c *OpenAICompatibleClient) DistillMemory(
 	ctx context.Context,
 	category string,
@@ -221,7 +223,7 @@ func (c *OpenAICompatibleClient) DistillMemory(
 ) (string, error) {
 	req := chatCompletionRequest{
 		Model:       c.model,
-		Temperature: 0.2,
+		Temperature: 0,
 		Messages: []chatMessage{
 			{
 				Role: "system",

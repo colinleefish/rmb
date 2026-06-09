@@ -72,6 +72,25 @@ func TestChunkAtoms(t *testing.T) {
 	}
 }
 
+func TestEqualStringSets(t *testing.T) {
+	cases := []struct {
+		a, b []string
+		want bool
+	}{
+		{[]string{"x", "y"}, []string{"y", "x"}, true},      // order-insensitive
+		{[]string{"x", "x", "y"}, []string{"x", "y"}, true}, // duplicate-insensitive
+		{[]string{"x"}, []string{"x", "y"}, false},
+		{[]string{"x"}, []string{"z"}, false},
+		{nil, nil, true},
+		{[]string{}, nil, true},
+	}
+	for i, c := range cases {
+		if got := equalStringSets(c.a, c.b); got != c.want {
+			t.Fatalf("case %d: equalStringSets(%v,%v)=%v want %v", i, c.a, c.b, got, c.want)
+		}
+	}
+}
+
 func TestBuildAtomSceneIndexAndProvenance(t *testing.T) {
 	scenes := []model.Scene{
 		{URI: "mypast://scenes/s1", SourceAtomURIs: pgarray.TextArray{"a1", "a2"}},

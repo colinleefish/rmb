@@ -164,3 +164,26 @@ func sourceSceneURIsFor(bucket memoryBucket, index map[string][]string) []string
 	sort.Strings(out)
 	return out
 }
+
+// equalStringSets reports whether two string slices contain the same set of
+// values, ignoring order and duplicates. Used to detect whether a bucket's
+// scene provenance changed since its active memory was written.
+func equalStringSets(a, b []string) bool {
+	seen := make(map[string]struct{}, len(a))
+	for _, s := range a {
+		seen[s] = struct{}{}
+	}
+	other := make(map[string]struct{}, len(b))
+	for _, s := range b {
+		other[s] = struct{}{}
+	}
+	if len(seen) != len(other) {
+		return false
+	}
+	for s := range seen {
+		if _, ok := other[s]; !ok {
+			return false
+		}
+	}
+	return true
+}

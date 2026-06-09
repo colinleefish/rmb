@@ -123,35 +123,80 @@ func (w *Worker) rollup(ctx context.Context) error {
 	}
 
 	index := buildAtomSceneIndex(scenes)
-	incomplete := false
+	// transientPending: a temporary failure (rate limit/timeout/DB) means work is
+	// genuinely unfinished, so leave sessions pending to retry the whole cycle.
+	// Permanent per-bucket failures (e.g. un-parseable LLM output) are logged and
+	// skipped: they must not block all sessions forever or force a full re-distill
+	// every tick. Such a bucket is retried only when its inputs next change.
+	transientPending := false
 
 	for _, bucket := range buckets {
+		srcScenes := sourceSceneURIsFor(bucket, index)
+
+		// Provenance gate: skip the LLM call entirely when this bucket's source
+		// scene set is unchanged since its active memory was written (and events,
+		// which are immutable once materialized). This is the primary fix for
+		// version churn and wasted re-distillation.
+		unchanged, err := w.bucketUnchanged(ctx, bucket, srcScenes)
+		if err != nil {
+			log.Printf("t3 worker provenance check bucket=%s failed: %v", bucket.URI, err)
+			transientPending = true
+			break
+		}
+		if unchanged {
+			continue
+		}
+
 		pm, err := w.distillBucket(ctx, bucket)
 		if err != nil {
 			if isTransient(err) {
 				log.Printf("t3 worker transient error bucket=%s: %v", bucket.URI, err)
-				incomplete = true
+				transientPending = true
 				break
 			}
-			log.Printf("t3 worker bucket=%s failed: %v", bucket.URI, err)
-			incomplete = true
+			log.Printf("t3 worker bucket=%s failed (skipped): %v", bucket.URI, err)
 			continue
 		}
 
-		srcScenes := sourceSceneURIsFor(bucket, index)
 		if err := w.persistMemory(ctx, bucket, pm, srcScenes); err != nil {
-			log.Printf("t3 worker persist bucket=%s failed: %v", bucket.URI, err)
-			incomplete = true
+			if isTransient(err) {
+				log.Printf("t3 worker persist transient bucket=%s: %v", bucket.URI, err)
+				transientPending = true
+				break
+			}
+			log.Printf("t3 worker persist bucket=%s failed (skipped): %v", bucket.URI, err)
 			continue
 		}
 		time.Sleep(distillDelay)
 	}
 
-	if incomplete {
-		log.Printf("t3 worker rollup incomplete; leaving %d sessions pending for retry", len(pendingIDs))
+	if transientPending {
+		log.Printf("t3 worker rollup incomplete (transient); leaving %d sessions pending for retry", len(pendingIDs))
 		return nil
 	}
 	return w.markSessionsIdle(ctx, pendingIDs, w.now().UTC())
+}
+
+// bucketUnchanged reports whether a bucket can skip re-distillation: its active
+// memory exists and (for events) is immutable, or its stored source scene set
+// equals the current one. Returns false when no active row exists (must distill).
+func (w *Worker) bucketUnchanged(ctx context.Context, bucket memoryBucket, srcScenes []string) (bool, error) {
+	var active model.Memory
+	err := w.db.WithContext(ctx).
+		Select("source_scene_uris").
+		Where("uri = ? AND superseded_at IS NULL", bucket.URI).
+		Take(&active).Error
+	if err == gorm.ErrRecordNotFound {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("load active memory provenance: %w", err)
+	}
+	// events are immutable once materialized; never re-distill.
+	if bucket.Category == model.AtomCategoryEvents {
+		return true, nil
+	}
+	return equalStringSets([]string(active.SourceSceneURIs), srcScenes), nil
 }
 
 func (w *Worker) pendingSessionIDs(ctx context.Context) ([]uuid.UUID, error) {
