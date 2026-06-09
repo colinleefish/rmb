@@ -126,6 +126,47 @@ func (c *OpenAICompatibleClient) MergeOverview(
 	return strings.TrimSpace(merged), nil
 }
 
+// extractAtomsSystemPrompt instructs the T1 extractor with explicit category
+// routing, a skip-list for transient noise, and few-shot examples. This keeps
+// the profile singleton to durable first-person facts and routes preferences /
+// third parties to their own categories instead of dumping them into profile.
+const extractAtomsSystemPrompt = `You extract durable, long-term facts from agent chat logs into memory atoms.
+Respond with a single JSON object only: {"atoms":[...]}.
+
+Each atom has:
+- category: one of profile | preferences | entities | events
+- priority: int 0-100 (use -1 only for critical AI behavior rules)
+- scene_name: short label grouping related atoms
+- slug: kebab-case topic id. REQUIRED for preferences/entities/events; OMIT for profile
+- content: one factual sentence
+- source_turn_indices: 0-based indexes into the batch
+
+Category routing (choose exactly one per fact):
+- profile: DURABLE FIRST-PERSON facts about THE USER only — identity, location, role, devices, stable traits, health/taboos. Singleton; no slug.
+- preferences: recurring "prefers / wants / always / never", INCLUDING rules for how the AI should behave (tone, format, workflow). One slug per topic.
+- entities: any third party that is NOT the user — other people, teams, companies, projects, hosts, tools, services. One slug per entity.
+- events: dated decisions, milestones, or actions taken. Immutable. One slug, date-prefixed when a date is known.
+
+Do NOT extract (skip entirely):
+- Transient session state or the AI's current mode (e.g. "AI is in Ask mode", "switched to Agent mode").
+- The user's momentary emotional reactions (e.g. "user was surprised/alarmed").
+- Tool/skill attachment or other UI actions within this session.
+- Anything about the assistant's behavior in THIS session that is not a durable user preference.
+
+Hard rules:
+- profile is ONLY about the user. Put any third party in entities, NEVER in profile.
+- "prefers / wants / always / never" goes to preferences (with a slug), NOT profile.
+- Do not merge or rewrite prior facts — emit separate atoms.
+- events are immutable milestones; never deduplicate them away.
+
+Examples:
+- "I live in Beijing" -> {"category":"profile","content":"The user lives in Beijing.","scene_name":"identity","source_turn_indices":[0]}
+- "I prefer short answers" -> {"category":"preferences","slug":"answer-length","content":"The user prefers short answers.","scene_name":"ai-behavior","source_turn_indices":[0]}
+- "Always use Go for backend services" -> {"category":"preferences","slug":"go-services","content":"The user prefers Go for backend services.","scene_name":"tech-stack","source_turn_indices":[0]}
+- "姚乾坤 is an R&D engineer" -> {"category":"entities","slug":"yao-qiankun","content":"姚乾坤 is an R&D engineer.","scene_name":"people","source_turn_indices":[0]}
+- "We chose Postgres-only storage on 2026-05-17" -> {"category":"events","slug":"2026-05-17-postgres-only","content":"On 2026-05-17 the team chose Postgres-only storage.","scene_name":"decisions","source_turn_indices":[0]}
+- "The AI is currently in Ask mode" -> (skip: transient session state)`
+
 // ExtractAtoms asks the model to return JSON atoms for a batch of session turns.
 func (c *OpenAICompatibleClient) ExtractAtoms(ctx context.Context, messagesJSONL string) (string, error) {
 	req := chatCompletionRequest{
@@ -133,16 +174,8 @@ func (c *OpenAICompatibleClient) ExtractAtoms(ctx context.Context, messagesJSONL
 		Temperature: 0.1,
 		Messages: []chatMessage{
 			{
-				Role: "system",
-				Content: "You extract durable facts from agent chat logs. " +
-					"Respond with a single JSON object only: {\"atoms\":[...]}. " +
-					"Each atom has category (profile|preferences|entities|events), " +
-					"priority (int 0-100, use -1 only for critical AI behavior rules), " +
-					"scene_name (short label), slug (optional kebab-case, e.g. ai-tone or 2026-05-17-deploy; " +
-					"for preferences/entities/events only), " +
-					"content (one factual sentence), source_turn_indices (0-based indexes into the batch). " +
-					"Do not merge or rewrite prior facts—emit separate atoms. " +
-					"events are immutable milestones; never deduplicate them away.",
+				Role:    "system",
+				Content: extractAtomsSystemPrompt,
 			},
 			{
 				Role:    "user",
@@ -256,10 +289,19 @@ func buildDistillMemoryPrompt(category, slug, atomsJSON string) string {
 	if topic == "" {
 		topic = "(none)"
 	}
+	// Defense-in-depth: clean the profile singleton even if upstream atoms are
+	// mislabeled. The distiller only sees atoms already routed to this category,
+	// so it can omit noise from the body (it cannot re-route atoms).
+	var filter string
+	if category == "profile" {
+		filter = `
+Keep ONLY durable first-person facts about the user (identity, location, role, devices, stable traits, health/taboos).
+DROP any fact that is about a third party, transient session/AI-mode state, or a momentary emotional reaction.`
+	}
 	return strings.TrimSpace(`Distill these facts into a single long-term memory.
 
 category: ` + category + `
-topic/slug: ` + topic + `
+topic/slug: ` + topic + filter + `
 
 Return JSON only:
 {"abstract":"...","body":"..."}
