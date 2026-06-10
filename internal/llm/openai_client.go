@@ -204,6 +204,8 @@ Do NOT extract (skip entirely):
 
 Hard rules:
 - profile is ONLY about the user. Put any third party in entities, NEVER in profile.
+- The user managing, proxying, or administering someone else's accounts, login profiles, IPs, hosts, or devices does NOT make those facts about the user. A proxy or profile NAMED AFTER a person belongs to that PERSON (entities), not the user.
+- NEVER write "the user" as the subject of a fact about a named third party. If a fact's real subject is a specific named person other than the user (a friend, colleague, contact), it is an entities fact about THEM — never "The user's name is <that person>".
 - "prefers / wants / always / never" goes to preferences (with a slug), NOT profile.
 - Do not merge or rewrite prior facts — emit separate atoms.
 - events are immutable milestones; never deduplicate them away.
@@ -213,6 +215,7 @@ Examples:
 - "I prefer short answers" -> {"category":"preferences","slug":"answer-length","content":"The user prefers short answers.","scene_name":"ai-behavior","source_turn_indices":[0]}
 - "Always use Go for backend services" -> {"category":"preferences","slug":"go-services","content":"The user prefers Go for backend services.","scene_name":"tech-stack","source_turn_indices":[0]}
 - "姚乾坤 is an R&D engineer" -> {"category":"entities","slug":"yao-qiankun","content":"姚乾坤 is an R&D engineer.","scene_name":"people","source_turn_indices":[0]}
+- A turn where the user sets up a proxy named "songxinyang" for their friend Song Xin Yang in Shenyang -> {"category":"entities","slug":"song-xin-yang","content":"Song Xin Yang is the user's friend, based in Shenyang, who uses the songxinyang proxy profile.","scene_name":"people","source_turn_indices":[0]} (WRONG: "The user's name is Song Xin Yang" / "The user lives in Shenyang" — managing her proxy does not make the user her)
 - "We chose Postgres-only storage on 2026-05-17" -> {"category":"events","slug":"2026-05-17-postgres-only","content":"On 2026-05-17 the team chose Postgres-only storage.","scene_name":"decisions","source_turn_indices":[0]}
 - "The AI is currently in Ask mode" -> (skip: transient session state)`
 
