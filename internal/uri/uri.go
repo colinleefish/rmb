@@ -289,6 +289,11 @@ func validateShape(scope string, segments []string) error {
 		}
 		return fmt.Errorf("%w: invalid sessions path", ErrInvalidURI)
 	case ScopeScenes:
+		// Zero segments is the category container (e.g. mypast://scenes/),
+		// which `tree` lists; one segment is a single scene.
+		if len(segments) == 0 {
+			return nil
+		}
 		if len(segments) != 1 {
 			return fmt.Errorf("%w: scenes require one id segment", ErrInvalidURI)
 		}
@@ -300,6 +305,11 @@ func validateShape(scope string, segments []string) error {
 			return fmt.Errorf("%w: assertion id must be uuid", ErrInvalidURI)
 		}
 	case ScopePrefs, ScopeEntities, ScopeEvents:
+		// Zero segments is the category container (e.g. mypast://entities/),
+		// which `tree` lists; one segment is a single memory.
+		if len(segments) == 0 {
+			return nil
+		}
 		if len(segments) != 1 {
 			return fmt.Errorf("%w: %s requires one segment", ErrInvalidURI, scope)
 		}

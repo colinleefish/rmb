@@ -37,6 +37,9 @@ func (s *Service) Cat(ctx context.Context, raw string, w io.Writer) error {
 	case uri.ScopePrefs, uri.ScopeEntities, uri.ScopeEvents:
 		return s.catMemoryByURI(ctx, u.String(), w)
 	case uri.ScopeScenes:
+		if len(u.Segments) == 0 {
+			return fmt.Errorf("scene id required; use `tree %s` to list scenes", u.String())
+		}
 		return s.catScene(ctx, u.Segments[0], w)
 	case uri.ScopeSessions:
 		return s.catSessionPath(ctx, u, w)

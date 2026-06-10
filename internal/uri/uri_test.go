@@ -81,3 +81,26 @@ func TestContainerTrailingSlash(t *testing.T) {
 		t.Fatalf("expected container uri")
 	}
 }
+
+// Scope-level container URIs (no leaf segment) must parse so that `tree` can
+// list everything under a category. treeRoot advertises these exact URIs.
+func TestParseScopeContainers(t *testing.T) {
+	cases := []string{
+		"mypast://entities/",
+		"mypast://preferences/",
+		"mypast://events/",
+		"mypast://scenes/",
+	}
+	for _, in := range cases {
+		u, err := Parse(in)
+		if err != nil {
+			t.Fatalf("Parse(%q): %v", in, err)
+		}
+		if !u.IsContainer() {
+			t.Fatalf("Parse(%q): expected container uri", in)
+		}
+		if len(u.Segments) != 0 {
+			t.Fatalf("Parse(%q): expected zero segments, got %v", in, u.Segments)
+		}
+	}
+}
