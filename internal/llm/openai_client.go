@@ -255,6 +255,7 @@ func (c *OpenAICompatibleClient) DistillMemory(
 	category string,
 	slug string,
 	atomsJSON string,
+	corrections []string,
 ) (string, error) {
 	req := chatCompletionRequest{
 		Model:       c.model,
@@ -266,7 +267,7 @@ func (c *OpenAICompatibleClient) DistillMemory(
 			},
 			{
 				Role:    "user",
-				Content: buildDistillMemoryPrompt(category, slug, atomsJSON),
+				Content: buildDistillMemoryPrompt(category, slug, atomsJSON, corrections),
 			},
 		},
 	}

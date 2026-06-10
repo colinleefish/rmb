@@ -17,6 +17,10 @@ type Memory struct {
 	Abstract        *string    `gorm:"column:abstract;type:text"`
 	Body            *string    `gorm:"column:body;type:text"`
 	SourceSceneURIs pgarray.TextArray `gorm:"column:source_scene_uris;type:text[];not null"`
+	// SourceAssertionURIs are the active human corrections baked into Body at
+	// distill time. Used by the T3 provenance gate to re-distill when corrections
+	// change. See docs/corrections.md.
+	SourceAssertionURIs pgarray.TextArray `gorm:"column:source_assertion_uris;type:text[];not null"`
 	CreatedAt       time.Time  `gorm:"column:created_at;type:timestamptz;not null"`
 	UpdatedAt       time.Time  `gorm:"column:updated_at;type:timestamptz;not null"`
 }

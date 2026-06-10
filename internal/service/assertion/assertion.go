@@ -91,23 +91,30 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (model.Assertion, 
 
 // Retract retires a specific assertion by its URI (sets superseded_at). This is
 // per-assertion identity supersession — it does not touch other corrections that
-// happen to share a target. Returns ErrNotFound if no active assertion matches.
-func (s *Service) Retract(ctx context.Context, assertionURI string) error {
+// happen to share a target. Returns the retracted assertion's target URIs (so
+// callers can re-distill those memories) or ErrNotFound if none matches.
+func (s *Service) Retract(ctx context.Context, assertionURI string) ([]string, error) {
 	u, err := uri.Parse(strings.TrimSpace(assertionURI))
 	if err != nil || u.Scope != uri.ScopeAssertions {
-		return fmt.Errorf("%w: not an assertion URI: %q", ErrInvalidInput, assertionURI)
+		return nil, fmt.Errorf("%w: not an assertion URI: %q", ErrInvalidInput, assertionURI)
 	}
-	res := s.db.WithContext(ctx).
-		Model(&model.Assertion{}).
+	var row model.Assertion
+	err = s.db.WithContext(ctx).
 		Where("uri = ? AND superseded_at IS NULL", u.String()).
-		Update("superseded_at", s.now().UTC())
-	if res.Error != nil {
-		return fmt.Errorf("retract assertion: %w", res.Error)
+		Take(&row).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, u.String())
 	}
-	if res.RowsAffected == 0 {
-		return fmt.Errorf("%w: %s", ErrNotFound, u.String())
+	if err != nil {
+		return nil, fmt.Errorf("load assertion: %w", err)
 	}
-	return nil
+	if err := s.db.WithContext(ctx).
+		Model(&model.Assertion{}).
+		Where("id = ?", row.ID).
+		Update("superseded_at", s.now().UTC()).Error; err != nil {
+		return nil, fmt.Errorf("retract assertion: %w", err)
+	}
+	return []string(row.TargetURIs), nil
 }
 
 // List returns active assertions, newest-first. When target is non-empty, only

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -480,8 +481,18 @@ func (r Runner) runAssertionAdd(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	wakeT3ForCorrection(ctx, database, []string(row.TargetURIs))
 	fmt.Fprintf(r.stdout(), "added %s: %s -> %s\n", kind, strings.Join(targets, ", "), row.URI)
 	return nil
+}
+
+// wakeT3ForCorrection re-distills the targeted memories so the correction is
+// baked into the body. Best-effort: a failure must not fail the write — the
+// assertion is durable and the read-time overlay still applies.
+func wakeT3ForCorrection(ctx context.Context, database *gorm.DB, targets []string) {
+	if _, err := memory.EnqueueSessionsForMemoryTargets(ctx, database, targets); err != nil {
+		log.Printf("assertion wake-t3 failed (overlay still applies): %v", err)
+	}
 }
 
 // runAssertionList prints active assertions, optionally filtered to one target.
@@ -560,9 +571,11 @@ func (r Runner) runRetract(ctx context.Context, args []string) error {
 	}
 	defer closeDB()
 
-	if err := assertion.NewService(database).Retract(ctx, target); err != nil {
+	targets, err := assertion.NewService(database).Retract(ctx, target)
+	if err != nil {
 		return err
 	}
+	wakeT3ForCorrection(ctx, database, targets)
 	fmt.Fprintf(r.stdout(), "retracted: %s\n", target)
 	return nil
 }

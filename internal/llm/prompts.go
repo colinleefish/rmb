@@ -59,7 +59,7 @@ func buildSessionAbstractPrompt(sceneAbstracts string) string {
 	return strings.TrimSpace(out)
 }
 
-func buildDistillMemoryPrompt(category, slug, atomsJSON string) string {
+func buildDistillMemoryPrompt(category, slug, atomsJSON string, corrections []string) string {
 	topic := strings.TrimSpace(slug)
 	if topic == "" {
 		topic = "(none)"
@@ -75,6 +75,23 @@ func buildDistillMemoryPrompt(category, slug, atomsJSON string) string {
 	out = strings.ReplaceAll(out, "{{CATEGORY}}", category)
 	out = strings.ReplaceAll(out, "{{SLUG}}", topic)
 	out = strings.ReplaceAll(out, "{{FILTER}}", filter)
+	out = strings.ReplaceAll(out, "{{CORRECTIONS}}", buildCorrectionsBlock(corrections))
 	out = strings.ReplaceAll(out, "{{FACTS}}", orEmptyMarker(atomsJSON))
 	return strings.TrimSpace(out)
+}
+
+// buildCorrectionsBlock renders human corrections as an authoritative, newest-
+// first list that the distiller must treat as ground truth. Empty when none.
+func buildCorrectionsBlock(corrections []string) string {
+	lines := make([]string, 0, len(corrections))
+	for _, c := range corrections {
+		if c = strings.TrimSpace(c); c != "" {
+			lines = append(lines, "- "+c)
+		}
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "\n\nAUTHORITATIVE human corrections (highest priority; treat as ground truth and override any conflicting fact below; newest first):\n" +
+		strings.Join(lines, "\n")
 }

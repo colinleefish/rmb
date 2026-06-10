@@ -198,19 +198,24 @@ the user-facing intent; the overlay label is `CORRECTION`.
 Dual-mode like the rest of the CLI (local DB or remote API). Writing a
 correction is a privileged op, so the HTTP path requires auth.
 
-## v1 scope (minimal, high-value)
+## Scope (delivered)
 
 - `assertions` table + migration.
 - `correct` kind only.
-- **Read-time overlay** wired into `find` / `search` / `cat` / `meta` (skip
-  distill-injection initially).
-- Precedence rule added to `cli-agent-guide.md`.
+- **Read-time overlay** wired into `find` / `search` / `cat` / `meta`.
+- Precedence rule in `cli-agent-guide.md`.
+- **Write-time distill injection**: active `correct` assertions are fed into T3
+  as authoritative input, so the regenerated memory body reflects them and
+  becomes searchable. Provenance is tracked in `memories.source_assertion_uris`;
+  the gate re-distills a bucket when its active correction set changes; creating
+  or retracting a correction wakes T3 for the targeted memory's sessions. Events
+  stay immutable (overlay only — no body injection).
 
-Delivers "I say it once, the agent honors it forever."
+Delivers "I say it once, the agent honors it forever," and the body itself is
+the merged truth (orthogonal corrections are combined by the distiller).
 
 ## Deferred
 
-- Write-time distill injection (quality polish).
 - `split` / `alias` and catalog-aware slugging / entity resolution (bundle
   together — see the drift discussion in the project review).
 - Scope-keying (work / personal / project) for assertions.

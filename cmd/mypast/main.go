@@ -146,7 +146,7 @@ func main() {
 			}
 
 			inspectHandler := handler.NewInspectHandler(inspect.NewService(database))
-			assertionHandler := handler.NewAssertionHandler(assertion.NewService(database))
+			assertionHandler := handler.NewAssertionHandler(assertion.NewService(database), database)
 
 			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler, inspectHandler, assertionHandler)
 			if err != nil {

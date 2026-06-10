@@ -4,16 +4,33 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/colinleefish/mypast/internal/config"
 	"github.com/colinleefish/mypast/internal/db"
 	"github.com/colinleefish/mypast/internal/db/pgarray"
 	"github.com/colinleefish/mypast/internal/model"
+	"github.com/colinleefish/mypast/internal/service/assertion"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+// splitCorrections separates active corrections (newest-first, as returned by
+// assertion.ForTargets) into their statements (for the distiller) and their URIs
+// (for the provenance gate).
+func splitCorrections(sums []assertion.Summary) (statements, uris []string) {
+	statements = make([]string, 0, len(sums))
+	uris = make([]string, 0, len(sums))
+	for _, s := range sums {
+		if st := strings.TrimSpace(s.Statement); st != "" {
+			statements = append(statements, st)
+		}
+		uris = append(uris, s.URI)
+	}
+	return statements, uris
+}
 
 const (
 	globalLockKey = "mypast-t3-rollup"
@@ -21,7 +38,7 @@ const (
 )
 
 type MemoryDistiller interface {
-	DistillMemory(ctx context.Context, category, slug, atomsJSON string) (string, error)
+	DistillMemory(ctx context.Context, category, slug, atomsJSON string, corrections []string) (string, error)
 }
 
 type Worker struct {
@@ -123,6 +140,19 @@ func (w *Worker) rollup(ctx context.Context) error {
 	}
 
 	index := buildAtomSceneIndex(scenes)
+
+	// Active human corrections, keyed by the memory URI they target. These are
+	// injected into distillation as authoritative input so the regenerated body
+	// reflects them (write-time injection). See docs/corrections.md.
+	bucketURIs := make([]string, 0, len(buckets))
+	for _, b := range buckets {
+		bucketURIs = append(bucketURIs, b.URI)
+	}
+	corrByTarget, err := assertion.ForTargets(ctx, w.db, bucketURIs)
+	if err != nil {
+		return fmt.Errorf("load corrections: %w", err)
+	}
+
 	// transientPending: a temporary failure (rate limit/timeout/DB) means work is
 	// genuinely unfinished, so leave sessions pending to retry the whole cycle.
 	// Permanent per-bucket failures (e.g. un-parseable LLM output) are logged and
@@ -132,12 +162,13 @@ func (w *Worker) rollup(ctx context.Context) error {
 
 	for _, bucket := range buckets {
 		srcScenes := sourceSceneURIsFor(bucket, index)
+		corrStatements, corrURIs := splitCorrections(corrByTarget[bucket.URI])
 
 		// Provenance gate: skip the LLM call entirely when this bucket's source
-		// scene set is unchanged since its active memory was written (and events,
-		// which are immutable once materialized). This is the primary fix for
-		// version churn and wasted re-distillation.
-		unchanged, err := w.bucketUnchanged(ctx, bucket, srcScenes)
+		// scene set AND active correction set are unchanged since its active
+		// memory was written (and events, which are immutable once materialized).
+		// This is the primary fix for version churn and wasted re-distillation.
+		unchanged, err := w.bucketUnchanged(ctx, bucket, srcScenes, corrURIs)
 		if err != nil {
 			log.Printf("t3 worker provenance check bucket=%s failed: %v", bucket.URI, err)
 			transientPending = true
@@ -147,7 +178,7 @@ func (w *Worker) rollup(ctx context.Context) error {
 			continue
 		}
 
-		pm, err := w.distillBucket(ctx, bucket)
+		pm, err := w.distillBucket(ctx, bucket, corrStatements)
 		if err != nil {
 			if isTransient(err) {
 				log.Printf("t3 worker transient error bucket=%s: %v", bucket.URI, err)
@@ -158,7 +189,7 @@ func (w *Worker) rollup(ctx context.Context) error {
 			continue
 		}
 
-		if err := w.persistMemory(ctx, bucket, pm, srcScenes); err != nil {
+		if err := w.persistMemory(ctx, bucket, pm, srcScenes, corrURIs); err != nil {
 			if isTransient(err) {
 				log.Printf("t3 worker persist transient bucket=%s: %v", bucket.URI, err)
 				transientPending = true
@@ -180,10 +211,10 @@ func (w *Worker) rollup(ctx context.Context) error {
 // bucketUnchanged reports whether a bucket can skip re-distillation: its active
 // memory exists and (for events) is immutable, or its stored source scene set
 // equals the current one. Returns false when no active row exists (must distill).
-func (w *Worker) bucketUnchanged(ctx context.Context, bucket memoryBucket, srcScenes []string) (bool, error) {
+func (w *Worker) bucketUnchanged(ctx context.Context, bucket memoryBucket, srcScenes, corrURIs []string) (bool, error) {
 	var active model.Memory
 	err := w.db.WithContext(ctx).
-		Select("source_scene_uris").
+		Select("source_scene_uris", "source_assertion_uris").
 		Where("uri = ? AND superseded_at IS NULL", bucket.URI).
 		Take(&active).Error
 	if err == gorm.ErrRecordNotFound {
@@ -192,11 +223,13 @@ func (w *Worker) bucketUnchanged(ctx context.Context, bucket memoryBucket, srcSc
 	if err != nil {
 		return false, fmt.Errorf("load active memory provenance: %w", err)
 	}
-	// events are immutable once materialized; never re-distill.
+	// events are immutable once materialized; never re-distill. Human corrections
+	// on events still surface via the read-time overlay, just not in the body.
 	if bucket.Category == model.AtomCategoryEvents {
 		return true, nil
 	}
-	return equalStringSets([]string(active.SourceSceneURIs), srcScenes), nil
+	return equalStringSets([]string(active.SourceSceneURIs), srcScenes) &&
+		equalStringSets([]string(active.SourceAssertionURIs), corrURIs), nil
 }
 
 func (w *Worker) pendingSessionIDs(ctx context.Context) ([]uuid.UUID, error) {
@@ -220,7 +253,7 @@ func (w *Worker) pendingSessionIDs(ctx context.Context) ([]uuid.UUID, error) {
 
 // distillBucket produces one memory from a bucket, chunking and merging when the
 // bucket exceeds the per-call atom budget so each LLM response stays complete.
-func (w *Worker) distillBucket(ctx context.Context, bucket memoryBucket) (parsedMemory, error) {
+func (w *Worker) distillBucket(ctx context.Context, bucket memoryBucket, corrections []string) (parsedMemory, error) {
 	chunks := chunkAtoms(bucket.Atoms, w.config.MaxAtomsPerBatch)
 
 	if len(chunks) == 1 {
@@ -228,20 +261,22 @@ func (w *Worker) distillBucket(ctx context.Context, bucket memoryBucket) (parsed
 		if err != nil {
 			return parsedMemory{}, err
 		}
-		raw, err := w.llm.DistillMemory(ctx, bucket.Category, bucket.Slug, atomsJSON)
+		raw, err := w.llm.DistillMemory(ctx, bucket.Category, bucket.Slug, atomsJSON, corrections)
 		if err != nil {
 			return parsedMemory{}, err
 		}
 		return parseDistillResponse(raw)
 	}
 
+	// Per-chunk passes only extract partial bodies, so corrections are withheld
+	// here and applied once at the final merge, where the whole picture is in view.
 	partials := make([]string, 0, len(chunks))
 	for _, chunk := range chunks {
 		atomsJSON, err := serializeAtomsForLLM(chunk)
 		if err != nil {
 			return parsedMemory{}, err
 		}
-		raw, err := w.llm.DistillMemory(ctx, bucket.Category, bucket.Slug, atomsJSON)
+		raw, err := w.llm.DistillMemory(ctx, bucket.Category, bucket.Slug, atomsJSON, nil)
 		if err != nil {
 			return parsedMemory{}, err
 		}
@@ -257,7 +292,7 @@ func (w *Worker) distillBucket(ctx context.Context, bucket memoryBucket) (parsed
 	if err != nil {
 		return parsedMemory{}, err
 	}
-	raw, err := w.llm.DistillMemory(ctx, bucket.Category, bucket.Slug, mergedJSON)
+	raw, err := w.llm.DistillMemory(ctx, bucket.Category, bucket.Slug, mergedJSON, corrections)
 	if err != nil {
 		return parsedMemory{}, err
 	}
@@ -269,6 +304,7 @@ func (w *Worker) persistMemory(
 	bucket memoryBucket,
 	pm parsedMemory,
 	sourceSceneURIs []string,
+	sourceAssertionURIs []string,
 ) error {
 	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		now := w.now().UTC()
@@ -289,7 +325,7 @@ func (w *Worker) persistMemory(
 			if existing > 0 {
 				return nil
 			}
-			return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, 1, now)
+			return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, sourceAssertionURIs, 1, now)
 		}
 
 		var active model.Memory
@@ -298,14 +334,25 @@ func (w *Worker) persistMemory(
 			Take(&active).Error
 		switch {
 		case err == gorm.ErrRecordNotFound:
-			return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, 1, now)
+			return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, sourceAssertionURIs, 1, now)
 		case err != nil:
 			return fmt.Errorf("load active memory: %w", err)
 		}
 
-		// Idempotent: skip if the distilled body is unchanged.
+		// Idempotent: when the body is unchanged, avoid a new version. But if the
+		// active correction set changed (e.g. a correction was retracted but the
+		// LLM produced the same text), refresh the provenance in place so the gate
+		// stops re-firing every cycle.
 		if active.Body != nil && *active.Body == pm.Body {
-			return nil
+			if equalStringSets([]string(active.SourceAssertionURIs), sourceAssertionURIs) {
+				return nil
+			}
+			return tx.Model(&model.Memory{}).
+				Where("id = ?", active.ID).
+				Updates(map[string]any{
+					"source_assertion_uris": pgarray.TextArray(append([]string(nil), sourceAssertionURIs...)),
+					"updated_at":            now,
+				}).Error
 		}
 
 		if err := tx.Model(&model.Memory{}).
@@ -313,7 +360,7 @@ func (w *Worker) persistMemory(
 			Update("superseded_at", now).Error; err != nil {
 			return fmt.Errorf("supersede memory: %w", err)
 		}
-		return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, active.Version+1, now)
+		return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, sourceAssertionURIs, active.Version+1, now)
 	})
 }
 
@@ -323,6 +370,7 @@ func insertMemory(
 	slugPtr *string,
 	pm parsedMemory,
 	sourceSceneURIs []string,
+	sourceAssertionURIs []string,
 	version int,
 	now time.Time,
 ) error {
@@ -333,16 +381,17 @@ func insertMemory(
 	abstract := pm.Abstract
 	body := pm.Body
 	row := model.Memory{
-		ID:              id,
-		URI:             bucket.URI,
-		Category:        bucket.Category,
-		Slug:            slugPtr,
-		Version:         version,
-		Abstract:        &abstract,
-		Body:            &body,
-		SourceSceneURIs: pgarray.TextArray(append([]string(nil), sourceSceneURIs...)),
-		CreatedAt:       now,
-		UpdatedAt:       now,
+		ID:                  id,
+		URI:                 bucket.URI,
+		Category:            bucket.Category,
+		Slug:                slugPtr,
+		Version:             version,
+		Abstract:            &abstract,
+		Body:                &body,
+		SourceSceneURIs:     pgarray.TextArray(append([]string(nil), sourceSceneURIs...)),
+		SourceAssertionURIs: pgarray.TextArray(append([]string(nil), sourceAssertionURIs...)),
+		CreatedAt:           now,
+		UpdatedAt:           now,
 	}
 	if err := tx.Create(&row).Error; err != nil {
 		return fmt.Errorf("insert memory: %w", err)

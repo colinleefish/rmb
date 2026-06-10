@@ -4,12 +4,41 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/colinleefish/mypast/internal/db/pgarray"
 	"github.com/colinleefish/mypast/internal/model"
 	"github.com/colinleefish/mypast/internal/service/session"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
+
+// EnqueueSessionsForMemoryTargets marks T3 pending for the sessions that own the
+// memories targeted by a human correction, so the next rollup re-distills those
+// buckets and bakes the correction into the body (write-time injection). Targets
+// that are not memories (or have no materialized memory yet) resolve to no
+// sessions. Returns the number of sessions enqueued.
+func EnqueueSessionsForMemoryTargets(ctx context.Context, gdb *gorm.DB, targetURIs []string) (int, error) {
+	if len(targetURIs) == 0 {
+		return 0, nil
+	}
+	type row struct{ SessionID uuid.UUID }
+	var rows []row
+	if err := gdb.WithContext(ctx).Raw(`
+		SELECT DISTINCT ps.session_id
+		FROM memories m
+		JOIN scenes sc ON sc.uri = ANY(m.source_scene_uris)
+		JOIN pipeline_state ps ON ps.session_id = sc.session_id
+		WHERE m.superseded_at IS NULL AND m.uri = ANY(?)
+	`, pgarray.TextArray(targetURIs)).Scan(&rows).Error; err != nil {
+		return 0, fmt.Errorf("resolve correction target sessions: %w", err)
+	}
+	for _, r := range rows {
+		if err := EnqueueSession(ctx, gdb, r.SessionID); err != nil {
+			return 0, err
+		}
+	}
+	return len(rows), nil
+}
 
 // EnqueueSession marks a session for T3 rollup (used by backfill CLI).
 func EnqueueSession(ctx context.Context, gdb *gorm.DB, sessionID uuid.UUID) error {
