@@ -124,7 +124,8 @@ func (s *Service) catSessionPath(ctx context.Context, u uri.URI, w io.Writer) er
 	}
 	sessionKey := strings.ToLower(u.Segments[0])
 
-	if len(u.Segments) == 1 {
+	switch classifySessionPath(u) {
+	case sessionPathSession:
 		var session model.Session
 		if err := s.db.WithContext(ctx).
 			Where("session_key = ?", sessionKey).
@@ -139,9 +140,8 @@ func (s *Service) catSessionPath(ctx context.Context, u uri.URI, w io.Writer) er
 		}
 		_, err := io.WriteString(w, text)
 		return err
-	}
 
-	if len(u.Segments) == 3 && u.Segments[1] == "turns" {
+	case sessionPathTurn:
 		var session model.Session
 		if err := s.db.WithContext(ctx).
 			Where("session_key = ?", sessionKey).
@@ -166,9 +166,44 @@ func (s *Service) catSessionPath(ctx context.Context, u uri.URI, w io.Writer) er
 		}
 		_, err = io.WriteString(w, turns[idx].MessagesJSONL)
 		return err
-	}
 
-	return fmt.Errorf("cat not supported for %q", u.String())
+	case sessionPathAtom:
+		target := uri.BuildSessionAtom(sessionKey, u.Segments[2])
+		var row model.Atom
+		if err := s.db.WithContext(ctx).Where("uri = ?", target).Take(&row).Error; err != nil {
+			return fmt.Errorf("load atom: %w", err)
+		}
+		_, err := io.WriteString(w, row.Content)
+		return err
+
+	default:
+		return fmt.Errorf("cat not supported for %q", u.String())
+	}
+}
+
+// sessionPathKind classifies the shape of a mypast://sessions/... URI so that
+// the cat dispatch (and any future reader) can route by intent rather than
+// re-deriving segment arithmetic at every call site.
+type sessionPathKind int
+
+const (
+	sessionPathUnknown sessionPathKind = iota
+	sessionPathSession
+	sessionPathTurn
+	sessionPathAtom
+)
+
+func classifySessionPath(u uri.URI) sessionPathKind {
+	switch {
+	case len(u.Segments) == 1:
+		return sessionPathSession
+	case len(u.Segments) == 3 && u.Segments[1] == "turns":
+		return sessionPathTurn
+	case len(u.Segments) == 3 && u.Segments[1] == "atoms":
+		return sessionPathAtom
+	default:
+		return sessionPathUnknown
+	}
 }
 
 func (s *Service) treeSession(ctx context.Context, u uri.URI, w io.Writer) error {
