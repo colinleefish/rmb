@@ -11,7 +11,7 @@ Each atom has:
 
 Category routing (choose exactly one per fact):
 - profile: DURABLE FIRST-PERSON facts about THE USER only — identity, location, role, devices, stable traits, health/taboos. Singleton; no slug.
-- preferences: recurring "prefers / wants / always / never", INCLUDING rules for how the AI should behave (tone, format, workflow). One slug per topic.
+- preferences: a STANDING, GENERAL disposition that holds across sessions and projects — how the user likes things done (tone, format, workflow, tech-stack defaults, recurring "always / never / prefers"), INCLUDING rules for how the AI should behave. It must still be true next month regardless of any current task. One slug per topic. A one-time choice about what to build/do NEXT, a project roadmap, or a milestone ORDER is NOT a preference — even when phrased "I want to / prefer to do X next" (that is an event if a firm decision, else skip).
 - entities: a NAMEABLE, PERSISTENT thing that is not the user — a specific person, team, company, named project/repo, host/server, tool, or service. NOT an activity, comparison, investigation, bug-fix, or one-off task. The slug is the thing's canonical name. If a fact is "what we did to X", the entity is X and the doing is an event — do not invent an entity for the action.
 - events: dated decisions, milestones, or actions taken. Immutable. Slug is date-prefixed when a date is known; each distinct event gets its own slug (events are NOT consolidated).
 
@@ -20,6 +20,7 @@ Do NOT extract (skip entirely):
 - The user's momentary emotional reactions (e.g. "user was surprised/alarmed").
 - Tool/skill attachment or other UI actions within this session.
 - Anything about the assistant's behavior in THIS session that is not a durable user preference.
+- Project plans, roadmaps, milestone ordering, or "what to build/do next" — even when phrased "I want to / prefer to do X next". These are transient planning, not standing preferences. If a firm dated decision was made, emit an event; otherwise skip.
 
 Hard rules:
 - profile is ONLY about the user. Put any third party in entities, NEVER in profile.
@@ -44,4 +45,5 @@ Examples:
 - "We compared web service options today" -> (NOT an entity; it is an activity. If a decision was reached, emit an event; otherwise skip. WRONG: {"category":"entities","slug":"web-service-comparison",...})
 - "Fixed the T2 stall bug" -> {"category":"events","slug":"2026-06-07-fix-t2-stall","content":"On 2026-06-07 the T2 scene-worker stall was fixed.","scene_name":"decisions","source_turn_indices":[0]} (WRONG: an "entities" atom slugged "fix-t2-stall" — a bug-fix is an event, not an entity.)
 - "The starlink RDS is at 10.9.114.160" -> {"category":"entities","slug":"starlink","content":"The starlink RDS instance is reachable at 10.9.114.160.","scene_name":"infra","source_turn_indices":[0]} (WRONG: slug "10-9-114-160" or "starlink-rds" — never slug an IP, and fold the backing store into the system's canonical slug.)
+- "Let's build the T2 scenes worker next" / "follow the roadmap: eval, then embed, then search" -> (skip, or an event if a firm dated decision; NOT a preference. WRONG: {"category":"preferences","slug":"next-steps",...} or {"slug":"roadmap",...} — project plans are not standing dispositions.)
 - "The AI is currently in Ask mode" -> (skip: transient session state)
