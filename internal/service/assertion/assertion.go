@@ -30,7 +30,7 @@ type Summary struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// CreateInput describes a new human correction. v1 supports correct + forget.
+// CreateInput describes a new human correction. The only kind is correct.
 type CreateInput struct {
 	Kind       string
 	TargetURIs []string
@@ -49,10 +49,8 @@ func NewService(db *gorm.DB) *Service {
 // Create validates and inserts an append-only assertion, returning the new row.
 func (s *Service) Create(ctx context.Context, in CreateInput) (model.Assertion, error) {
 	kind := strings.TrimSpace(in.Kind)
-	switch kind {
-	case model.AssertionKindCorrect, model.AssertionKindForget:
-	default:
-		return model.Assertion{}, fmt.Errorf("%w: unsupported kind %q (v1: correct, forget)", ErrInvalidInput, in.Kind)
+	if kind != model.AssertionKindCorrect {
+		return model.Assertion{}, fmt.Errorf("%w: unsupported kind %q (only: correct)", ErrInvalidInput, in.Kind)
 	}
 
 	targets, err := normalizeTargets(in.TargetURIs)
@@ -64,7 +62,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (model.Assertion, 
 	}
 
 	statement := strings.TrimSpace(in.Statement)
-	if kind == model.AssertionKindCorrect && statement == "" {
+	if statement == "" {
 		return model.Assertion{}, fmt.Errorf("%w: correct requires a statement", ErrInvalidInput)
 	}
 

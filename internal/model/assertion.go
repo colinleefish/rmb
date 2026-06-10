@@ -8,11 +8,11 @@ import (
 )
 
 // Assertion kinds. Every kind targets concrete memories — there is no
-// target-less "global fact" kind. v1 exposes correct + forget; split/alias are
-// reserved for entity resolution.
+// target-less "global fact" kind. The only human kind is correct (a positive or
+// negative content overlay); forgetting is passive decay, not an assertion (see
+// docs/forget-rationale.md). split/alias are reserved for entity resolution.
 const (
 	AssertionKindCorrect = "correct"
-	AssertionKindForget  = "forget"
 	AssertionKindSplit   = "split"
 	AssertionKindAlias   = "alias"
 )

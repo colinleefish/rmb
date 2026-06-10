@@ -41,11 +41,11 @@ ordering.
 |--------|-------|
 | `id` | uuid, append-only; never `UPDATE` |
 | `author` | `human` (vs implicit `worker` for derived rows) |
-| `kind` | `correct` \| `forget` \| `split` \| `alias` |
+| `kind` | `correct` (only human kind) \| `split` \| `alias` (reserved) — no `forget`, see docs/forget-rationale.md |
 | `target_uris` | `text[]` — the memories/entities/scenes this patches (1..N, any tier); **required, never empty** — a correction must correct something |
 | `target_selector` | jsonb, optional/deferred — pattern targeting (e.g. `{category, slug}`); reaches future memories |
 | `statement` | human text, e.g. "10.9.114.160 is the -uc source VM, not the RDS." |
-| `payload` | jsonb; machine-actionable detail for `split`/`alias`/`forget` |
+| `payload` | jsonb; machine-actionable detail for `split`/`alias` |
 | `superseded_at` | per-assertion identity, not per-target: set only when *this specific* assertion is explicitly retracted/replaced by its URI. Writing another correction on the same memory does **not** supersede it (see Multiplicity & ordering). |
 | `created_at` | |
 
@@ -138,10 +138,15 @@ injection is a quality bonus and can come later.
 
 ## Kinds
 
-- **`correct`** — override/annotate a specific memory (the IP case). *(v1)*
-- **`forget`** — mark a memory wrong/retired; recall hides or flags it. *(v1)*
-- **`split`** — "this slug is really two things" — keep them apart.
-- **`alias`** — "slug-a and slug-b are the same; canonical = X."
+- **`correct`** — override/annotate a specific memory; positive ("she works at a
+  bank") or negative ("she does NOT work at Huawei"). The only human kind. *(v1)*
+- **`split`** — "this slug is really two things" — keep them apart. *(reserved)*
+- **`alias`** — "slug-a and slug-b are the same; canonical = X." *(reserved)*
+
+There is no `forget` kind. Deliberate forgetting is not a human action mypast
+supports: a wrong fact is a negative `correct`, and disuse is handled by passive
+usage-based decay (`docs/ebbinghaus-recall.md`). See `docs/forget-rationale.md`
+for the full reasoning.
 
 Every kind targets concrete memories — there is no target-less "assert a global
 fact" kind. A correction with nothing to correct is a contradiction; durable
@@ -180,7 +185,7 @@ carries the overlay, so correctness is enforced at the answer boundary.
 ## CLI surface
 
 ```
-mypast assertion add <correct|forget> <uri> [<uri>...] "statement"
+mypast assertion add correct <uri> [<uri>...] "statement"
 mypast assertion rm  <assertion-uri>      # retire a specific correction
 mypast assertion ls  [<target-uri>]       # list active corrections
 mypast meta <uri>                         # also lists corrections attached to a memory
@@ -188,8 +193,7 @@ mypast meta <uri>                         # also lists corrections attached to a
 
 Naming: the objects are **assertions** (table, model, `mypast://assertions/<uuid>`
 URI, `/api/v1/assertions`, and the `mypast assertion` command). "Correction" is
-the user-facing intent; the overlay labels stay kind-specific (`CORRECTION` for
-`correct`, `RETIRED` for `forget`).
+the user-facing intent; the overlay label is `CORRECTION`.
 
 Dual-mode like the rest of the CLI (local DB or remote API). Writing a
 correction is a privileged op, so the HTTP path requires auth.
@@ -197,7 +201,7 @@ correction is a privileged op, so the HTTP path requires auth.
 ## v1 scope (minimal, high-value)
 
 - `assertions` table + migration.
-- `correct` + `forget` kinds only.
+- `correct` kind only.
 - **Read-time overlay** wired into `find` / `search` / `cat` / `meta` (skip
   distill-injection initially).
 - Precedence rule added to `cli-agent-guide.md`.

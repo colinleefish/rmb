@@ -420,15 +420,14 @@ func (r Runner) runAssertion(ctx context.Context, args []string) error {
 }
 
 // parseAssertionKind maps a user-facing kind token to a canonical kind. "fix" is
-// accepted as a friendly alias for "correct".
+// accepted as a friendly alias for "correct". correct is the only kind:
+// forgetting is passive decay, not a human action (see docs/forget-rationale.md).
 func parseAssertionKind(tok string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(tok)) {
 	case "correct", "fix":
 		return model.AssertionKindCorrect, nil
-	case "forget":
-		return model.AssertionKindForget, nil
 	default:
-		return "", fmt.Errorf("unsupported kind %q (v1: correct, forget)", tok)
+		return "", fmt.Errorf("unsupported kind %q (only: correct)", tok)
 	}
 }
 
@@ -438,7 +437,7 @@ func parseAssertionKind(tok string) (string, error) {
 func (r Runner) runAssertionAdd(ctx context.Context, args []string) error {
 	pos := positionalArgs(args)
 	if len(pos) == 0 {
-		return fmt.Errorf("usage: mypast assertion add <correct|forget> <mypast://uri> [<uri>...] \"statement\"")
+		return fmt.Errorf("usage: mypast assertion add correct <mypast://uri> [<uri>...] \"statement\"")
 	}
 	kind, err := parseAssertionKind(pos[0])
 	if err != nil {
@@ -579,11 +578,7 @@ func printMatches(out io.Writer, matches []recall.Match) {
 			fmt.Fprintf(out, "      %s\n", s)
 		}
 		for _, c := range m.Corrections {
-			label := "CORRECTION"
-			if c.Kind == model.AssertionKindForget {
-				label = "RETIRED"
-			}
-			fmt.Fprintf(out, "      \u2691 %s: %s\n", label, c.Statement)
+			fmt.Fprintf(out, "      \u2691 CORRECTION: %s\n", c.Statement)
 		}
 	}
 }
@@ -753,7 +748,7 @@ Usage:
                               Optional: --k=<n>
   mypast search <query>       Hybrid recall (vector + FTS) across memories and scenes
                               Optional: --k=<n>
-  mypast assertion add <correct|forget> <uri> [<uri>...] "statement"
+  mypast assertion add correct <uri> [<uri>...] "statement"
                               Attach a human correction that overrides memory at recall
   mypast assertion rm <assertion-uri>
                               Retire a specific correction (URI from meta/ls output)

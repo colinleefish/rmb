@@ -317,11 +317,7 @@ func (s *Service) correctionsBlock(ctx context.Context, target string) (string, 
 	var b strings.Builder
 	b.WriteString("\n\n--- corrections (human, newest first) ---\n")
 	for _, c := range sums {
-		label := "CORRECTION"
-		if c.Kind == model.AssertionKindForget {
-			label = "RETIRED"
-		}
-		fmt.Fprintf(&b, "⚑ %s (%s): %s\n", label, c.CreatedAt.UTC().Format("2006-01-02"), c.Statement)
+		fmt.Fprintf(&b, "⚑ CORRECTION (%s): %s\n", c.CreatedAt.UTC().Format("2006-01-02"), c.Statement)
 	}
 	return b.String(), nil
 }
