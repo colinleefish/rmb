@@ -61,10 +61,8 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 		return r.runFind(ctx, args[1:])
 	case "search":
 		return r.runSearch(ctx, args[1:])
-	case "fix":
-		return r.runCorrection(ctx, model.AssertionKindCorrect, args[1:])
-	case "forget":
-		return r.runCorrection(ctx, model.AssertionKindForget, args[1:])
+	case "assertion":
+		return r.runAssertion(ctx, args[1:])
 	case "store", "read", "list", "delete", "load-context":
 		return fmt.Errorf("%q command is planned but not implemented yet", args[0])
 	default:
@@ -400,16 +398,55 @@ func (r Runner) runSearch(ctx context.Context, args []string) error {
 	return nil
 }
 
-// runCorrection writes a human correction (kind=correct via `fix`, kind=forget
-// via `forget`). Positional args starting with the mypast scheme are targets;
-// the remaining words form the statement. Remote when MYPAST_URL is set.
-func (r Runner) runCorrection(ctx context.Context, kind string, args []string) error {
-	cmd := "fix"
-	if kind == model.AssertionKindForget {
-		cmd = "forget"
+// runAssertion dispatches the human-correction subcommands:
+//
+//	mypast assertion add <kind> <uri> [<uri>...] "statement"
+//	mypast assertion rm  <assertion-uri>
+//	mypast assertion ls  [<target-uri>]
+func (r Runner) runAssertion(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: mypast assertion <add|rm|ls> ...")
 	}
+	switch args[0] {
+	case "add":
+		return r.runAssertionAdd(ctx, args[1:])
+	case "rm":
+		return r.runRetract(ctx, args[1:])
+	case "ls":
+		return r.runAssertionList(ctx, args[1:])
+	default:
+		return fmt.Errorf("unknown assertion action %q (use add|rm|ls)", args[0])
+	}
+}
+
+// parseAssertionKind maps a user-facing kind token to a canonical kind. "fix" is
+// accepted as a friendly alias for "correct".
+func parseAssertionKind(tok string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(tok)) {
+	case "correct", "fix":
+		return model.AssertionKindCorrect, nil
+	case "forget":
+		return model.AssertionKindForget, nil
+	default:
+		return "", fmt.Errorf("unsupported kind %q (v1: correct, forget)", tok)
+	}
+}
+
+// runAssertionAdd writes a human correction. The first positional arg is the
+// kind; positional args with the mypast scheme are targets; the rest form the
+// statement. Remote when MYPAST_URL is set, else local DB.
+func (r Runner) runAssertionAdd(ctx context.Context, args []string) error {
+	pos := positionalArgs(args)
+	if len(pos) == 0 {
+		return fmt.Errorf("usage: mypast assertion add <correct|forget> <mypast://uri> [<uri>...] \"statement\"")
+	}
+	kind, err := parseAssertionKind(pos[0])
+	if err != nil {
+		return err
+	}
+
 	var targets, words []string
-	for _, a := range positionalArgs(args) {
+	for _, a := range pos[1:] {
 		if strings.HasPrefix(a, uri.Scheme+"://") {
 			targets = append(targets, a)
 		} else {
@@ -418,7 +455,7 @@ func (r Runner) runCorrection(ctx context.Context, kind string, args []string) e
 	}
 	statement := strings.TrimSpace(strings.Join(words, " "))
 	if len(targets) == 0 {
-		return fmt.Errorf("usage: mypast %s <mypast://uri> [<uri>...] \"statement\"", cmd)
+		return fmt.Errorf("usage: mypast assertion add %s <mypast://uri> [<uri>...] \"statement\"", pos[0])
 	}
 
 	if cl, ok := client.Resolve(); ok {
@@ -426,7 +463,7 @@ func (r Runner) runCorrection(ctx context.Context, kind string, args []string) e
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(r.stdout(), "%s: %s -> %s\n", cmd, strings.Join(targets, ", "), createdURI)
+		fmt.Fprintf(r.stdout(), "added %s: %s -> %s\n", kind, strings.Join(targets, ", "), createdURI)
 		return nil
 	}
 
@@ -444,7 +481,90 @@ func (r Runner) runCorrection(ctx context.Context, kind string, args []string) e
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(r.stdout(), "%s: %s -> %s\n", cmd, strings.Join(targets, ", "), row.URI)
+	fmt.Fprintf(r.stdout(), "added %s: %s -> %s\n", kind, strings.Join(targets, ", "), row.URI)
+	return nil
+}
+
+// runAssertionList prints active assertions, optionally filtered to one target.
+func (r Runner) runAssertionList(ctx context.Context, args []string) error {
+	pos := positionalArgs(args)
+	target := ""
+	if len(pos) > 0 {
+		target = pos[0]
+	}
+
+	if cl, ok := client.Resolve(); ok {
+		items, err := cl.ListAssertions(ctx, target)
+		if err != nil {
+			return err
+		}
+		out := r.stdout()
+		if len(items) == 0 {
+			fmt.Fprintln(out, "no assertions")
+			return nil
+		}
+		for _, it := range items {
+			fmt.Fprintf(out, "%s  [%s]\n", it.URI, it.Kind)
+			fmt.Fprintf(out, "   -> %s\n", strings.Join(it.TargetURIs, ", "))
+			if it.Statement != "" {
+				fmt.Fprintf(out, "   %s\n", it.Statement)
+			}
+		}
+		return nil
+	}
+
+	database, closeDB, err := r.openDB(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+
+	rows, err := assertion.NewService(database).List(ctx, target)
+	if err != nil {
+		return err
+	}
+	out := r.stdout()
+	if len(rows) == 0 {
+		fmt.Fprintln(out, "no assertions")
+		return nil
+	}
+	for _, row := range rows {
+		fmt.Fprintf(out, "%s  [%s]\n", row.URI, row.Kind)
+		fmt.Fprintf(out, "   -> %s\n", strings.Join([]string(row.TargetURIs), ", "))
+		if row.Statement != nil && *row.Statement != "" {
+			fmt.Fprintf(out, "   %s\n", *row.Statement)
+		}
+	}
+	return nil
+}
+
+// runRetract retires a specific correction by its assertion URI. Remote when
+// MYPAST_URL is set, else local DB.
+func (r Runner) runRetract(ctx context.Context, args []string) error {
+	pos := positionalArgs(args)
+	if len(pos) != 1 {
+		return fmt.Errorf("usage: mypast retract <mypast://assertions/...>")
+	}
+	target := pos[0]
+
+	if cl, ok := client.Resolve(); ok {
+		if err := cl.RetractAssertion(ctx, target); err != nil {
+			return err
+		}
+		fmt.Fprintf(r.stdout(), "retracted: %s\n", target)
+		return nil
+	}
+
+	database, closeDB, err := r.openDB(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+
+	if err := assertion.NewService(database).Retract(ctx, target); err != nil {
+		return err
+	}
+	fmt.Fprintf(r.stdout(), "retracted: %s\n", target)
 	return nil
 }
 
@@ -633,10 +753,12 @@ Usage:
                               Optional: --k=<n>
   mypast search <query>       Hybrid recall (vector + FTS) across memories and scenes
                               Optional: --k=<n>
-  mypast fix <uri> [<uri>...] "statement"
+  mypast assertion add <correct|forget> <uri> [<uri>...] "statement"
                               Attach a human correction that overrides memory at recall
-  mypast forget <uri> [<uri>...] ["why"]
-                              Mark memory wrong/retired; surfaced as a correction
+  mypast assertion rm <assertion-uri>
+                              Retire a specific correction (URI from meta/ls output)
+  mypast assertion ls [<target-uri>]
+                              List active corrections (optionally for one target)
   mypast store <uri>          Planned
   mypast read <uri>           Planned
   mypast list <prefix>        Planned

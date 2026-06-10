@@ -67,7 +67,9 @@ func New(
 	}
 
 	if assertionHandler != nil {
+		protected.GET("/api/v1/assertions", assertionHandler.List)
 		protected.POST("/api/v1/assertions", assertionHandler.Create)
+		protected.DELETE("/api/v1/assertions", assertionHandler.Retract)
 	}
 
 	return r, nil

@@ -180,11 +180,16 @@ carries the overlay, so correctness is enforced at the answer boundary.
 ## CLI surface
 
 ```
-mypast fix <uri> [<uri>...] "statement"   # kind=correct; one or more targets
-mypast forget <uri> [<uri>...] ["why"]
-mypast alias <uri-a> <uri-b> --canonical=<uri>
-mypast meta <uri>                         # now lists attached assertions
+mypast assertion add <correct|forget> <uri> [<uri>...] "statement"
+mypast assertion rm  <assertion-uri>      # retire a specific correction
+mypast assertion ls  [<target-uri>]       # list active corrections
+mypast meta <uri>                         # also lists corrections attached to a memory
 ```
+
+Naming: the objects are **assertions** (table, model, `mypast://assertions/<uuid>`
+URI, `/api/v1/assertions`, and the `mypast assertion` command). "Correction" is
+the user-facing intent; the overlay labels stay kind-specific (`CORRECTION` for
+`correct`, `RETIRED` for `forget`).
 
 Dual-mode like the rest of the CLI (local DB or remote API). Writing a
 correction is a privileged op, so the HTTP path requires auth.

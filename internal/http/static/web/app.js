@@ -1,4 +1,5 @@
 const API = "/api/v1/browse";
+const PAGE_SIZE = 25;
 
 const tabs = [
   { id: "guide", label: "Guide", path: null },
@@ -15,8 +16,8 @@ const state = {
   tab: "overview",
   overview: null,
   selectedKey: null,
-  selectedRowIdx: null,
   atomsFilter: { q: "", category: "all" },
+  pages: {},
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -114,6 +115,10 @@ function statusBadge(status) {
   return `<span class="badge ${cls} status-dot ${esc(s)}">${esc(s)}</span>`;
 }
 
+function outlineBadge(text) {
+  return `<span class="badge badge-outline">${esc(text)}</span>`;
+}
+
 function pageHeader(title, description) {
   return `
     <div class="page-header">
@@ -151,6 +156,154 @@ function renderMessages(jsonl) {
     .join("");
 }
 
+/* —————————————————— drawer (slide-in detail) —————————————————— */
+
+function openDrawer(title, bodyHTML) {
+  const root = $("#drawer-root");
+  $("#drawer-title").innerHTML = title || "";
+  const body = $("#drawer-body");
+  body.innerHTML = bodyHTML || "";
+  body.scrollTop = 0;
+  root.hidden = false;
+  requestAnimationFrame(() => root.classList.add("open"));
+}
+
+function closeDrawer() {
+  const root = $("#drawer-root");
+  if (root.hidden) return;
+  root.classList.remove("open");
+  document
+    .querySelectorAll(".data-table tbody tr.selected")
+    .forEach((r) => r.classList.remove("selected"));
+  state.selectedKey = null;
+  setTimeout(() => {
+    if (!root.classList.contains("open")) root.hidden = true;
+  }, 250);
+}
+
+function wireDrawer() {
+  $("#drawer-root")
+    .querySelectorAll("[data-drawer-close]")
+    .forEach((el) => el.addEventListener("click", closeDrawer));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeDrawer();
+  });
+}
+
+/* —————————————————— pagination —————————————————— */
+
+function getPage(key) {
+  return state.pages[key] || 1;
+}
+
+function setPage(key, n) {
+  state.pages[key] = n;
+}
+
+function pageSlice(items, key) {
+  const total = items.length;
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.min(Math.max(1, getPage(key)), pages);
+  setPage(key, page);
+  const start = (page - 1) * PAGE_SIZE;
+  return { slice: items.slice(start, start + PAGE_SIZE), page, pages, total, start };
+}
+
+function renderPager(el, info, onGo) {
+  const { page, pages, total, start, shown } = info;
+  if (!total) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  el.hidden = false;
+  const from = start + 1;
+  const to = start + shown;
+  const controls =
+    pages > 1
+      ? `
+      <div class="pager-controls">
+        <button type="button" class="btn btn-outline btn-sm" data-go="prev" ${page <= 1 ? "disabled" : ""}>Prev</button>
+        <span class="pager-page">Page ${page} of ${pages}</span>
+        <button type="button" class="btn btn-outline btn-sm" data-go="next" ${page >= pages ? "disabled" : ""}>Next</button>
+      </div>`
+      : "";
+  el.innerHTML = `<span class="pager-info">${from}–${to} of ${total}</span>${controls}`;
+  el.querySelector('[data-go="prev"]')?.addEventListener("click", () => onGo(page - 1));
+  el.querySelector('[data-go="next"]')?.addEventListener("click", () => onGo(page + 1));
+}
+
+/* —————————————————— generic list panel —————————————————— */
+
+// opts: title, description, thead, colCount, pageKey, getItems(), rowHTML(row, i),
+//       emptyText, drawerFor(row) -> {title, body} | null, onRowClick(row),
+//       toolbarHTML, wireToolbar(root, repaint)
+function renderListPanel(p, opts) {
+  const toolbar = opts.toolbarHTML
+    ? `<div class="card-content" style="padding:1rem 1.5rem 0">${opts.toolbarHTML}</div>`
+    : "";
+
+  p.innerHTML = `
+    ${pageHeader(opts.title, opts.description)}
+    <div class="card data-table-card">
+      ${toolbar}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>${opts.thead}</thead>
+          <tbody id="list-tbody"></tbody>
+        </table>
+      </div>
+      <div id="list-pager" class="pager" hidden></div>
+    </div>`;
+
+  const tbody = p.querySelector("#list-tbody");
+  const pagerEl = p.querySelector("#list-pager");
+
+  function paint() {
+    const items = opts.getItems();
+    const { slice, page, pages, total, start } = pageSlice(items, opts.pageKey);
+
+    tbody.innerHTML = slice.length
+      ? slice.map((row, i) => opts.rowHTML(row, i)).join("")
+      : `<tr><td colspan="${opts.colCount}" class="empty" style="padding:2rem;text-align:center">${esc(
+          opts.emptyText || "Nothing here yet"
+        )}</td></tr>`;
+
+    renderPager(pagerEl, { page, pages, total, start, shown: slice.length }, (next) => {
+      setPage(opts.pageKey, next);
+      paint();
+    });
+
+    tbody.querySelectorAll("tr[data-idx]").forEach((tr) => {
+      tr.addEventListener("click", () => {
+        const idx = Number(tr.dataset.idx);
+        const row = slice[idx];
+        tbody.querySelectorAll("tr.selected").forEach((r) => r.classList.remove("selected"));
+        tr.classList.add("selected");
+        if (opts.onRowClick) {
+          opts.onRowClick(row);
+          return;
+        }
+        const d = opts.drawerFor && opts.drawerFor(row);
+        if (d) openDrawer(d.title, d.body);
+      });
+    });
+  }
+
+  paint();
+
+  if (opts.wireToolbar) {
+    opts.wireToolbar(p, () => {
+      setPage(opts.pageKey, 1);
+      paint();
+    });
+  }
+
+  return paint;
+}
+
+/* —————————————————— nav —————————————————— */
+
 function renderNav() {
   const counts = state.overview?.counts || {};
   $("#nav").innerHTML = `
@@ -179,7 +332,6 @@ function renderNav() {
 async function switchTab(id) {
   state.tab = id;
   state.selectedKey = null;
-  state.selectedRowIdx = null;
   renderNav();
   showStatus("");
   try {
@@ -206,6 +358,8 @@ async function loadOverviewCounts() {
   renderNav();
 }
 
+/* —————————————————— guide —————————————————— */
+
 function renderGuideHTML() {
   return `
     ${pageHeader("Guide", "How capture and distillation layers connect.")}
@@ -231,11 +385,7 @@ function renderGuideHTML() {
     </div>`;
 }
 
-function wireGuideNav(root) {
-  root.querySelectorAll("[data-goto]").forEach((btn) => {
-    btn.addEventListener("click", () => switchTab(btn.dataset.goto));
-  });
-}
+/* —————————————————— atoms —————————————————— */
 
 function filterAtoms(items) {
   const { q, category } = state.atomsFilter;
@@ -257,46 +407,32 @@ function filterAtoms(items) {
   });
 }
 
-function renderAtomTableRows(items, selectedIdx) {
-  if (!items.length) {
-    return `<tr><td colspan="5" class="empty" style="padding:2rem;text-align:center">No atoms match your filters</td></tr>`;
-  }
-  return items
-    .map((row, i) => {
-      const content = field(row, "content", "Content") || "—";
-      const category = field(row, "category", "Category");
-      const scene = field(row, "scene_name", "SceneName");
-      const slug = field(row, "slug", "Slug");
-      const priority = field(row, "priority", "Priority") ?? "—";
-      const uri = field(row, "uri", "URI");
-      const created = field(row, "created_at", "CreatedAt");
-      const sessionShort = sessionKeyFromURI(uri) || "—";
-      const topicParts = [scene, slug].filter(Boolean);
-      const topic = topicParts.length ? topicParts.join(" · ") : "—";
-      const priClass = Number(priority) >= 70 ? " high" : "";
-      const selected = selectedIdx === i ? " selected" : "";
+function atomRow(row, i) {
+  const content = field(row, "content", "Content") || "—";
+  const category = field(row, "category", "Category");
+  const scene = field(row, "scene_name", "SceneName");
+  const slug = field(row, "slug", "Slug");
+  const priority = field(row, "priority", "Priority") ?? "—";
+  const uri = field(row, "uri", "URI");
+  const created = field(row, "created_at", "CreatedAt");
+  const sessionShort = sessionKeyFromURI(uri) || "—";
+  const topic = [scene, slug].filter(Boolean).join(" · ") || "—";
+  const priClass = Number(priority) >= 70 ? " high" : "";
 
-      return `
-        <tr data-idx="${i}" class="${selected}">
-          <td>
-            <div class="cell-primary cell-clamp-2">${esc(content)}</div>
-          </td>
-          <td>${categoryBadge(category)}</td>
-          <td>
-            <div class="cell-secondary">${esc(topic)}</div>
-          </td>
-          <td><span class="cell-mono" title="${esc(uri)}">${esc(sessionShort)}</span></td>
-          <td>
-            <span class="priority-pill${priClass}">${esc(priority)}</span>
-            <div class="cell-meta">${fmtTimeShort(created)}</div>
-          </td>
-        </tr>`;
-    })
-    .join("");
+  return `
+    <tr data-idx="${i}">
+      <td><div class="cell-primary cell-clamp-2">${esc(content)}</div></td>
+      <td>${categoryBadge(category)}</td>
+      <td><div class="cell-secondary">${esc(topic)}</div></td>
+      <td><span class="cell-mono" title="${esc(uri)}">${esc(sessionShort)}</span></td>
+      <td>
+        <span class="priority-pill${priClass}">${esc(priority)}</span>
+        <div class="cell-meta">${fmtTimeShort(created)}</div>
+      </td>
+    </tr>`;
 }
 
-function renderAtomDetailCard(row) {
-  if (!row) return "";
+function atomDrawer(row) {
   const content = field(row, "content", "Content");
   const uri = field(row, "uri", "URI");
   const category = field(row, "category", "Category");
@@ -305,384 +441,217 @@ function renderAtomDetailCard(row) {
   const priority = field(row, "priority", "Priority");
   const created = field(row, "created_at", "CreatedAt");
 
-  return `
-    <div class="card row-detail">
-      <div class="card-content">
-        <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:0.75rem">
-          ${categoryBadge(category)}
-          ${scene ? `<span class="badge badge-outline">${esc(scene)}</span>` : ""}
-          ${slug ? `<span class="badge badge-outline">${esc(slug)}</span>` : ""}
-          <span class="badge badge-outline">P${esc(priority ?? "—")}</span>
-        </div>
-        <p class="detail-body">${esc(content)}</p>
-        <p class="detail-uri">${esc(uri)}</p>
-        <p class="cell-meta" style="margin-top:0.5rem">${fmtTime(created)}</p>
+  return {
+    title: esc(scene || slug || "Atom"),
+    body: `
+      <div class="detail-badges">
+        ${categoryBadge(category)}
+        ${scene ? outlineBadge(scene) : ""}
+        ${slug ? outlineBadge(slug) : ""}
+        ${outlineBadge("P" + (priority ?? "—"))}
       </div>
-    </div>`;
+      <p class="detail-body">${esc(content)}</p>
+      <p class="detail-uri">${esc(uri)}</p>
+      <p class="cell-meta" style="margin-top:0.5rem">${fmtTime(created)}</p>`,
+  };
 }
 
 async function renderAtomsPanel(p) {
   const { items: all } = await api("/atoms");
-  const filtered = filterAtoms(all);
+  renderListPanel(p, {
+    title: "Atoms",
+    description: "Facts extracted from chat turns (T1).",
+    colCount: 5,
+    pageKey: "atoms",
+    thead: `<tr>
+      <th style="min-width:14rem">Fact</th>
+      <th>Category</th>
+      <th>Topic</th>
+      <th>Session</th>
+      <th>Priority · When</th>
+    </tr>`,
+    getItems: () => filterAtoms(all),
+    rowHTML: atomRow,
+    drawerFor: atomDrawer,
+    emptyText: "No atoms match your filters",
+    toolbarHTML: `
+      <div class="toolbar">
+        <input type="search" class="input" id="atoms-search" placeholder="Search facts…" value="${esc(state.atomsFilter.q)}" />
+        <select class="select" id="atoms-category" aria-label="Category filter">
+          <option value="all"${state.atomsFilter.category === "all" ? " selected" : ""}>All categories</option>
+          <option value="profile"${state.atomsFilter.category === "profile" ? " selected" : ""}>profile</option>
+          <option value="preferences"${state.atomsFilter.category === "preferences" ? " selected" : ""}>preferences</option>
+          <option value="entities"${state.atomsFilter.category === "entities" ? " selected" : ""}>entities</option>
+          <option value="events"${state.atomsFilter.category === "events" ? " selected" : ""}>events</option>
+        </select>
+      </div>`,
+    wireToolbar: (root, repaint) => {
+      const searchEl = root.querySelector("#atoms-search");
+      const catEl = root.querySelector("#atoms-category");
+      const apply = () => {
+        state.atomsFilter.q = searchEl.value;
+        state.atomsFilter.category = catEl.value;
+        repaint();
+      };
+      searchEl.addEventListener("input", apply);
+      catEl.addEventListener("change", apply);
+    },
+  });
+}
 
-  p.innerHTML = `
-    ${pageHeader("Atoms", "Facts extracted from chat turns (T1).")}
-    <div class="card data-table-card">
-      <div class="card-content" style="padding:1rem 1.5rem 0">
-        <div class="toolbar">
-          <input type="search" class="input" id="atoms-search" placeholder="Search facts…" value="${esc(state.atomsFilter.q)}" />
-          <select class="select" id="atoms-category" aria-label="Category filter">
-            <option value="all"${state.atomsFilter.category === "all" ? " selected" : ""}>All categories</option>
-            <option value="profile"${state.atomsFilter.category === "profile" ? " selected" : ""}>profile</option>
-            <option value="preferences"${state.atomsFilter.category === "preferences" ? " selected" : ""}>preferences</option>
-            <option value="entities"${state.atomsFilter.category === "entities" ? " selected" : ""}>entities</option>
-            <option value="events"${state.atomsFilter.category === "events" ? " selected" : ""}>events</option>
-          </select>
-          <span class="toolbar-spacer"></span>
-          <span class="toolbar-meta">${filtered.length} of ${all.length}</span>
-        </div>
+/* —————————————————— memories —————————————————— */
+
+function memoryRow(row, i) {
+  const abstract = field(row, "abstract", "Abstract");
+  const body = field(row, "body", "Body");
+  const primary = abstract || truncate(body, 120) || "—";
+  const secondary = abstract && body ? truncate(body, 80) : "";
+  return `
+    <tr data-idx="${i}">
+      <td>
+        <div class="cell-primary cell-clamp-2">${esc(primary)}</div>
+        ${secondary ? `<div class="cell-secondary">${esc(secondary)}</div>` : ""}
+      </td>
+      <td>${categoryBadge(field(row, "category", "Category"))}</td>
+      <td class="cell-mono">${esc(field(row, "slug", "Slug") || "—")}</td>
+      <td class="cell-meta">${esc(field(row, "version", "Version") ?? "—")}</td>
+      <td class="cell-meta">${fmtTimeShort(field(row, "updated_at", "UpdatedAt"))}</td>
+    </tr>`;
+}
+
+function memoryDrawer(row) {
+  const abstract = field(row, "abstract", "Abstract");
+  const body = field(row, "body", "Body");
+  const slug = field(row, "slug", "Slug");
+  const category = field(row, "category", "Category");
+  const version = field(row, "version", "Version");
+  const updated = field(row, "updated_at", "UpdatedAt");
+  return {
+    title: esc(slug || category || "Memory"),
+    body: `
+      <div class="detail-badges">
+        ${categoryBadge(category)}
+        ${slug ? outlineBadge(slug) : ""}
+        ${version != null ? outlineBadge("v" + version) : ""}
       </div>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th style="min-width:14rem">Fact</th>
-              <th>Category</th>
-              <th>Topic</th>
-              <th>Session</th>
-              <th>Priority · When</th>
-            </tr>
-          </thead>
-          <tbody id="atoms-tbody">
-            ${renderAtomTableRows(filtered, state.selectedRowIdx)}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div id="row-detail"></div>`;
-
-  const searchEl = p.querySelector("#atoms-search");
-  const catEl = p.querySelector("#atoms-category");
-
-  const applyFilters = () => {
-    state.atomsFilter.q = searchEl.value;
-    state.atomsFilter.category = catEl.value;
-    state.selectedRowIdx = null;
-    const next = filterAtoms(all);
-    p.querySelector("#atoms-tbody").innerHTML = renderAtomTableRows(next, null);
-    p.querySelector(".toolbar-meta").textContent = `${next.length} of ${all.length}`;
-    p.querySelector("#row-detail").innerHTML = "";
-    wireAtomRows(p, next);
+      ${abstract ? `<p class="detail-body" style="font-weight:500">${esc(abstract)}</p>` : ""}
+      ${body ? `<p class="detail-body">${esc(body)}</p>` : ""}
+      <p class="cell-meta" style="margin-top:0.5rem">${fmtTime(updated)}</p>`,
   };
-
-  searchEl.addEventListener("input", applyFilters);
-  catEl.addEventListener("change", applyFilters);
-  wireAtomRows(p, filtered);
 }
 
-function wireAtomRows(root, items) {
-  root.querySelectorAll("#atoms-tbody tr[data-idx]").forEach((tr) => {
-    tr.addEventListener("click", () => {
-      const idx = Number(tr.dataset.idx);
-      state.selectedRowIdx = idx;
-      root.querySelectorAll("#atoms-tbody tr.selected").forEach((r) => r.classList.remove("selected"));
-      tr.classList.add("selected");
-      root.querySelector("#row-detail").innerHTML = renderAtomDetailCard(items[idx]);
-    });
-  });
+/* —————————————————— scenes —————————————————— */
 
-  if (state.selectedRowIdx != null && items[state.selectedRowIdx]) {
-    const tr = root.querySelector(`#atoms-tbody tr[data-idx="${state.selectedRowIdx}"]`);
-    tr?.classList.add("selected");
-    root.querySelector("#row-detail").innerHTML = renderAtomDetailCard(items[state.selectedRowIdx]);
-  }
+function sceneRow(row, i) {
+  const abstract = field(row, "abstract", "Abstract");
+  const body = field(row, "body", "Body");
+  const uri = field(row, "uri", "URI");
+  return `
+    <tr data-idx="${i}">
+      <td>
+        <div class="cell-primary cell-clamp-2">${esc(abstract || truncate(body, 100) || "—")}</div>
+        <div class="cell-secondary cell-mono">${esc(truncate(uri, 48))}</div>
+      </td>
+      <td class="cell-mono">${esc(sessionKeyFromURI(uri) || "—")}</td>
+      <td class="cell-meta">${fmtTimeShort(field(row, "updated_at", "UpdatedAt"))}</td>
+    </tr>`;
 }
 
-function renderMemoriesPanel(p, items) {
-  p.innerHTML = `
-    ${pageHeader("Memories", "Long-term knowledge (T3).")}
-    <div class="card data-table-card">
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr><th>Memory</th><th>Category</th><th>Slug</th><th>Version</th><th>Updated</th></tr>
-          </thead>
-          <tbody>
-            ${items.length
-              ? items
-                  .map((row, i) => {
-                    const abstract = field(row, "abstract", "Abstract");
-                    const body = field(row, "body", "Body");
-                    const primary = abstract || truncate(body, 120) || "—";
-                    const secondary = abstract && body ? truncate(body, 80) : "";
-                    return `
-                <tr data-idx="${i}">
-                  <td>
-                    <div class="cell-primary cell-clamp-2">${esc(primary)}</div>
-                    ${secondary ? `<div class="cell-secondary">${esc(secondary)}</div>` : ""}
-                  </td>
-                  <td>${categoryBadge(field(row, "category", "Category"))}</td>
-                  <td class="cell-mono">${esc(field(row, "slug", "Slug") || "—")}</td>
-                  <td class="cell-meta">${esc(field(row, "version", "Version") ?? "—")}</td>
-                  <td class="cell-meta">${fmtTimeShort(field(row, "updated_at", "UpdatedAt"))}</td>
-                </tr>`;
-                  })
-                  .join("")
-              : `<tr><td colspan="5" class="empty" style="padding:2rem;text-align:center">No memories yet</td></tr>`}
-          </tbody>
-        </table>
+function sceneDrawer(row) {
+  const abstract = field(row, "abstract", "Abstract");
+  const body = field(row, "body", "Body");
+  const uri = field(row, "uri", "URI");
+  const updated = field(row, "updated_at", "UpdatedAt");
+  return {
+    title: esc(truncate(abstract, 60) || "Scene"),
+    body: `
+      ${abstract ? `<p class="detail-body" style="font-weight:500">${esc(abstract)}</p>` : ""}
+      ${body ? `<p class="detail-body">${esc(body)}</p>` : ""}
+      <p class="detail-uri">${esc(uri)}</p>
+      <p class="cell-meta" style="margin-top:0.5rem">${fmtTime(updated)}</p>`,
+  };
+}
+
+/* —————————————————— tasks —————————————————— */
+
+function taskRow(row, i) {
+  const kind = field(row, "kind", "Kind");
+  const status = field(row, "status", "Status");
+  const err = field(row, "error", "Error");
+  const sid = field(row, "session_id", "SessionID");
+  const sessionShort = sid ? String(sid).slice(0, 8) + "…" : "—";
+  return `
+    <tr data-idx="${i}">
+      <td>
+        <div class="cell-primary">${esc(kind)}</div>
+        ${err ? `<div class="cell-secondary cell-clamp-2">${esc(err)}</div>` : ""}
+      </td>
+      <td>${statusBadge(status)}</td>
+      <td class="cell-mono">${esc(sessionShort)}</td>
+      <td class="cell-meta">${esc(field(row, "progress", "Progress") ?? 0)}%</td>
+      <td class="cell-meta">${fmtTimeShort(field(row, "created_at", "CreatedAt"))}</td>
+    </tr>`;
+}
+
+function taskDrawer(row) {
+  const kind = field(row, "kind", "Kind");
+  const status = field(row, "status", "Status");
+  const err = field(row, "error", "Error");
+  const sid = field(row, "session_id", "SessionID");
+  const progress = field(row, "progress", "Progress") ?? 0;
+  const created = field(row, "created_at", "CreatedAt");
+  return {
+    title: esc(kind || "Task"),
+    body: `
+      <div class="detail-badges">
+        ${statusBadge(status)}
+        ${outlineBadge(progress + "%")}
       </div>
-    </div>
-    <div id="row-detail"></div>`;
-  wireGenericRowDetail(p, items, (row) => {
-    const body = field(row, "body", "Body");
-    const abstract = field(row, "abstract", "Abstract");
-    return body || abstract;
-  });
+      ${sid ? `<p class="detail-uri">session ${esc(sid)}</p>` : ""}
+      ${err ? `<p class="detail-body">${esc(err)}</p>` : `<p class="empty">No error reported.</p>`}
+      <p class="cell-meta" style="margin-top:0.5rem">${fmtTime(created)}</p>`,
+  };
 }
 
-function renderScenesPanel(p, items) {
-  p.innerHTML = `
-    ${pageHeader("Scenes", "Session-level summaries (T2).")}
-    <div class="card data-table-card">
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr><th>Scene</th><th>Session</th><th>Updated</th></tr>
-          </thead>
-          <tbody>
-            ${items.length
-              ? items
-                  .map((row, i) => {
-                    const abstract = field(row, "abstract", "Abstract");
-                    const body = field(row, "body", "Body");
-                    const uri = field(row, "uri", "URI");
-                    return `
-                <tr data-idx="${i}">
-                  <td>
-                    <div class="cell-primary cell-clamp-2">${esc(abstract || truncate(body, 100) || "—")}</div>
-                    <div class="cell-secondary cell-mono">${esc(truncate(uri, 48))}</div>
-                  </td>
-                  <td class="cell-mono">${esc(sessionKeyFromURI(uri) || "—")}</td>
-                  <td class="cell-meta">${fmtTimeShort(field(row, "updated_at", "UpdatedAt"))}</td>
-                </tr>`;
-                  })
-                  .join("")
-              : `<tr><td colspan="3" class="empty" style="padding:2rem;text-align:center">No scenes yet</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div id="row-detail"></div>`;
-  wireGenericRowDetail(p, items, (row) => field(row, "body", "Body") || field(row, "abstract", "Abstract"));
+/* —————————————————— pipeline —————————————————— */
+
+function pipelineRow(row, i) {
+  const sessionKey = field(row, "session_key", "SessionKey");
+  const label = sessionKey ? sessionKey.slice(0, 8) + "…" : "—";
+  return `
+    <tr data-idx="${i}">
+      <td class="cell-mono">${esc(label)}</td>
+      <td>${statusBadge(field(row, "t1_status", "T1Status"))}</td>
+      <td>${statusBadge(field(row, "t2_status", "T2Status"))}</td>
+      <td>${statusBadge(field(row, "t3_status", "T3Status"))}</td>
+      <td class="cell-meta">${esc(field(row, "warmup_threshold", "WarmupThreshold") ?? "—")}</td>
+    </tr>`;
 }
 
-function renderTasksPanel(p, items) {
-  p.innerHTML = `
-    ${pageHeader("Tasks", "Async worker runs.")}
-    <div class="card data-table-card">
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr><th>Job</th><th>Status</th><th>Session</th><th>Progress</th><th>Created</th></tr>
-          </thead>
-          <tbody>
-            ${items
-              .map((row, i) => {
-                const kind = field(row, "kind", "Kind");
-                const status = field(row, "status", "Status");
-                const err = field(row, "error", "Error");
-                const sid = field(row, "session_id", "SessionID");
-                const sessionShort = sid ? String(sid).slice(0, 8) + "…" : "—";
-                return `
-              <tr data-idx="${i}">
-                <td>
-                  <div class="cell-primary">${esc(kind)}</div>
-                  ${err ? `<div class="cell-secondary cell-clamp-2">${esc(err)}</div>` : ""}
-                </td>
-                <td>${statusBadge(status)}</td>
-                <td class="cell-mono">${esc(sessionShort)}</td>
-                <td class="cell-meta">${esc(field(row, "progress", "Progress") ?? 0)}%</td>
-                <td class="cell-meta">${fmtTimeShort(field(row, "created_at", "CreatedAt"))}</td>
-              </tr>`;
-              })
-              .join("")}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div id="row-detail"></div>`;
-  wireGenericRowDetail(p, items, (row) => field(row, "error", "Error"));
+/* —————————————————— sessions —————————————————— */
+
+function sessionRow(s, i) {
+  return `
+    <tr data-idx="${i}" data-key="${esc(s.session_key)}">
+      <td>
+        <div class="cell-primary">${esc(s.title || "Untitled session")}</div>
+        <div class="cell-secondary cell-mono">${esc(s.session_key.slice(0, 8))}…</div>
+      </td>
+      <td class="cell-meta">${s.turn_count}</td>
+      <td>${statusBadge(s.status)}</td>
+      <td class="cell-meta">${fmtTimeShort(s.updated_at)}</td>
+    </tr>`;
 }
 
-function renderPipelinePanel(p, items) {
-  p.innerHTML = `
-    ${pageHeader("Pipeline", "Per-session worker state. Click a row to open the session.")}
-    <div class="card data-table-card">
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr><th>Session</th><th>T1</th><th>T2</th><th>T3</th><th>Warmup</th></tr>
-          </thead>
-          <tbody>
-            ${items
-              .map((row, i) => {
-                const sessionKey = field(row, "session_key", "SessionKey");
-                const label = sessionKey ? sessionKey.slice(0, 8) + "…" : "—";
-                return `
-              <tr data-idx="${i}" data-key="${esc(sessionKey || "")}">
-                <td class="cell-mono">${esc(label)}</td>
-                <td>${statusBadge(field(row, "t1_status", "T1Status"))}</td>
-                <td>${statusBadge(field(row, "t2_status", "T2Status"))}</td>
-                <td>${statusBadge(field(row, "t3_status", "T3Status"))}</td>
-                <td class="cell-meta">${esc(field(row, "warmup_threshold", "WarmupThreshold") ?? "—")}</td>
-              </tr>`;
-              })
-              .join("")}
-          </tbody>
-        </table>
-      </div>
-    </div>`;
-  p.querySelectorAll("tbody tr[data-key]").forEach((tr) => {
-    const key = tr.dataset.key;
-    if (!key) return;
-    tr.addEventListener("click", () => goToSession(key));
-  });
-}
-
-function wireGenericRowDetail(root, items, textFn) {
-  root.querySelectorAll("tbody tr[data-idx]").forEach((tr) => {
-    tr.addEventListener("click", () => {
-      const idx = Number(tr.dataset.idx);
-      const text = textFn(items[idx]);
-      root.querySelectorAll("tbody tr.selected").forEach((r) => r.classList.remove("selected"));
-      tr.classList.add("selected");
-      const el = root.querySelector("#row-detail");
-      if (!text || !el) {
-        if (el) el.innerHTML = "";
-        return;
-      }
-      el.innerHTML = `
-        <div class="card row-detail">
-          <div class="card-content">
-            <p class="detail-body">${esc(text)}</p>
-          </div>
-        </div>`;
-    });
-  });
-}
-
-async function renderPanel() {
-  const p = panel();
-  const tab = tabs.find((t) => t.id === state.tab);
-
-  if (state.tab === "guide") {
-    p.innerHTML = renderGuideHTML();
-    wireGuideNav(p);
-    return;
-  }
-
-  if (state.tab === "overview") {
-    if (!state.overview) await loadOverviewCounts();
-    const c = state.overview.counts;
-    p.innerHTML = `
-      ${pageHeader("Overview", "Row counts across the pipeline.")}
-      <div class="stats-grid">
-        ${Object.entries(c)
-          .map(
-            ([k, v]) => `
-          <div class="stat-card">
-            <div class="label">${esc(k.replace(/_/g, " "))}</div>
-            <div class="value">${v}</div>
-          </div>`
-          )
-          .join("")}
-      </div>
-      <p class="empty">
-        <button type="button" class="link-btn" data-goto-guide>Read the Guide</button>
-        or open <strong>Atoms</strong> to browse extracted facts.
-      </p>`;
-    p.querySelector("[data-goto-guide]")?.addEventListener("click", () => switchTab("guide"));
-    return;
-  }
-
-  if (state.tab === "atoms") {
-    await renderAtomsPanel(p);
-    return;
-  }
-
-  if (state.tab === "sessions") {
-    const { items } = await api("/sessions");
-    p.innerHTML = `
-      ${pageHeader("Sessions", "Agent conversations and captured turns.")}
-      <div class="card data-table-card">
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>Session</th><th>Turns</th><th>Status</th><th>Updated</th></tr>
-            </thead>
-            <tbody>
-              ${items
-                .map(
-                  (s) => `
-                <tr data-key="${esc(s.session_key)}" class="${state.selectedKey === s.session_key ? "selected" : ""}">
-                  <td>
-                    <div class="cell-primary">${esc(s.title || "Untitled session")}</div>
-                    <div class="cell-secondary cell-mono">${esc(s.session_key.slice(0, 8))}…</div>
-                  </td>
-                  <td class="cell-meta">${s.turn_count}</td>
-                  <td>${statusBadge(s.status)}</td>
-                  <td class="cell-meta">${fmtTimeShort(s.updated_at)}</td>
-                </tr>`
-                )
-                .join("")}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <div id="session-detail"></div>`;
-    p.querySelectorAll("tbody tr").forEach((tr) => {
-      tr.addEventListener("click", () => openSession(tr.dataset.key));
-    });
-    if (state.selectedKey) await openSession(state.selectedKey, false);
-    return;
-  }
-
-  if (!tab?.path) return;
-
-  const { items } = await api(tab.path);
-
-  if (state.tab === "memories") {
-    renderMemoriesPanel(p, items);
-    return;
-  }
-  if (state.tab === "scenes") {
-    renderScenesPanel(p, items);
-    return;
-  }
-  if (state.tab === "tasks") {
-    renderTasksPanel(p, items);
-    return;
-  }
-  if (state.tab === "pipeline") {
-    renderPipelinePanel(p, items);
-    return;
-  }
-}
-
-async function openSession(sessionKey, scrollPanel = true) {
+async function openSession(sessionKey) {
   state.selectedKey = sessionKey;
   showStatus("");
   const data = await api("/sessions/" + encodeURIComponent(sessionKey));
   const s = data.session;
-  const p = panel();
 
-  p.querySelectorAll("tbody tr").forEach((tr) => {
+  document.querySelectorAll("#list-tbody tr[data-key]").forEach((tr) => {
     tr.classList.toggle("selected", tr.dataset.key === sessionKey);
   });
-
-  const sessionDetail = p.querySelector("#session-detail");
-  if (!sessionDetail) return;
 
   const ps = data.pipeline_state;
   const pipelineHTML = ps
@@ -738,34 +707,150 @@ async function openSession(sessionKey, scrollPanel = true) {
         </div>`
       : '<p class="empty">No scenes yet</p>';
 
-  sessionDetail.innerHTML = `
-    <div class="card row-detail" style="margin-top:1rem">
-      <div class="card-header">
-        <h3 class="card-title">${esc(s.title || s.session_key)}</h3>
-        <p class="card-description cell-mono">${esc(s.uri)}</p>
-      </div>
-      <div class="card-content">
-        <h3 style="font-size:0.875rem;font-weight:600;margin:0 0 0.5rem">Pipeline</h3>
-        ${pipelineHTML}
-        <h3 style="font-size:0.875rem;font-weight:600;margin:1.25rem 0 0.5rem">Turns (${data.turns.length})</h3>
-        ${data.turns
+  const turnsHTML = data.turns
+    .map(
+      (t) => `
+      <details class="turn">
+        <summary>#${t.turn_index} · ${esc(t.turn_status)} · ${fmtTime(t.created_at)}</summary>
+        <div class="messages">${renderMessages(t.messages_jsonl)}</div>
+      </details>`
+    )
+    .join("");
+
+  openDrawer(
+    esc(s.title || s.session_key),
+    `
+      <p class="detail-uri">${esc(s.uri)}</p>
+      <h3 class="drawer-section">Pipeline</h3>
+      ${pipelineHTML}
+      <h3 class="drawer-section">Turns (${data.turns.length})</h3>
+      ${turnsHTML || '<p class="empty">No turns yet</p>'}
+      <h3 class="drawer-section">Atoms (${data.atoms.length})</h3>
+      ${atomsTable}
+      <h3 class="drawer-section">Scenes (${data.scenes.length})</h3>
+      ${scenesTable}`
+  );
+}
+
+/* —————————————————— panel router —————————————————— */
+
+async function renderPanel() {
+  const p = panel();
+  const tab = tabs.find((t) => t.id === state.tab);
+
+  if (state.tab === "guide") {
+    p.innerHTML = renderGuideHTML();
+    return;
+  }
+
+  if (state.tab === "overview") {
+    if (!state.overview) await loadOverviewCounts();
+    const c = state.overview.counts;
+    p.innerHTML = `
+      ${pageHeader("Overview", "Row counts across the pipeline.")}
+      <div class="stats-grid">
+        ${Object.entries(c)
           .map(
-            (t) => `
-          <details class="turn">
-            <summary>#${t.turn_index} · ${esc(t.turn_status)} · ${fmtTime(t.created_at)}</summary>
-            <div class="messages">${renderMessages(t.messages_jsonl)}</div>
-          </details>`
+            ([k, v]) => `
+          <div class="stat-card">
+            <div class="label">${esc(k.replace(/_/g, " "))}</div>
+            <div class="value">${v}</div>
+          </div>`
           )
           .join("")}
-        <h3 style="font-size:0.875rem;font-weight:600;margin:1.25rem 0 0.5rem">Atoms (${data.atoms.length})</h3>
-        ${atomsTable}
-        <h3 style="font-size:0.875rem;font-weight:600;margin:1.25rem 0 0.5rem">Scenes (${data.scenes.length})</h3>
-        ${scenesTable}
       </div>
-    </div>`;
+      <p class="empty">
+        <button type="button" class="link-btn" data-goto-guide>Read the Guide</button>
+        or open <strong>Atoms</strong> to browse extracted facts.
+      </p>`;
+    p.querySelector("[data-goto-guide]")?.addEventListener("click", () => switchTab("guide"));
+    return;
+  }
 
-  if (scrollPanel) {
-    sessionDetail.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  if (state.tab === "atoms") {
+    await renderAtomsPanel(p);
+    return;
+  }
+
+  if (state.tab === "sessions") {
+    const { items } = await api("/sessions");
+    renderListPanel(p, {
+      title: "Sessions",
+      description: "Agent conversations and captured turns.",
+      colCount: 4,
+      pageKey: "sessions",
+      thead: `<tr><th>Session</th><th>Turns</th><th>Status</th><th>Updated</th></tr>`,
+      getItems: () => items,
+      rowHTML: sessionRow,
+      onRowClick: (s) => openSession(s.session_key),
+      emptyText: "No sessions yet",
+    });
+    if (state.selectedKey) await openSession(state.selectedKey);
+    return;
+  }
+
+  if (!tab?.path) return;
+
+  const { items } = await api(tab.path);
+
+  if (state.tab === "memories") {
+    renderListPanel(p, {
+      title: "Memories",
+      description: "Long-term knowledge (T3).",
+      colCount: 5,
+      pageKey: "memories",
+      thead: `<tr><th>Memory</th><th>Category</th><th>Slug</th><th>Version</th><th>Updated</th></tr>`,
+      getItems: () => items,
+      rowHTML: memoryRow,
+      drawerFor: memoryDrawer,
+      emptyText: "No memories yet",
+    });
+    return;
+  }
+
+  if (state.tab === "scenes") {
+    renderListPanel(p, {
+      title: "Scenes",
+      description: "Session-level summaries (T2).",
+      colCount: 3,
+      pageKey: "scenes",
+      thead: `<tr><th>Scene</th><th>Session</th><th>Updated</th></tr>`,
+      getItems: () => items,
+      rowHTML: sceneRow,
+      drawerFor: sceneDrawer,
+      emptyText: "No scenes yet",
+    });
+    return;
+  }
+
+  if (state.tab === "tasks") {
+    renderListPanel(p, {
+      title: "Tasks",
+      description: "Async worker runs.",
+      colCount: 5,
+      pageKey: "tasks",
+      thead: `<tr><th>Job</th><th>Status</th><th>Session</th><th>Progress</th><th>Created</th></tr>`,
+      getItems: () => items,
+      rowHTML: taskRow,
+      drawerFor: taskDrawer,
+      emptyText: "No tasks yet",
+    });
+    return;
+  }
+
+  if (state.tab === "pipeline") {
+    renderListPanel(p, {
+      title: "Pipeline",
+      description: "Per-session worker state. Click a row to open the session.",
+      colCount: 5,
+      pageKey: "pipeline",
+      thead: `<tr><th>Session</th><th>T1</th><th>T2</th><th>T3</th><th>Warmup</th></tr>`,
+      getItems: () => items,
+      rowHTML: pipelineRow,
+      onRowClick: (row) => goToSession(field(row, "session_key", "SessionKey")),
+      emptyText: "No pipeline state",
+    });
+    return;
   }
 }
 
@@ -780,6 +865,7 @@ async function refresh() {
 }
 
 $("#refresh-btn").addEventListener("click", refresh);
+wireDrawer();
 
 if (!sessionStorage.getItem("mypast-ui-seen")) {
   state.tab = "guide";

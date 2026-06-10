@@ -175,6 +175,80 @@ func (c *Client) recall(ctx context.Context, path, query string, k int) ([]recal
 	return out.Items, nil
 }
 
+// AssertionItem is a listed assertion from the remote server.
+type AssertionItem struct {
+	URI        string   `json:"uri"`
+	Kind       string   `json:"kind"`
+	Statement  string   `json:"statement"`
+	TargetURIs []string `json:"target_uris"`
+}
+
+// ListAssertions returns active assertions; when target is non-empty, only those
+// targeting it.
+func (c *Client) ListAssertions(ctx context.Context, target string) ([]AssertionItem, error) {
+	endpoint := c.baseURL + "/api/v1/assertions"
+	if t := strings.TrimSpace(target); t != "" {
+		q := url.Values{}
+		q.Set("target", t)
+		endpoint += "?" + q.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call assertions list: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("remote assertions list returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var out struct {
+		Items []AssertionItem `json:"items"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return out.Items, nil
+}
+
+// RetractAssertion retires a correction by its assertion URI on the remote server.
+func (c *Client) RetractAssertion(ctx context.Context, assertionURI string) error {
+	q := url.Values{}
+	q.Set("uri", assertionURI)
+	endpoint := c.baseURL + "/api/v1/assertions?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("call assertions delete: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &e) == nil && e.Error != "" {
+			return fmt.Errorf("remote retract: %s", e.Error)
+		}
+		return fmt.Errorf("remote retract returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
 func firstNonEmpty(vals ...string) string {
 	for _, v := range vals {
 		if strings.TrimSpace(v) != "" {

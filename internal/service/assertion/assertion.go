@@ -19,6 +19,9 @@ import (
 // ErrInvalidInput marks a bad correction request (caller error → HTTP 400).
 var ErrInvalidInput = errors.New("invalid assertion input")
 
+// ErrNotFound marks a retract of an assertion that is missing or already retired.
+var ErrNotFound = errors.New("assertion not found")
+
 // Summary is the recall/inspect overlay view of an active correction.
 type Summary struct {
 	URI       string    `json:"uri"`
@@ -86,6 +89,45 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (model.Assertion, 
 		return model.Assertion{}, fmt.Errorf("insert assertion: %w", err)
 	}
 	return row, nil
+}
+
+// Retract retires a specific assertion by its URI (sets superseded_at). This is
+// per-assertion identity supersession — it does not touch other corrections that
+// happen to share a target. Returns ErrNotFound if no active assertion matches.
+func (s *Service) Retract(ctx context.Context, assertionURI string) error {
+	u, err := uri.Parse(strings.TrimSpace(assertionURI))
+	if err != nil || u.Scope != uri.ScopeAssertions {
+		return fmt.Errorf("%w: not an assertion URI: %q", ErrInvalidInput, assertionURI)
+	}
+	res := s.db.WithContext(ctx).
+		Model(&model.Assertion{}).
+		Where("uri = ? AND superseded_at IS NULL", u.String()).
+		Update("superseded_at", s.now().UTC())
+	if res.Error != nil {
+		return fmt.Errorf("retract assertion: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return fmt.Errorf("%w: %s", ErrNotFound, u.String())
+	}
+	return nil
+}
+
+// List returns active assertions, newest-first. When target is non-empty, only
+// assertions whose target_uris include that URI are returned.
+func (s *Service) List(ctx context.Context, target string) ([]model.Assertion, error) {
+	q := s.db.WithContext(ctx).Where("superseded_at IS NULL")
+	if t := strings.TrimSpace(target); t != "" {
+		u, err := uri.Parse(t)
+		if err != nil {
+			return nil, fmt.Errorf("%w: target %q: %v", ErrInvalidInput, target, err)
+		}
+		q = q.Where("target_uris && ?", pgarray.TextArray([]string{u.String()}))
+	}
+	var rows []model.Assertion
+	if err := q.Order("created_at DESC").Limit(200).Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("list assertions: %w", err)
+	}
+	return rows, nil
 }
 
 // ForTargets returns active assertions overlapping the given target URIs, keyed
