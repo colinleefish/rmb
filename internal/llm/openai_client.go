@@ -25,6 +25,12 @@ type OpenAICompatibleConfig struct {
 	Model      string
 	MaxRetries int
 	Timeout    time.Duration
+	// ThinkingStyle selects how the provider encodes the reasoning toggle:
+	// "thinking_type" (MiMo/DeepSeek), "enable_thinking" (Qwen/gateways),
+	// "reasoning_effort" (OpenAI-style), or "" to send nothing.
+	ThinkingStyle string
+	// ThinkingEnabled is the desired reasoning state when ThinkingStyle is set.
+	ThinkingEnabled bool
 }
 
 type OpenAICompatibleClient struct {
@@ -33,6 +39,9 @@ type OpenAICompatibleClient struct {
 	model      string
 	maxRetries int
 	httpClient *http.Client
+	// thinkingBody is merged into every chat request to toggle reasoning; nil
+	// when no thinking style is configured (provider default).
+	thinkingBody map[string]any
 }
 
 type chatCompletionRequest struct {
@@ -88,13 +97,53 @@ func NewOpenAICompatibleClient(cfg OpenAICompatibleConfig) (*OpenAICompatibleCli
 		timeout = defaultTimeout
 	}
 
+	thinkingBody, err := buildThinkingBody(cfg.ThinkingStyle, cfg.ThinkingEnabled)
+	if err != nil {
+		return nil, err
+	}
+
 	return &OpenAICompatibleClient{
-		baseURL:    strings.TrimRight(base, "/"),
-		apiKey:     key,
-		model:      model,
-		maxRetries: maxRetries,
-		httpClient: &http.Client{Timeout: timeout},
+		baseURL:      strings.TrimRight(base, "/"),
+		apiKey:       key,
+		model:        model,
+		maxRetries:   maxRetries,
+		httpClient:   &http.Client{Timeout: timeout},
+		thinkingBody: thinkingBody,
 	}, nil
+}
+
+// Thinking-toggle encodings, keyed by provider style. Each provider exposes the
+// reasoning switch differently; this maps a style + desired state to the request
+// fields to merge. Returns nil (omit) when the style is empty or the style has
+// no representation for the requested state.
+const (
+	ThinkingStyleNone            = ""
+	ThinkingStyleThinkingType    = "thinking_type"    // {"thinking":{"type":"disabled"|"enabled"}}
+	ThinkingStyleEnableThinking  = "enable_thinking"  // {"enable_thinking": false|true}
+	ThinkingStyleReasoningEffort = "reasoning_effort" // {"reasoning_effort":"none"} to disable
+)
+
+func buildThinkingBody(style string, enabled bool) (map[string]any, error) {
+	switch strings.TrimSpace(style) {
+	case ThinkingStyleNone:
+		return nil, nil
+	case ThinkingStyleThinkingType:
+		state := "enabled"
+		if !enabled {
+			state = "disabled"
+		}
+		return map[string]any{"thinking": map[string]any{"type": state}}, nil
+	case ThinkingStyleEnableThinking:
+		return map[string]any{"enable_thinking": enabled}, nil
+	case ThinkingStyleReasoningEffort:
+		if enabled {
+			// No single "enabled" value; leave the provider default.
+			return nil, nil
+		}
+		return map[string]any{"reasoning_effort": "none"}, nil
+	default:
+		return nil, fmt.Errorf("unknown llm thinking style %q", style)
+	}
 }
 
 func (c *OpenAICompatibleClient) MergeOverview(
@@ -411,6 +460,21 @@ func (c *OpenAICompatibleClient) chatCompletion(
 	raw, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", false, fmt.Errorf("marshal llm request: %w", err)
+	}
+
+	// Merge the provider-specific thinking toggle into the request body.
+	if len(c.thinkingBody) > 0 {
+		var m map[string]any
+		if err := json.Unmarshal(raw, &m); err != nil {
+			return "", false, fmt.Errorf("merge thinking body: %w", err)
+		}
+		for k, v := range c.thinkingBody {
+			m[k] = v
+		}
+		raw, err = json.Marshal(m)
+		if err != nil {
+			return "", false, fmt.Errorf("marshal llm request: %w", err)
+		}
 	}
 
 	req, err := http.NewRequestWithContext(

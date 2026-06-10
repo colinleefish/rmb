@@ -57,12 +57,14 @@ func main() {
 
 			if cfg.Extraction.Enabled || cfg.Scene.Enabled || cfg.Memory.Enabled || cfg.Summarizer.Enabled {
 				llmClient, err := llm.NewOpenAICompatibleClient(llm.OpenAICompatibleConfig{
-					Provider:   cfg.LLM.Provider,
-					APIBase:    cfg.LLM.APIBase,
-					APIKey:     cfg.LLM.APIKey,
-					Model:      cfg.LLM.Model,
-					MaxRetries: cfg.LLM.MaxRetries,
-					Timeout:    cfg.LLM.Timeout,
+					Provider:        cfg.LLM.Provider,
+					APIBase:         cfg.LLM.APIBase,
+					APIKey:          cfg.LLM.APIKey,
+					Model:           cfg.LLM.Model,
+					MaxRetries:      cfg.LLM.MaxRetries,
+					Timeout:         cfg.LLM.Timeout,
+					ThinkingStyle:   cfg.LLM.ThinkingStyle,
+					ThinkingEnabled: cfg.LLM.ThinkingEnabled,
 				})
 				if err != nil {
 					log.Printf(

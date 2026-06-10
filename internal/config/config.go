@@ -48,12 +48,14 @@ type ServerConfig struct {
 }
 
 type LLMConfig struct {
-	Provider   string
-	APIBase    string
-	APIKey     string
-	Model      string
-	MaxRetries int
-	Timeout    time.Duration
+	Provider        string
+	APIBase         string
+	APIKey          string
+	Model           string
+	MaxRetries      int
+	Timeout         time.Duration
+	ThinkingStyle   string // "" | thinking_type | enable_thinking | reasoning_effort
+	ThinkingEnabled bool
 }
 
 type SummarizerConfig struct {
@@ -110,12 +112,14 @@ type fileConfig struct {
 		ShutdownTimeout string `toml:"shutdown_timeout"`
 	} `toml:"server"`
 	LLM struct {
-		Provider   string `toml:"provider"`
-		APIBase    string `toml:"api_base"`
-		APIKey     string `toml:"api_key"`
-		Model      string `toml:"model"`
-		MaxRetries *int   `toml:"max_retries"`
-		Timeout    string `toml:"timeout"`
+		Provider      string `toml:"provider"`
+		APIBase       string `toml:"api_base"`
+		APIKey        string `toml:"api_key"`
+		Model         string `toml:"model"`
+		MaxRetries    *int   `toml:"max_retries"`
+		Timeout       string `toml:"timeout"`
+		ThinkingStyle string `toml:"thinking_style"`
+		Thinking      string `toml:"thinking"`
 	} `toml:"llm"`
 	Auth struct {
 		Username string `toml:"username"`
@@ -177,9 +181,11 @@ func Load() (Config, error) {
 			ShutdownTimeout: 5 * time.Second,
 		},
 		LLM: LLMConfig{
-			Provider:   "openai",
-			MaxRetries: 2,
-			Timeout:    30 * time.Second,
+			Provider:        "openai",
+			MaxRetries:      2,
+			Timeout:         30 * time.Second,
+			ThinkingStyle:   "",
+			ThinkingEnabled: true,
 		},
 		Summarizer: SummarizerConfig{
 			// Disabled by default — the rolling overview_text summarizer is
@@ -244,7 +250,25 @@ func Load() (Config, error) {
 		}
 	}
 
+	switch cfg.LLM.ThinkingStyle {
+	case "", "thinking_type", "enable_thinking", "reasoning_effort":
+	default:
+		return Config{}, fmt.Errorf("llm thinking_style %q invalid (want thinking_type|enable_thinking|reasoning_effort)", cfg.LLM.ThinkingStyle)
+	}
+
 	return cfg, nil
+}
+
+// parseThinking maps an enabled/disabled string to a bool.
+func parseThinking(v string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on", "enabled", "enable":
+		return true, nil
+	case "0", "false", "no", "off", "disabled", "disable":
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid thinking value %q (want enabled|disabled)", v)
+	}
 }
 
 func firstEnv(keys ...string) string {
@@ -373,6 +397,16 @@ func loadFileConfig(cfg *Config, path string, explicitPath bool) error {
 			return fmt.Errorf("parse llm.timeout in %q: %w", path, err)
 		}
 		cfg.LLM.Timeout = timeout
+	}
+	if fc.LLM.ThinkingStyle != "" {
+		cfg.LLM.ThinkingStyle = fc.LLM.ThinkingStyle
+	}
+	if fc.LLM.Thinking != "" {
+		enabled, err := parseThinking(fc.LLM.Thinking)
+		if err != nil {
+			return fmt.Errorf("parse llm.thinking in %q: %w", path, err)
+		}
+		cfg.LLM.ThinkingEnabled = enabled
 	}
 	if fc.Summarizer.Enabled != nil {
 		cfg.Summarizer.Enabled = *fc.Summarizer.Enabled
@@ -549,6 +583,16 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("parse MYPAST_LLM_TIMEOUT: %w", err)
 		}
 		cfg.LLM.Timeout = d
+	}
+	if v := os.Getenv("MYPAST_LLM_THINKING_STYLE"); v != "" {
+		cfg.LLM.ThinkingStyle = strings.TrimSpace(v)
+	}
+	if v := os.Getenv("MYPAST_LLM_THINKING"); v != "" {
+		enabled, err := parseThinking(v)
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_LLM_THINKING: %w", err)
+		}
+		cfg.LLM.ThinkingEnabled = enabled
 	}
 	if v := os.Getenv("MYPAST_SUMMARIZER_ENABLED"); v != "" {
 		switch strings.ToLower(strings.TrimSpace(v)) {
