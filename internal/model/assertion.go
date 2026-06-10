@@ -7,11 +7,11 @@ import (
 	"github.com/google/uuid"
 )
 
-// Assertion kinds. v1 exposes correct + forget; the rest are reserved so the
-// schema check constraint need not change when they land.
+// Assertion kinds. Every kind targets concrete memories — there is no
+// target-less "global fact" kind. v1 exposes correct + forget; split/alias are
+// reserved for entity resolution.
 const (
 	AssertionKindCorrect = "correct"
-	AssertionKindAssert  = "assert"
 	AssertionKindForget  = "forget"
 	AssertionKindSplit   = "split"
 	AssertionKindAlias   = "alias"

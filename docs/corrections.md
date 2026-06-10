@@ -41,18 +41,17 @@ ordering.
 |--------|-------|
 | `id` | uuid, append-only; never `UPDATE` |
 | `author` | `human` (vs implicit `worker` for derived rows) |
-| `kind` | `correct` \| `assert` \| `forget` \| `split` \| `alias` |
-| `target_uris` | `text[]` — the memories/entities/scenes this patches (1..N, any tier); empty = global |
+| `kind` | `correct` \| `forget` \| `split` \| `alias` |
+| `target_uris` | `text[]` — the memories/entities/scenes this patches (1..N, any tier); **required, never empty** — a correction must correct something |
 | `target_selector` | jsonb, optional/deferred — pattern targeting (e.g. `{category, slug}`); reaches future memories |
 | `statement` | human text, e.g. "10.9.114.160 is the -uc source VM, not the RDS." |
 | `payload` | jsonb; machine-actionable detail for `split`/`alias`/`forget` |
 | `superseded_at` | per-assertion identity, not per-target: set only when *this specific* assertion is explicitly retracted/replaced by its URI. Writing another correction on the same memory does **not** supersede it (see Multiplicity & ordering). |
 | `created_at` | |
 
-No embedding column in v1: targeted corrections are reached purely via the
-`target_uris` join (no vectors involved). Retrieval (FTS over `statement`, vector
-only if semantic matching proves necessary) is added later, when untargeted
-global assertions land — that is the only case whose surfacing depends on it.
+No embedding column: every correction targets something, so it is reached purely
+via the `target_uris` join (no vectors, no FTS over assertion text). Corrections
+are never free-floating — there is no target-less/global assertion.
 
 ## Targeting — one correction, many targets
 
@@ -73,7 +72,6 @@ Resolution — a memory `M` receives correction `C` if:
 ```
 M.uri = ANY(C.target_uris)        -- explicit pin (GIN-indexed)
   OR  M matches C.target_selector  -- optional/deferred pattern match
-  OR  C.target_uris empty AND C.target_selector null   -- global
 ```
 
 **Rule of thumb: correct the thing, not the row.** Prefer the *logical* URI
@@ -119,8 +117,7 @@ superseded.
 
 **1. Read-time overlay — the guarantee.** When recall returns a memory, attach
 any active assertion that targets its URI (see Targeting above) via the
-`target_uris` join — no vectors involved. (Surfacing untargeted assertions on
-their own is a deferred concern; see retrieval note in the data model.) Result:
+`target_uris` join — no vectors involved. Result:
 
 ```
 mypast://entities/starlink-dev-all-in-one
@@ -142,10 +139,14 @@ injection is a quality bonus and can come later.
 ## Kinds
 
 - **`correct`** — override/annotate a specific memory (the IP case). *(v1)*
-- **`assert`** — add a durable fact the extractor keeps missing.
 - **`forget`** — mark a memory wrong/retired; recall hides or flags it. *(v1)*
 - **`split`** — "this slug is really two things" — keep them apart.
 - **`alias`** — "slug-a and slug-b are the same; canonical = X."
+
+Every kind targets concrete memories — there is no target-less "assert a global
+fact" kind. A correction with nothing to correct is a contradiction; durable
+facts that have no memory to attach to belong in the pipeline (or a future
+human-authored memory), not here.
 
 `split` + `alias` double as the **human-curated canonical-slug catalog** for
 entity resolution (the durable fix for slug drift). One mechanism, two payoffs:
@@ -180,7 +181,6 @@ carries the overlay, so correctness is enforced at the answer boundary.
 
 ```
 mypast fix <uri> [<uri>...] "statement"   # kind=correct; one or more targets
-mypast assert "statement"                 # global/standalone fact (no target)
 mypast forget <uri> [<uri>...] ["why"]
 mypast alias <uri-a> <uri-b> --canonical=<uri>
 mypast meta <uri>                         # now lists attached assertions
@@ -202,9 +202,6 @@ Delivers "I say it once, the agent honors it forever."
 ## Deferred
 
 - Write-time distill injection (quality polish).
-- Untargeted global `assert` + its retrieval path (FTS over `statement` first,
-  vector only if semantic matching proves necessary). This is the only surfacing
-  case that needs retrieval; targeted corrections never do.
 - `split` / `alias` and catalog-aware slugging / entity resolution (bundle
   together — see the drift discussion in the project review).
 - Scope-keying (work / personal / project) for assertions.
