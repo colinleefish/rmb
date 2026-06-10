@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/colinleefish/mypast/internal/model"
+	"github.com/colinleefish/mypast/internal/service/assertion"
 	"github.com/colinleefish/mypast/internal/uri"
 	"gorm.io/gorm"
 )
@@ -290,8 +291,39 @@ func (s *Service) catMemoryByURI(ctx context.Context, target string, w io.Writer
 	if row.Body != nil {
 		text = *row.Body
 	}
-	_, err := io.WriteString(w, text)
+	overlay, err := s.correctionsBlock(ctx, target)
+	if err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, text); err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, overlay)
 	return err
+}
+
+// correctionsBlock renders active human corrections for a target URI as a
+// trailing annotation block (newest-first), or "" if none. This is the
+// read-time overlay guarantee from docs/corrections.md.
+func (s *Service) correctionsBlock(ctx context.Context, target string) (string, error) {
+	byTarget, err := assertion.ForTargets(ctx, s.db, []string{target})
+	if err != nil {
+		return "", err
+	}
+	sums := byTarget[target]
+	if len(sums) == 0 {
+		return "", nil
+	}
+	var b strings.Builder
+	b.WriteString("\n\n--- corrections (human, newest first) ---\n")
+	for _, c := range sums {
+		label := "CORRECTION"
+		if c.Kind == model.AssertionKindForget {
+			label = "RETIRED"
+		}
+		fmt.Fprintf(&b, "⚑ %s (%s): %s\n", label, c.CreatedAt.UTC().Format("2006-01-02"), c.Statement)
+	}
+	return b.String(), nil
 }
 
 func (s *Service) catScene(ctx context.Context, sceneID string, w io.Writer) error {
@@ -315,7 +347,7 @@ func (s *Service) metaMemory(ctx context.Context, target string) (map[string]any
 		Take(&row).Error; err != nil {
 		return nil, fmt.Errorf("load memory: %w", err)
 	}
-	return map[string]any{
+	meta := map[string]any{
 		"uri":                row.URI,
 		"version":            row.Version,
 		"category":           row.Category,
@@ -324,7 +356,15 @@ func (s *Service) metaMemory(ctx context.Context, target string) (map[string]any
 		"source_scene_uris":  row.SourceSceneURIs,
 		"created_at":         row.CreatedAt,
 		"updated_at":         row.UpdatedAt,
-	}, nil
+	}
+	byTarget, err := assertion.ForTargets(ctx, s.db, []string{target})
+	if err != nil {
+		return nil, err
+	}
+	if sums := byTarget[target]; len(sums) > 0 {
+		meta["corrections"] = sums
+	}
+	return meta, nil
 }
 
 func (s *Service) metaScene(ctx context.Context, target string) (map[string]any, error) {

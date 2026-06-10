@@ -59,6 +59,51 @@ func (c *Client) Search(ctx context.Context, query string, k int) ([]recall.Matc
 	return c.recall(ctx, "/api/v1/search", query, k)
 }
 
+// CreateAssertion posts a human correction and returns the new assertion URI.
+func (c *Client) CreateAssertion(ctx context.Context, kind string, targets []string, statement string) (string, error) {
+	reqBody, err := json.Marshal(map[string]any{
+		"kind":        kind,
+		"target_uris": targets,
+		"statement":   statement,
+	})
+	if err != nil {
+		return "", fmt.Errorf("encode request: %w", err)
+	}
+	endpoint := c.baseURL + "/api/v1/assertions"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return "", fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("call assertions: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &e) == nil && e.Error != "" {
+			return "", fmt.Errorf("remote assertions: %s", e.Error)
+		}
+		return "", fmt.Errorf("remote assertions returned %d", resp.StatusCode)
+	}
+	var out struct {
+		URI string `json:"uri"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+	return out.URI, nil
+}
+
 // Inspect calls cat/tree/meta on the remote server and returns the textual
 // output verbatim (identical to local CLI output). kind is "cat", "tree", or "meta".
 func (c *Client) Inspect(ctx context.Context, kind, uri string) (string, error) {

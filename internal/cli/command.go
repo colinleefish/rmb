@@ -14,6 +14,8 @@ import (
 	"github.com/colinleefish/mypast/internal/db/pgarray"
 	"github.com/colinleefish/mypast/internal/hook"
 	"github.com/colinleefish/mypast/internal/llm"
+	"github.com/colinleefish/mypast/internal/model"
+	"github.com/colinleefish/mypast/internal/service/assertion"
 	"github.com/colinleefish/mypast/internal/service/embed"
 	"github.com/colinleefish/mypast/internal/service/eval"
 	"github.com/colinleefish/mypast/internal/service/extract"
@@ -21,6 +23,7 @@ import (
 	"github.com/colinleefish/mypast/internal/service/memory"
 	"github.com/colinleefish/mypast/internal/service/recall"
 	"github.com/colinleefish/mypast/internal/service/scene"
+	"github.com/colinleefish/mypast/internal/uri"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -58,6 +61,10 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 		return r.runFind(ctx, args[1:])
 	case "search":
 		return r.runSearch(ctx, args[1:])
+	case "fix":
+		return r.runCorrection(ctx, model.AssertionKindCorrect, args[1:])
+	case "forget":
+		return r.runCorrection(ctx, model.AssertionKindForget, args[1:])
 	case "store", "read", "list", "delete", "load-context":
 		return fmt.Errorf("%q command is planned but not implemented yet", args[0])
 	default:
@@ -330,6 +337,9 @@ func (r Runner) runFind(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := recall.AttachCorrections(ctx, database, matches); err != nil {
+		return err
+	}
 	printMatches(r.stdout(), matches)
 	return nil
 }
@@ -383,7 +393,58 @@ func (r Runner) runSearch(ctx context.Context, args []string) error {
 	}
 
 	fused := recall.FuseRRF([][]recall.Match{vecMem, ftsMem, vecScene, ftsScene}, 60, k)
+	if err := recall.AttachCorrections(ctx, database, fused); err != nil {
+		return err
+	}
 	printMatches(r.stdout(), fused)
+	return nil
+}
+
+// runCorrection writes a human correction (kind=correct via `fix`, kind=forget
+// via `forget`). Positional args starting with the mypast scheme are targets;
+// the remaining words form the statement. Remote when MYPAST_URL is set.
+func (r Runner) runCorrection(ctx context.Context, kind string, args []string) error {
+	cmd := "fix"
+	if kind == model.AssertionKindForget {
+		cmd = "forget"
+	}
+	var targets, words []string
+	for _, a := range positionalArgs(args) {
+		if strings.HasPrefix(a, uri.Scheme+"://") {
+			targets = append(targets, a)
+		} else {
+			words = append(words, a)
+		}
+	}
+	statement := strings.TrimSpace(strings.Join(words, " "))
+	if len(targets) == 0 {
+		return fmt.Errorf("usage: mypast %s <mypast://uri> [<uri>...] \"statement\"", cmd)
+	}
+
+	if cl, ok := client.Resolve(); ok {
+		createdURI, err := cl.CreateAssertion(ctx, kind, targets, statement)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(r.stdout(), "%s: %s -> %s\n", cmd, strings.Join(targets, ", "), createdURI)
+		return nil
+	}
+
+	database, closeDB, err := r.openDB(ctx)
+	if err != nil {
+		return err
+	}
+	defer closeDB()
+
+	row, err := assertion.NewService(database).Create(ctx, assertion.CreateInput{
+		Kind:       kind,
+		TargetURIs: targets,
+		Statement:  statement,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(r.stdout(), "%s: %s -> %s\n", cmd, strings.Join(targets, ", "), row.URI)
 	return nil
 }
 
@@ -396,6 +457,13 @@ func printMatches(out io.Writer, matches []recall.Match) {
 		fmt.Fprintf(out, "%2d. [%s] %s\n", i+1, orDash(m.Tier), m.URI)
 		if s := strings.TrimSpace(m.Snippet); s != "" {
 			fmt.Fprintf(out, "      %s\n", s)
+		}
+		for _, c := range m.Corrections {
+			label := "CORRECTION"
+			if c.Kind == model.AssertionKindForget {
+				label = "RETIRED"
+			}
+			fmt.Fprintf(out, "      \u2691 %s: %s\n", label, c.Statement)
 		}
 	}
 }
@@ -565,6 +633,10 @@ Usage:
                               Optional: --k=<n>
   mypast search <query>       Hybrid recall (vector + FTS) across memories and scenes
                               Optional: --k=<n>
+  mypast fix <uri> [<uri>...] "statement"
+                              Attach a human correction that overrides memory at recall
+  mypast forget <uri> [<uri>...] ["why"]
+                              Mark memory wrong/retired; surfaced as a correction
   mypast store <uri>          Planned
   mypast read <uri>           Planned
   mypast list <prefix>        Planned

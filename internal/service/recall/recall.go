@@ -9,16 +9,40 @@ import (
 	"sort"
 
 	"github.com/colinleefish/mypast/internal/db/pgarray"
+	"github.com/colinleefish/mypast/internal/service/assertion"
 	"gorm.io/gorm"
 )
 
 // Match is a single retrieval hit. Tier is the pyramid layer ("memories",
 // "scenes", "turns") and Rank is method-specific (ts_rank or cosine similarity).
 type Match struct {
-	URI     string  `gorm:"column:uri" json:"uri"`
-	Tier    string  `gorm:"column:tier" json:"tier"`
-	Rank    float64 `gorm:"column:rank" json:"rank"`
-	Snippet string  `gorm:"column:snippet" json:"snippet"`
+	URI         string               `gorm:"column:uri" json:"uri"`
+	Tier        string               `gorm:"column:tier" json:"tier"`
+	Rank        float64              `gorm:"column:rank" json:"rank"`
+	Snippet     string               `gorm:"column:snippet" json:"snippet"`
+	Corrections []assertion.Summary  `gorm:"-" json:"corrections,omitempty"`
+}
+
+// AttachCorrections overlays active human corrections onto matches by target URI
+// (newest-first). This is the read-time guarantee from docs/corrections.md.
+func AttachCorrections(ctx context.Context, db *gorm.DB, matches []Match) error {
+	if len(matches) == 0 {
+		return nil
+	}
+	uris := make([]string, 0, len(matches))
+	for _, m := range matches {
+		uris = append(uris, m.URI)
+	}
+	byTarget, err := assertion.ForTargets(ctx, db, uris)
+	if err != nil {
+		return err
+	}
+	for i := range matches {
+		if c, ok := byTarget[matches[i].URI]; ok {
+			matches[i].Corrections = c
+		}
+	}
+	return nil
 }
 
 // FTSMemories runs full-text search over active memories (body + abstract),
@@ -136,7 +160,14 @@ func Find(ctx context.Context, db *gorm.DB, embed QueryEmbedder, query string, k
 	if err != nil {
 		return nil, err
 	}
-	return VectorMemories(ctx, db, vec, k)
+	matches, err := VectorMemories(ctx, db, vec, k)
+	if err != nil {
+		return nil, err
+	}
+	if err := AttachCorrections(ctx, db, matches); err != nil {
+		return nil, err
+	}
+	return matches, nil
 }
 
 // Search runs hybrid recall: vector + FTS across memories and scenes, fused with
@@ -166,7 +197,11 @@ func Search(ctx context.Context, db *gorm.DB, embed QueryEmbedder, query string,
 	if err != nil {
 		return nil, err
 	}
-	return FuseRRF([][]Match{vecMem, ftsMem, vecScene, ftsScene}, 60, k), nil
+	fused := FuseRRF([][]Match{vecMem, ftsMem, vecScene, ftsScene}, 60, k)
+	if err := AttachCorrections(ctx, db, fused); err != nil {
+		return nil, err
+	}
+	return fused, nil
 }
 
 // FuseRRF combines ranked result lists using Reciprocal Rank Fusion. The fused

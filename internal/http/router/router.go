@@ -18,6 +18,7 @@ func New(
 	browseHandler *handler.BrowseHandler,
 	recallHandler *handler.RecallHandler,
 	inspectHandler *handler.InspectHandler,
+	assertionHandler *handler.AssertionHandler,
 ) (*gin.Engine, error) {
 	r := gin.Default()
 
@@ -63,6 +64,10 @@ func New(
 		protected.GET("/api/v1/inspect/cat", inspectHandler.Cat)
 		protected.GET("/api/v1/inspect/tree", inspectHandler.Tree)
 		protected.GET("/api/v1/inspect/meta", inspectHandler.Meta)
+	}
+
+	if assertionHandler != nil {
+		protected.POST("/api/v1/assertions", assertionHandler.Create)
 	}
 
 	return r, nil

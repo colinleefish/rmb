@@ -98,6 +98,10 @@ mypast tree mypast://entities/
 ## Rules
 
 - Recall **before** asking the user about anything that may be in past context.
+- **Human corrections override memory.** Recall results and `cat`/`meta` may show
+  `⚑ CORRECTION` / `⚑ RETIRED` lines attached to a memory — these are
+  human-authored and authoritative. Prefer them over the memory body; if several
+  conflict, the newest wins. A `RETIRED` flag means treat that memory as wrong.
 - Treat `memories` as the user's established truth; if a memory conflicts with a
   fresh statement from the user, prefer the user and note the discrepancy.
 - Quote the `uri` when you rely on a memory, so the user can verify it.

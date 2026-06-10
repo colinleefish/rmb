@@ -18,6 +18,7 @@ const (
 	ScopePrefs    = "preferences"
 	ScopeEntities = "entities"
 	ScopeEvents   = "events"
+	ScopeAssertions = "assertions"
 )
 
 var (
@@ -32,6 +33,7 @@ var (
 		ScopePrefs:    {},
 		ScopeEntities: {},
 		ScopeEvents:   {},
+		ScopeAssertions: {},
 	}
 )
 
@@ -162,6 +164,10 @@ func BuildMemory(category, segment string) string {
 	return Scheme + "://" + category + "/" + segment
 }
 
+func BuildAssertion(id string) string {
+	return Scheme + "://" + ScopeAssertions + "/" + strings.ToLower(id)
+}
+
 // SanitizeSlug normalizes a label into a strict URI slug: lowercase ASCII,
 // hyphen-separated words, CJK preserved. Underscores, spaces, and dots become hyphens.
 func SanitizeSlug(raw string) (string, error) {
@@ -233,7 +239,7 @@ func splitSegments(path string) []string {
 
 func validateScope(scope string) error {
 	switch scope {
-	case ScopeSessions, ScopeScenes, ScopeProfile, ScopePrefs, ScopeEntities, ScopeEvents:
+	case ScopeSessions, ScopeScenes, ScopeProfile, ScopePrefs, ScopeEntities, ScopeEvents, ScopeAssertions:
 		return nil
 	default:
 		return fmt.Errorf("%w: unknown scope %q", ErrInvalidURI, scope)
@@ -285,6 +291,13 @@ func validateShape(scope string, segments []string) error {
 	case ScopeScenes:
 		if len(segments) != 1 {
 			return fmt.Errorf("%w: scenes require one id segment", ErrInvalidURI)
+		}
+	case ScopeAssertions:
+		if len(segments) != 1 {
+			return fmt.Errorf("%w: assertions require one id segment", ErrInvalidURI)
+		}
+		if !uuidSegment.MatchString(segments[0]) {
+			return fmt.Errorf("%w: assertion id must be uuid", ErrInvalidURI)
 		}
 	case ScopePrefs, ScopeEntities, ScopeEvents:
 		if len(segments) != 1 {
