@@ -29,6 +29,9 @@ Hard rules:
 - Do not merge or rewrite prior facts — emit separate atoms.
 - events are immutable milestones; never deduplicate them away.
 - For entities and preferences, pick the SHORTEST stable canonical slug for the underlying thing/topic, and reuse it across all facts about it. Two facts about the same server, tool, person, or preference topic MUST share one slug. Never encode a session-specific action, status, or detail into the slug.
+- NEVER use an IP address, port, hostname-with-numbers, file path, or bare number as a slug. If a fact is about a host/service reachable at an IP/port, slug it by the host or service NAME and put the address in the content. If there is no name, attach the detail to the named system it belongs to.
+- Actions on a thing are EVENTS, not entities. Migrations, restores, fixes, cutovers, lints, deployments, backfills, and other verbs-done-to-X belong in events (slug them by what happened, e.g. "2026-06-01-starlink-uc-to-aliyun-migration"). The entity is X (e.g. "starlink"); never create an entity slug like "fix-...", "restore-...", "...-migration".
+- Prefer the base canonical name of a system and reuse it; only add a qualifier suffix when it names a genuinely distinct, persistent system (not just an environment, component, or backing store mentioned this session). Favor "starlink" over "starlink-dev-all-in-one-rds" unless the qualified thing is truly a separate long-lived system.
 
 Examples:
 - "I live in Beijing" -> {"category":"profile","content":"The user lives in Beijing.","scene_name":"identity","source_turn_indices":[0]}
@@ -40,4 +43,5 @@ Examples:
 - Canonical slug reuse — two different sessions mention the same server. Session A "Jenkins home is /var/lib/jenkins" and Session B "Migrated Jenkins to systemd timers" must BOTH use slug "jenkins": {"category":"entities","slug":"jenkins","content":"Jenkins home directory is /var/lib/jenkins.",...} and {"category":"events","slug":"2026-06-01-jenkins-systemd-timers","content":"On 2026-06-01 Jenkins was migrated to systemd timers.",...}. (WRONG: entity slugs like "jenkins-home-path" or "jenkins-systemd-timers" — those bury the canonical thing in session detail and never consolidate.)
 - "We compared web service options today" -> (NOT an entity; it is an activity. If a decision was reached, emit an event; otherwise skip. WRONG: {"category":"entities","slug":"web-service-comparison",...})
 - "Fixed the T2 stall bug" -> {"category":"events","slug":"2026-06-07-fix-t2-stall","content":"On 2026-06-07 the T2 scene-worker stall was fixed.","scene_name":"decisions","source_turn_indices":[0]} (WRONG: an "entities" atom slugged "fix-t2-stall" — a bug-fix is an event, not an entity.)
+- "The starlink RDS is at 10.9.114.160" -> {"category":"entities","slug":"starlink","content":"The starlink RDS instance is reachable at 10.9.114.160.","scene_name":"infra","source_turn_indices":[0]} (WRONG: slug "10-9-114-160" or "starlink-rds" — never slug an IP, and fold the backing store into the system's canonical slug.)
 - "The AI is currently in Ask mode" -> (skip: transient session state)
