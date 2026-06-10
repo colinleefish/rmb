@@ -5,15 +5,15 @@ Each atom has:
 - category: one of profile | preferences | entities | events
 - priority: int 0-100 (use -1 only for critical AI behavior rules)
 - scene_name: short label grouping related atoms
-- slug: kebab-case topic id. REQUIRED for preferences/entities/events; OMIT for profile
+- slug: kebab-case CANONICAL id of the THING ITSELF, not a description of what happened to it. The same real-world thing MUST get the SAME slug every time so facts from different sessions consolidate into one memory. Use the bare canonical name (e.g. "jenkins", "tokyo-endpoint", "starorigin"), never a phrase about an action/state ("fix-jenkins-timer", "jenkins-systemd-update"). REQUIRED for preferences/entities/events; OMIT for profile
 - content: one factual sentence
 - source_turn_indices: 0-based indexes into the batch
 
 Category routing (choose exactly one per fact):
 - profile: DURABLE FIRST-PERSON facts about THE USER only — identity, location, role, devices, stable traits, health/taboos. Singleton; no slug.
 - preferences: recurring "prefers / wants / always / never", INCLUDING rules for how the AI should behave (tone, format, workflow). One slug per topic.
-- entities: any third party that is NOT the user — other people, teams, companies, projects, hosts, tools, services. One slug per entity.
-- events: dated decisions, milestones, or actions taken. Immutable. One slug, date-prefixed when a date is known.
+- entities: a NAMEABLE, PERSISTENT thing that is not the user — a specific person, team, company, named project/repo, host/server, tool, or service. NOT an activity, comparison, investigation, bug-fix, or one-off task. The slug is the thing's canonical name. If a fact is "what we did to X", the entity is X and the doing is an event — do not invent an entity for the action.
+- events: dated decisions, milestones, or actions taken. Immutable. Slug is date-prefixed when a date is known; each distinct event gets its own slug (events are NOT consolidated).
 
 Do NOT extract (skip entirely):
 - Transient session state or the AI's current mode (e.g. "AI is in Ask mode", "switched to Agent mode").
@@ -28,6 +28,7 @@ Hard rules:
 - "prefers / wants / always / never" goes to preferences (with a slug), NOT profile.
 - Do not merge or rewrite prior facts — emit separate atoms.
 - events are immutable milestones; never deduplicate them away.
+- For entities and preferences, pick the SHORTEST stable canonical slug for the underlying thing/topic, and reuse it across all facts about it. Two facts about the same server, tool, person, or preference topic MUST share one slug. Never encode a session-specific action, status, or detail into the slug.
 
 Examples:
 - "I live in Beijing" -> {"category":"profile","content":"The user lives in Beijing.","scene_name":"identity","source_turn_indices":[0]}
@@ -36,4 +37,7 @@ Examples:
 - "姚乾坤 is an R&D engineer" -> {"category":"entities","slug":"yao-qiankun","content":"姚乾坤 is an R&D engineer.","scene_name":"people","source_turn_indices":[0]}
 - A turn where the user sets up a proxy named "songxinyang" for their friend Song Xin Yang in Shenyang -> {"category":"entities","slug":"song-xin-yang","content":"Song Xin Yang is the user's friend, based in Shenyang, who uses the songxinyang proxy profile.","scene_name":"people","source_turn_indices":[0]} (WRONG: "The user's name is Song Xin Yang" / "The user lives in Shenyang" — managing her proxy does not make the user her)
 - "We chose Postgres-only storage on 2026-05-17" -> {"category":"events","slug":"2026-05-17-postgres-only","content":"On 2026-05-17 the team chose Postgres-only storage.","scene_name":"decisions","source_turn_indices":[0]}
+- Canonical slug reuse — two different sessions mention the same server. Session A "Jenkins home is /var/lib/jenkins" and Session B "Migrated Jenkins to systemd timers" must BOTH use slug "jenkins": {"category":"entities","slug":"jenkins","content":"Jenkins home directory is /var/lib/jenkins.",...} and {"category":"events","slug":"2026-06-01-jenkins-systemd-timers","content":"On 2026-06-01 Jenkins was migrated to systemd timers.",...}. (WRONG: entity slugs like "jenkins-home-path" or "jenkins-systemd-timers" — those bury the canonical thing in session detail and never consolidate.)
+- "We compared web service options today" -> (NOT an entity; it is an activity. If a decision was reached, emit an event; otherwise skip. WRONG: {"category":"entities","slug":"web-service-comparison",...})
+- "Fixed the T2 stall bug" -> {"category":"events","slug":"2026-06-07-fix-t2-stall","content":"On 2026-06-07 the T2 scene-worker stall was fixed.","scene_name":"decisions","source_turn_indices":[0]} (WRONG: an "entities" atom slugged "fix-t2-stall" — a bug-fix is an event, not an entity.)
 - "The AI is currently in Ask mode" -> (skip: transient session state)
