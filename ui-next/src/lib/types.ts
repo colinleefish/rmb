@@ -13,6 +13,7 @@ export interface OverviewCounts {
   memories: number;
   pipeline_states: number;
   tasks: number;
+  assertions: number;
 }
 
 export interface Overview {
@@ -86,6 +87,15 @@ export interface TaskModel {
   SessionID?: string | null;
   CreatedAt?: string;
   UpdatedAt?: string;
+}
+
+// The assertions API returns explicit snake_case JSON (see handler/assertion.go).
+export interface AssertionModel {
+  uri: string;
+  kind: string;
+  statement: string;
+  target_uris: string[];
+  created_at: string;
 }
 
 export interface PipelineStateModel {

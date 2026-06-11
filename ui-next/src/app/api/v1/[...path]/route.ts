@@ -16,17 +16,33 @@ function authHeader(): Record<string, string> {
   return { Authorization: `Basic ${token}` };
 }
 
-export async function GET(
+async function forward(
   request: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> },
+  params: Promise<{ path: string[] }>,
 ) {
   const { path } = await params;
   const target = `${API_BASE}/api/v1/${path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
 
+  // Forward the body verbatim for mutating methods so the upstream sees the
+  // same JSON the browser sent (e.g. assertion create payloads).
+  const hasBody = request.method !== "GET" && request.method !== "HEAD";
+  const reqBody = hasBody ? await request.text() : undefined;
+
   let upstream: Response;
   try {
     upstream = await fetch(target, {
-      headers: { Accept: "application/json", ...authHeader() },
+      method: request.method,
+      headers: {
+        Accept: "application/json",
+        ...(reqBody
+          ? {
+              "Content-Type":
+                request.headers.get("content-type") ?? "application/json",
+            }
+          : {}),
+        ...authHeader(),
+      },
+      body: reqBody,
       cache: "no-store",
     });
   } catch (err) {
@@ -43,4 +59,25 @@ export async function GET(
       "content-type": upstream.headers.get("content-type") ?? "application/json",
     },
   });
+}
+
+export function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return forward(request, params);
+}
+
+export function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return forward(request, params);
+}
+
+export function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ path: string[] }> },
+) {
+  return forward(request, params);
 }

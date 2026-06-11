@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   ListTodo,
   MessagesSquare,
+  ShieldCheck,
   Sparkles,
   Atom,
   type LucideIcon,
@@ -26,6 +27,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "atoms", label: "Atoms", href: "/atoms", icon: Atom, countKey: "atoms", enabled: true },
   { id: "scenes", label: "Scenes", href: "/scenes", icon: Boxes, countKey: "scenes", enabled: true },
   { id: "memories", label: "Memories", href: "/memories", icon: Sparkles, countKey: "memories", enabled: true },
+  { id: "assertions", label: "Assertions", href: "/assertions", icon: ShieldCheck, countKey: "assertions", enabled: true },
   { id: "pipeline", label: "Pipeline", href: "/pipeline", icon: GitBranch, countKey: "pipeline_states", enabled: true },
   { id: "tasks", label: "Tasks", href: "/tasks", icon: ListTodo, countKey: "tasks", enabled: true },
 ];

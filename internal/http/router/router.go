@@ -36,7 +36,15 @@ func New(
 	if err != nil {
 		return nil, err
 	}
-	protected.StaticFS("/ui", http.FS(webFS))
+	// Serve the embedded Next.js static export directly via http.FileServer
+	// instead of gin's StaticFS. The export uses trailingSlash:true, so routes
+	// like /ui/memories/ must resolve to memories/index.html. gin's StaticFS
+	// rejects these because its existence check (fs.Open("/memories/")) treats
+	// the trailing slash as an invalid embed.FS path and returns 404 before the
+	// file server runs. http.FileServer handles directory index files natively.
+	uiFileServer := http.StripPrefix("/ui", http.FileServer(http.FS(webFS)))
+	protected.GET("/ui/*filepath", gin.WrapH(uiFileServer))
+	protected.HEAD("/ui/*filepath", gin.WrapH(uiFileServer))
 	protected.GET("/", func(c *gin.Context) {
 		c.Redirect(http.StatusFound, "/ui/")
 	})

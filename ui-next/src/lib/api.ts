@@ -1,4 +1,5 @@
 import type {
+  AssertionModel,
   AtomModel,
   MemoryModel,
   Overview,
@@ -27,6 +28,28 @@ async function apiGet<T>(path: string): Promise<T> {
   return body as T;
 }
 
+async function apiSend<T>(
+  method: "POST" | "DELETE",
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const res = await fetch(`${API}${path}`, {
+    method,
+    headers: {
+      Accept: "application/json",
+      ...(body != null ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body != null ? JSON.stringify(body) : undefined,
+  });
+  const data = (await res.json().catch(() => ({}))) as T | { error?: string };
+  if (!res.ok) {
+    const message =
+      (data as { error?: string }).error ?? res.statusText ?? "request failed";
+    throw new Error(message);
+  }
+  return data as T;
+}
+
 export function getOverview(): Promise<Overview> {
   return apiGet<Overview>("/browse/overview");
 }
@@ -53,3 +76,28 @@ export const listMemories = () => listItems<MemoryModel>("/browse/memories");
 export const listPipelineStates = () =>
   listItems<PipelineRow>("/browse/pipeline-state");
 export const listTasks = () => listItems<TaskModel>("/browse/tasks");
+
+// Assertions: human corrections that overlay distilled memory.
+// `target` filters to assertions attached to a single memory URI.
+export const listAssertions = (target?: string) =>
+  listItems<AssertionModel>(
+    target ? `/assertions?target=${encodeURIComponent(target)}` : "/assertions",
+  );
+
+export function createAssertion(input: {
+  statement: string;
+  target_uris: string[];
+  kind?: string;
+}): Promise<{ uri: string; kind: string; target_uris: string[] }> {
+  return apiSend("POST", "/assertions", {
+    kind: input.kind ?? "correct",
+    target_uris: input.target_uris,
+    statement: input.statement,
+  });
+}
+
+export function retractAssertion(
+  uri: string,
+): Promise<{ uri: string; retracted: boolean }> {
+  return apiSend("DELETE", `/assertions?uri=${encodeURIComponent(uri)}`);
+}

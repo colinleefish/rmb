@@ -1,47 +1,18 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 
-import { DataTable, SortButton, type RowDetail } from "@/components/data-table";
+import { DataTable, SortButton } from "@/components/data-table";
 import { CategoryBadge } from "@/components/category-badge";
-import {
-  DetailBadges,
-  DetailLead,
-  DetailMeta,
-  DetailText,
-  DetailUri,
-  OutlineBadge,
-} from "@/components/detail";
+import { MemoryDetailDialog } from "@/components/memories/memory-detail-dialog";
 import { listMemories } from "@/lib/api";
-import { fmtDateShort, fmtDateTime, pick, truncate } from "@/lib/format";
+import { fmtDateShort, pick, truncate } from "@/lib/format";
 import type { MemoryModel } from "@/lib/types";
 
-function detailOf(m: MemoryModel): RowDetail {
-  const abstract = pick(m, "Abstract", "abstract");
-  const body = pick(m, "Body", "body");
-  const version = pick<number>(m, "Version", "version");
-  const updated = pick(m, "UpdatedAt", "updated_at");
-  return {
-    title:
-      pick(m, "Slug", "slug") ?? pick(m, "Category", "category") ?? "Memory",
-    description: pick(m, "URI", "uri"),
-    body: (
-      <>
-        <DetailBadges>
-          <CategoryBadge category={pick(m, "Category", "category")} />
-          {version != null && <OutlineBadge>v{version}</OutlineBadge>}
-        </DetailBadges>
-        {abstract && <DetailLead>{abstract}</DetailLead>}
-        {body && <DetailText>{body}</DetailText>}
-        {updated && <DetailMeta>Updated {fmtDateTime(updated)}</DetailMeta>}
-        <DetailUri>{pick(m, "URI", "uri")}</DetailUri>
-      </>
-    ),
-  };
-}
-
 export function MemoriesTable() {
+  const [selected, setSelected] = useState<MemoryModel | null>(null);
+
   const columns = useMemo<ColumnDef<MemoryModel>[]>(
     () => [
       {
@@ -104,24 +75,32 @@ export function MemoriesTable() {
   );
 
   return (
-    <DataTable
-      load={listMemories}
-      columns={columns}
-      searchText={(m) =>
-        [
-          pick(m, "Abstract", "abstract"),
-          pick(m, "Body", "body"),
-          pick(m, "Category", "category"),
-          pick(m, "Slug", "slug"),
-          pick(m, "URI", "uri"),
-        ]
-          .filter(Boolean)
-          .join(" ")
-      }
-      searchPlaceholder="Search memories…"
-      emptyMessage="No memories yet."
-      initialSorting={[{ id: "updated", desc: true }]}
-      renderDetail={detailOf}
-    />
+    <>
+      <DataTable
+        load={listMemories}
+        columns={columns}
+        searchText={(m) =>
+          [
+            pick(m, "Abstract", "abstract"),
+            pick(m, "Body", "body"),
+            pick(m, "Category", "category"),
+            pick(m, "Slug", "slug"),
+            pick(m, "URI", "uri"),
+          ]
+            .filter(Boolean)
+            .join(" ")
+        }
+        searchPlaceholder="Search memories…"
+        emptyMessage="No memories yet."
+        initialSorting={[{ id: "updated", desc: true }]}
+        onRowClick={setSelected}
+      />
+      <MemoryDetailDialog
+        memory={selected}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null);
+        }}
+      />
+    </>
   );
 }

@@ -30,6 +30,7 @@ type Overview struct {
 		Memories       int64 `json:"memories"`
 		PipelineStates int64 `json:"pipeline_states"`
 		Tasks          int64 `json:"tasks"`
+		Assertions     int64 `json:"assertions"`
 	} `json:"counts"`
 }
 
@@ -84,6 +85,14 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 		if err := s.db.WithContext(ctx).Table(t.name).Count(t.dest).Error; err != nil {
 			return Overview{}, fmt.Errorf("count %s: %w", t.name, err)
 		}
+	}
+	// Assertions are append-only; count only active (non-retracted) ones so the
+	// badge matches what the assertions list shows.
+	if err := s.db.WithContext(ctx).
+		Table("assertions").
+		Where("superseded_at IS NULL").
+		Count(&out.Counts.Assertions).Error; err != nil {
+		return Overview{}, fmt.Errorf("count assertions: %w", err)
 	}
 	return out, nil
 }
