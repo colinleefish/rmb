@@ -14,7 +14,7 @@ Before asking the user a question, or when a task references something that
 likely happened before (a server, project, credential location, past decision,
 preference), **search your memory first**:
 
-- The user mentions a host/project/tool by name → `mypast find` or `search` it.
+- The user mentions a host/project/tool by name → `mypast search` it.
 - You need a path, port, config location, or prior decision → recall it.
 - The user says "like last time" / "the usual" / "where we left off" → recall it.
 
@@ -25,14 +25,20 @@ If recall returns nothing relevant, then ask the user.
 ### Search (use this most)
 
 ```
-mypast search "<natural language query>"      # hybrid: meanings + keywords, across memories and scenes
-mypast find "<natural language query>"         # vector-only: closest long-term memories
+mypast search "<natural language query>"
+mypast search "<query>" --scope=memory      # distilled long-term facts only
+mypast search "<query>" --scope=scene       # per-session conversation context only
+mypast search "<query>" --k=<n>             # control result count (default: 5)
 ```
 
-- Prefer `search` for most questions — it blends semantic + keyword matching and
-  covers both distilled memories and per-session scenes.
-- Use `find` when you want only the tightest long-term facts.
-- Add `--k=<n>` to control result count (default: find 5, search 8).
+`search` blends semantic (vector) and keyword (FTS) matching, fused with
+reciprocal rank fusion. By default it covers both `memory` and `scene` tiers.
+
+- Use `--scope=memory` when you want tight, specific fact recall — e.g. a config
+  value, a person's role, a past decision.
+- Use `--scope=scene` when you want conversational context — e.g. "what were we
+  working on in that session".
+- Omit `--scope` for most queries; the combined result is usually best.
 
 Output is a ranked list:
 
@@ -86,14 +92,17 @@ To trace a fact to its source: `meta <memory-uri>` shows `source_scene_uris`;
 
 ```
 # "What's the config for the tokyo endpoint?"
-mypast search "tokyo endpoint shadowsocks config"
+mypast search "tokyo endpoint shadowsocks config" --scope=memory
 mypast cat mypast://entities/tokyo-shadowsocks-config
 
 # "Where does Jenkins store its data again?"
-mypast search "jenkins home directory disk"
+mypast search "jenkins home directory disk" --scope=memory
 
 # "What did we decide about storage?"
 mypast search "storage decision postgres"
+
+# "What were we working on last session?"
+mypast search "recent work" --scope=scene
 
 # Browse what categories exist
 mypast tree mypast://
@@ -106,8 +115,8 @@ Machine-distilled memory can be wrong or over-merged. The user can attach
 **assertions** — durable, human-authored patches — to any memory `uri`. They
 are not edits to the memory; they overlay it and always win over the machine fact.
 
-- `mypast cat <uri>`, `meta <uri>`, and `search`/`find` results automatically
-  show any active assertions on that target. You do not fetch them separately.
+- `mypast cat <uri>`, `meta <uri>`, and `search` results automatically show any
+  active assertions on that target. You do not fetch them separately.
 - Each one is a **correct** assertion (`⚑ CORRECTION:`) — the user's
   authoritative statement about the thing; treat it as the truth, over the
   distilled snippet. It may be positive ("she works at a bank") or negative
@@ -120,8 +129,8 @@ you to correct a memory:
 
 ```
 mypast assertion add correct <mypast://uri> [<uri>...] "the corrected fact"
-mypast assertion ls [<target-uri>]      # list active assertions
-mypast assertion rm <mypast://assertions/...>   # retract one you added
+mypast assertion ls [<target-uri>]                     # list active assertions
+mypast assertion rm <mypast://assertions/...>          # retract one you added
 ```
 
 `correct` accepts `fix` as an alias. Always pass real `uri`s returned by
@@ -136,8 +145,8 @@ correction, and unused memories fade on their own.)
 - A human **correction** assertion on a memory beats the memory; corrections are
   additive and the newest wins on a direct conflict. Honor them.
 - Quote the `uri` when you rely on a memory, so the user can verify it.
-- Do not fabricate URIs; only use ones returned by `search`/`find`/`tree`.
-- Recall (`search`/`find`/`cat`/`meta`/`tree`) is read-only — memory is written
+- Do not fabricate URIs; only use ones returned by `search`/`tree`.
+- Recall (`search`/`cat`/`meta`/`tree`) is read-only — memory is written
   automatically by background workers, so you never store facts yourself. The
   only writes you make are `mypast assertion` commands, and only when the user
   explicitly asks you to correct a memory.
