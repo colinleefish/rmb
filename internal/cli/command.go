@@ -19,13 +19,10 @@ import (
 	"github.com/colinleefish/mypast/internal/service/assertion"
 	"github.com/colinleefish/mypast/internal/service/embed"
 	"github.com/colinleefish/mypast/internal/service/eval"
-	"github.com/colinleefish/mypast/internal/service/extract"
 	"github.com/colinleefish/mypast/internal/service/inspect"
 	"github.com/colinleefish/mypast/internal/service/memory"
 	"github.com/colinleefish/mypast/internal/service/recall"
-	"github.com/colinleefish/mypast/internal/service/scene"
 	"github.com/colinleefish/mypast/internal/uri"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -102,61 +99,20 @@ func (r Runner) runT1(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] != "backfill" {
 		return fmt.Errorf("usage: mypast t1 backfill [--session=<uuid>]")
 	}
-
 	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
-
-	if cl, ok := client.Resolve(); ok {
-		n, err := cl.Backfill(ctx, "t1", sessionKey)
-		if err != nil {
-			return err
-		}
-		if sessionKey != "" {
-			fmt.Fprintln(r.stdout(), "enqueued t1 for session", sessionKey)
-		} else {
-			fmt.Fprintf(r.stdout(), "enqueued t1 for %d session(s)\n", n)
-		}
-		return nil
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("t1 backfill requires MYPAST_URL (the server owns the database)")
 	}
-
-	database, err := db.New(ctx, r.Config.DB.URL)
+	n, err := cl.Backfill(ctx, "t1", sessionKey)
 	if err != nil {
-		return fmt.Errorf("db connect: %w", err)
+		return err
 	}
-	sqlDB, err := database.DB()
-	if err != nil {
-		return fmt.Errorf("get db handle: %w", err)
-	}
-	defer sqlDB.Close()
-
-	if err := db.Migrate(ctx, database); err != nil {
-		return fmt.Errorf("db migrate: %w", err)
-	}
-
 	if sessionKey != "" {
-		if err := extract.EnqueueSessionByKey(ctx, database, sessionKey); err != nil {
-			return err
-		}
 		fmt.Fprintln(r.stdout(), "enqueued t1 for session", sessionKey)
-		return nil
+	} else {
+		fmt.Fprintf(r.stdout(), "enqueued t1 for %d session(s)\n", n)
 	}
-
-	type row struct {
-		SessionID uuid.UUID
-	}
-	var rows []row
-	if err := database.WithContext(ctx).Raw(`
-		SELECT DISTINCT session_id
-		FROM session_turns
-		WHERE t1_extracted_at IS NULL
-	`).Scan(&rows).Error; err != nil {
-		return fmt.Errorf("list sessions with pending turns: %w", err)
-	}
-	for _, row := range rows {
-		if err := extract.EnqueueSession(ctx, database, row.SessionID); err != nil {
-			return err
-		}
-	}
-	fmt.Fprintf(r.stdout(), "enqueued t1 for %d session(s)\n", len(rows))
 	return nil
 }
 
@@ -164,49 +120,20 @@ func (r Runner) runT2(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] != "backfill" {
 		return fmt.Errorf("usage: mypast t2 backfill [--session=<uuid>]")
 	}
-
 	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
-
-	if cl, ok := client.Resolve(); ok {
-		n, err := cl.Backfill(ctx, "t2", sessionKey)
-		if err != nil {
-			return err
-		}
-		if sessionKey != "" {
-			fmt.Fprintln(r.stdout(), "enqueued t2 for session", sessionKey)
-		} else {
-			fmt.Fprintf(r.stdout(), "enqueued t2 for %d session(s)\n", n)
-		}
-		return nil
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("t2 backfill requires MYPAST_URL (the server owns the database)")
 	}
-
-	database, err := db.New(ctx, r.Config.DB.URL)
-	if err != nil {
-		return fmt.Errorf("db connect: %w", err)
-	}
-	sqlDB, err := database.DB()
-	if err != nil {
-		return fmt.Errorf("get db handle: %w", err)
-	}
-	defer sqlDB.Close()
-
-	if err := db.Migrate(ctx, database); err != nil {
-		return fmt.Errorf("db migrate: %w", err)
-	}
-
-	if sessionKey != "" {
-		if err := scene.EnqueueSessionByKey(ctx, database, sessionKey); err != nil {
-			return err
-		}
-		fmt.Fprintln(r.stdout(), "enqueued t2 for session", sessionKey)
-		return nil
-	}
-
-	count, err := scene.EnqueueAllSessionsWithAtoms(ctx, database)
+	n, err := cl.Backfill(ctx, "t2", sessionKey)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(r.stdout(), "enqueued t2 for %d session(s)\n", count)
+	if sessionKey != "" {
+		fmt.Fprintln(r.stdout(), "enqueued t2 for session", sessionKey)
+	} else {
+		fmt.Fprintf(r.stdout(), "enqueued t2 for %d session(s)\n", n)
+	}
 	return nil
 }
 
@@ -214,49 +141,20 @@ func (r Runner) runT3(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] != "backfill" {
 		return fmt.Errorf("usage: mypast t3 backfill [--session=<uuid>]")
 	}
-
 	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
-
-	if cl, ok := client.Resolve(); ok {
-		n, err := cl.Backfill(ctx, "t3", sessionKey)
-		if err != nil {
-			return err
-		}
-		if sessionKey != "" {
-			fmt.Fprintln(r.stdout(), "enqueued t3 for session", sessionKey)
-		} else {
-			fmt.Fprintf(r.stdout(), "enqueued t3 for %d session(s)\n", n)
-		}
-		return nil
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("t3 backfill requires MYPAST_URL (the server owns the database)")
 	}
-
-	database, err := db.New(ctx, r.Config.DB.URL)
-	if err != nil {
-		return fmt.Errorf("db connect: %w", err)
-	}
-	sqlDB, err := database.DB()
-	if err != nil {
-		return fmt.Errorf("get db handle: %w", err)
-	}
-	defer sqlDB.Close()
-
-	if err := db.Migrate(ctx, database); err != nil {
-		return fmt.Errorf("db migrate: %w", err)
-	}
-
-	if sessionKey != "" {
-		if err := memory.EnqueueSessionByKey(ctx, database, sessionKey); err != nil {
-			return err
-		}
-		fmt.Fprintln(r.stdout(), "enqueued t3 for session", sessionKey)
-		return nil
-	}
-
-	count, err := memory.EnqueueAllSessionsWithScenes(ctx, database)
+	n, err := cl.Backfill(ctx, "t3", sessionKey)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(r.stdout(), "enqueued t3 for %d session(s)\n", count)
+	if sessionKey != "" {
+		fmt.Fprintln(r.stdout(), "enqueued t3 for session", sessionKey)
+	} else {
+		fmt.Fprintf(r.stdout(), "enqueued t3 for %d session(s)\n", n)
+	}
 	return nil
 }
 
