@@ -4,22 +4,16 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/colinleefish/mypast/internal/client"
 	"github.com/colinleefish/mypast/internal/config"
-	"github.com/colinleefish/mypast/internal/db"
 	"github.com/colinleefish/mypast/internal/hook"
 	"github.com/colinleefish/mypast/internal/model"
-	"github.com/colinleefish/mypast/internal/service/assertion"
-	"github.com/colinleefish/mypast/internal/service/inspect"
-	"github.com/colinleefish/mypast/internal/service/memory"
 	"github.com/colinleefish/mypast/internal/service/recall"
 	"github.com/colinleefish/mypast/internal/uri"
-	"gorm.io/gorm"
 )
 
 type ServeFunc func(context.Context) error
@@ -219,9 +213,6 @@ func parseAssertionKind(tok string) (string, error) {
 	}
 }
 
-// runAssertionAdd writes a human correction. The first positional arg is the
-// kind; positional args with the mypast scheme are targets; the rest form the
-// statement. Remote when MYPAST_URL is set, else local DB.
 func (r Runner) runAssertionAdd(ctx context.Context, args []string) error {
 	pos := positionalArgs(args)
 	if len(pos) == 0 {
@@ -245,44 +236,19 @@ func (r Runner) runAssertionAdd(ctx context.Context, args []string) error {
 		return fmt.Errorf("usage: mypast assertion add %s <mypast://uri> [<uri>...] \"statement\"", pos[0])
 	}
 
-	if cl, ok := client.Resolve(); ok {
-		createdURI, err := cl.CreateAssertion(ctx, kind, targets, statement)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintf(r.stdout(), "added %s: %s -> %s\n", kind, strings.Join(targets, ", "), createdURI)
-		return nil
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("assertion add requires MYPAST_URL (the server owns the database)")
 	}
-
-	database, closeDB, err := r.openDB(ctx)
+	createdURI, err := cl.CreateAssertion(ctx, kind, targets, statement)
 	if err != nil {
 		return err
 	}
-	defer closeDB()
-
-	row, err := assertion.NewService(database).Create(ctx, assertion.CreateInput{
-		Kind:       kind,
-		TargetURIs: targets,
-		Statement:  statement,
-	})
-	if err != nil {
-		return err
-	}
-	wakeT3ForCorrection(ctx, database, []string(row.TargetURIs))
-	fmt.Fprintf(r.stdout(), "added %s: %s -> %s\n", kind, strings.Join(targets, ", "), row.URI)
+	fmt.Fprintf(r.stdout(), "added %s: %s -> %s\n", kind, strings.Join(targets, ", "), createdURI)
 	return nil
 }
 
-// wakeT3ForCorrection re-distills the targeted memories so the correction is
-// baked into the body. Best-effort: a failure must not fail the write — the
-// assertion is durable and the read-time overlay still applies.
-func wakeT3ForCorrection(ctx context.Context, database *gorm.DB, targets []string) {
-	if _, err := memory.EnqueueSessionsForMemoryTargets(ctx, database, targets); err != nil {
-		log.Printf("assertion wake-t3 failed (overlay still applies): %v", err)
-	}
-}
 
-// runAssertionList prints active assertions, optionally filtered to one target.
 func (r Runner) runAssertionList(ctx context.Context, args []string) error {
 	pos := positionalArgs(args)
 	target := ""
@@ -290,80 +256,42 @@ func (r Runner) runAssertionList(ctx context.Context, args []string) error {
 		target = pos[0]
 	}
 
-	if cl, ok := client.Resolve(); ok {
-		items, err := cl.ListAssertions(ctx, target)
-		if err != nil {
-			return err
-		}
-		out := r.stdout()
-		if len(items) == 0 {
-			fmt.Fprintln(out, "no assertions")
-			return nil
-		}
-		for _, it := range items {
-			fmt.Fprintf(out, "%s  [%s]\n", it.URI, it.Kind)
-			fmt.Fprintf(out, "   -> %s\n", strings.Join(it.TargetURIs, ", "))
-			if it.Statement != "" {
-				fmt.Fprintf(out, "   %s\n", it.Statement)
-			}
-		}
-		return nil
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("assertion ls requires MYPAST_URL (the server owns the database)")
 	}
-
-	database, closeDB, err := r.openDB(ctx)
-	if err != nil {
-		return err
-	}
-	defer closeDB()
-
-	rows, err := assertion.NewService(database).List(ctx, target)
+	items, err := cl.ListAssertions(ctx, target)
 	if err != nil {
 		return err
 	}
 	out := r.stdout()
-	if len(rows) == 0 {
+	if len(items) == 0 {
 		fmt.Fprintln(out, "no assertions")
 		return nil
 	}
-	for _, row := range rows {
-		fmt.Fprintf(out, "%s  [%s]\n", row.URI, row.Kind)
-		fmt.Fprintf(out, "   -> %s\n", strings.Join([]string(row.TargetURIs), ", "))
-		if row.Statement != nil && *row.Statement != "" {
-			fmt.Fprintf(out, "   %s\n", *row.Statement)
+	for _, it := range items {
+		fmt.Fprintf(out, "%s  [%s]\n", it.URI, it.Kind)
+		fmt.Fprintf(out, "   -> %s\n", strings.Join(it.TargetURIs, ", "))
+		if it.Statement != "" {
+			fmt.Fprintf(out, "   %s\n", it.Statement)
 		}
 	}
 	return nil
 }
 
-// runRetract retires a specific correction by its assertion URI. Remote when
-// MYPAST_URL is set, else local DB.
 func (r Runner) runRetract(ctx context.Context, args []string) error {
 	pos := positionalArgs(args)
 	if len(pos) != 1 {
-		return fmt.Errorf("usage: mypast retract <mypast://assertions/...>")
+		return fmt.Errorf("usage: mypast assertion rm <mypast://assertions/...>")
 	}
-	target := pos[0]
-
-	if cl, ok := client.Resolve(); ok {
-		if err := cl.RetractAssertion(ctx, target); err != nil {
-			return err
-		}
-		fmt.Fprintf(r.stdout(), "retracted: %s\n", target)
-		return nil
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("assertion rm requires MYPAST_URL (the server owns the database)")
 	}
-
-	database, closeDB, err := r.openDB(ctx)
-	if err != nil {
+	if err := cl.RetractAssertion(ctx, pos[0]); err != nil {
 		return err
 	}
-	defer closeDB()
-
-	targets, err := assertion.NewService(database).Retract(ctx, target)
-	if err != nil {
-		return err
-	}
-	wakeT3ForCorrection(ctx, database, targets)
-	fmt.Fprintf(r.stdout(), "retracted: %s\n", target)
+	fmt.Fprintf(r.stdout(), "retracted: %s\n", pos[0])
 	return nil
 }
 
@@ -383,22 +311,6 @@ func printMatches(out io.Writer, matches []recall.Match) {
 	}
 }
 
-// openDB opens, migrates, and returns the database with a close func.
-func (r Runner) openDB(ctx context.Context) (*gorm.DB, func(), error) {
-	database, err := db.New(ctx, r.Config.DB.URL)
-	if err != nil {
-		return nil, nil, fmt.Errorf("db connect: %w", err)
-	}
-	sqlDB, err := database.DB()
-	if err != nil {
-		return nil, nil, fmt.Errorf("get db handle: %w", err)
-	}
-	if err := db.Migrate(ctx, database); err != nil {
-		sqlDB.Close()
-		return nil, nil, fmt.Errorf("db migrate: %w", err)
-	}
-	return database, func() { sqlDB.Close() }, nil
-}
 
 // positionalArgs returns args that are not flags (do not start with "--").
 func positionalArgs(args []string) []string {
@@ -455,52 +367,24 @@ func (r Runner) stdout() io.Writer {
 	return os.Stdout
 }
 
-// runInspect runs cat/tree/meta. When MYPAST_URL is configured it calls a remote
-// server; otherwise it queries the local database.
 func (r Runner) runInspect(ctx context.Context, command string, args []string) error {
 	if len(args) != 1 {
 		return fmt.Errorf("%s requires exactly one URI argument", command)
 	}
-
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("%s requires MYPAST_URL (the server owns the database)", command)
+	}
 	stdout := r.Stdout
 	if stdout == nil {
 		stdout = os.Stdout
 	}
-
-	if cl, ok := client.Resolve(); ok {
-		out, err := cl.Inspect(ctx, command, args[0])
-		if err != nil {
-			return err
-		}
-		_, err = io.WriteString(stdout, out)
+	out, err := cl.Inspect(ctx, command, args[0])
+	if err != nil {
 		return err
 	}
-
-	database, err := db.New(ctx, r.Config.DB.URL)
-	if err != nil {
-		return fmt.Errorf("db connect: %w", err)
-	}
-	sqlDB, err := database.DB()
-	if err != nil {
-		return fmt.Errorf("get db handle: %w", err)
-	}
-	defer sqlDB.Close()
-
-	if err := db.Migrate(ctx, database); err != nil {
-		return fmt.Errorf("db migrate: %w", err)
-	}
-
-	svc := inspect.NewService(database)
-	switch command {
-	case "cat":
-		return svc.Cat(ctx, args[0], stdout)
-	case "tree":
-		return svc.Tree(ctx, args[0], stdout)
-	case "meta":
-		return svc.Meta(ctx, args[0], stdout)
-	default:
-		return fmt.Errorf("unknown inspect command %q", command)
-	}
+	_, err = io.WriteString(stdout, out)
+	return err
 }
 
 func parseFlagValue(args []string, key string) string {
