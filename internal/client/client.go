@@ -93,6 +93,48 @@ func (c *Client) Backfill(ctx context.Context, tier, sessionKey string) (int, er
 	return out.Enqueued, nil
 }
 
+// EmbedStatusItem is one tier's embedding coverage from the remote server.
+type EmbedStatusItem struct {
+	Tier     string `json:"tier"`
+	Total    int64  `json:"total"`
+	Embedded int64  `json:"embedded"`
+	Pending  int64  `json:"pending"`
+}
+
+// EmbedStatus fetches embedding coverage across atoms, scenes, and memories.
+func (c *Client) EmbedStatus(ctx context.Context) ([]EmbedStatusItem, error) {
+	endpoint := c.baseURL + "/api/v1/embed/status"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call embed/status: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &e) == nil && e.Error != "" {
+			return nil, fmt.Errorf("remote embed/status: %s", e.Error)
+		}
+		return nil, fmt.Errorf("remote embed/status returned %d", resp.StatusCode)
+	}
+	var out struct {
+		Items []EmbedStatusItem `json:"items"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return out.Items, nil
+}
+
 func (c *Client) Find(ctx context.Context, query string, k int) ([]recall.Match, error) {
 	return c.recall(ctx, "/api/v1/find", query, k)
 }

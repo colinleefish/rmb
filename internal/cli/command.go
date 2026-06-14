@@ -17,8 +17,6 @@ import (
 	"github.com/colinleefish/mypast/internal/llm"
 	"github.com/colinleefish/mypast/internal/model"
 	"github.com/colinleefish/mypast/internal/service/assertion"
-	"github.com/colinleefish/mypast/internal/service/embed"
-	"github.com/colinleefish/mypast/internal/service/eval"
 	"github.com/colinleefish/mypast/internal/service/inspect"
 	"github.com/colinleefish/mypast/internal/service/memory"
 	"github.com/colinleefish/mypast/internal/service/recall"
@@ -51,8 +49,6 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 		return r.runT2(ctx, args[1:])
 	case "t3":
 		return r.runT3(ctx, args[1:])
-	case "eval":
-		return r.runEval(ctx, args[1:])
 	case "embed":
 		return r.runEmbed(ctx, args[1:])
 	case "find":
@@ -154,74 +150,6 @@ func (r Runner) runT3(ctx context.Context, args []string) error {
 		fmt.Fprintln(r.stdout(), "enqueued t3 for session", sessionKey)
 	} else {
 		fmt.Fprintf(r.stdout(), "enqueued t3 for %d session(s)\n", n)
-	}
-	return nil
-}
-
-func (r Runner) runEval(ctx context.Context, args []string) error {
-	path := strings.TrimSpace(parseFlagValue(args, "--queries"))
-	if path == "" {
-		path = "scripts/eval_queries.txt"
-	}
-	k := 5
-	if v := strings.TrimSpace(parseFlagValue(args, "--k")); v != "" {
-		parsed, err := strconv.Atoi(v)
-		if err != nil {
-			return fmt.Errorf("parse --k: %w", err)
-		}
-		k = parsed
-	}
-
-	probes, err := eval.LoadProbes(path)
-	if err != nil {
-		return err
-	}
-
-	database, err := db.New(ctx, r.Config.DB.URL)
-	if err != nil {
-		return fmt.Errorf("db connect: %w", err)
-	}
-	sqlDB, err := database.DB()
-	if err != nil {
-		return fmt.Errorf("get db handle: %w", err)
-	}
-	defer sqlDB.Close()
-
-	if err := db.Migrate(ctx, database); err != nil {
-		return fmt.Errorf("db migrate: %w", err)
-	}
-
-	// Use hybrid (vector + FTS) for the full-stack path when an embed client is
-	// configured; fall back to FTS-only otherwise.
-	var embedder eval.QueryEmbedder
-	if strings.TrimSpace(r.Config.Embed.APIKey) != "" {
-		embedder = r.embedQuery
-	}
-
-	report, err := eval.Run(ctx, database, probes, k, embedder)
-	if err != nil {
-		return err
-	}
-
-	out := r.stdout()
-	fmt.Fprintf(out, "eval: %d probes (k=%d)\n\n", len(report.Results), k)
-	for _, res := range report.Results {
-		status := "MISS"
-		if res.FullHit {
-			status = "HIT "
-		}
-		if res.Regression {
-			status = "REGR"
-		}
-		fmt.Fprintf(out, "[%s] %s\n", status, res.Probe.Query)
-		fmt.Fprintf(out, "        expect=%s baseline=%v matched=%s\n",
-			orDash(res.Probe.ExpectedPrefix), res.BaselineHas, orDash(res.MatchedURI))
-	}
-	fmt.Fprintf(out, "\nsummary: %d/%d full hits, %d regressions\n",
-		report.FullHits, len(report.Results), report.Regressions)
-
-	if report.Regressions > 0 {
-		return fmt.Errorf("eval failed: %d regression(s)", report.Regressions)
 	}
 	return nil
 }
@@ -575,29 +503,18 @@ func (r Runner) runEmbed(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] != "status" {
 		return fmt.Errorf("usage: mypast embed status")
 	}
-
-	database, err := db.New(ctx, r.Config.DB.URL)
-	if err != nil {
-		return fmt.Errorf("db connect: %w", err)
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("embed status requires MYPAST_URL (the server owns the database)")
 	}
-	sqlDB, err := database.DB()
-	if err != nil {
-		return fmt.Errorf("get db handle: %w", err)
-	}
-	defer sqlDB.Close()
-
-	if err := db.Migrate(ctx, database); err != nil {
-		return fmt.Errorf("db migrate: %w", err)
-	}
-
-	rows, err := embed.Status(ctx, database)
+	rows, err := cl.EmbedStatus(ctx)
 	if err != nil {
 		return err
 	}
 	out := r.stdout()
 	for _, row := range rows {
 		fmt.Fprintf(out, "%-10s embedded=%d/%d pending=%d\n",
-			row.Tier, row.Total-row.Pending, row.Total, row.Pending)
+			row.Tier, row.Embedded, row.Total, row.Pending)
 	}
 	return nil
 }

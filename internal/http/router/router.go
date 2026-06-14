@@ -20,6 +20,7 @@ func New(
 	inspectHandler *handler.InspectHandler,
 	assertionHandler *handler.AssertionHandler,
 	backfillHandler *handler.BackfillHandler,
+	embedHandler *handler.EmbedHandler,
 ) (*gin.Engine, error) {
 	r := gin.Default()
 
@@ -85,6 +86,10 @@ func New(
 		protected.POST("/api/v1/backfill/t1", backfillHandler.T1)
 		protected.POST("/api/v1/backfill/t2", backfillHandler.T2)
 		protected.POST("/api/v1/backfill/t3", backfillHandler.T3)
+	}
+
+	if embedHandler != nil {
+		protected.GET("/api/v1/embed/status", embedHandler.Status)
 	}
 
 	return r, nil

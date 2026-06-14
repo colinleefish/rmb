@@ -148,8 +148,9 @@ func main() {
 			inspectHandler := handler.NewInspectHandler(inspect.NewService(database))
 			assertionHandler := handler.NewAssertionHandler(assertion.NewService(database), database)
 			backfillHandler := handler.NewBackfillHandler(database)
+			embedHandler := handler.NewEmbedHandler(database)
 
-			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler, inspectHandler, assertionHandler, backfillHandler)
+			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler, inspectHandler, assertionHandler, backfillHandler, embedHandler)
 			if err != nil {
 				return fmt.Errorf("build router: %w", err)
 			}
