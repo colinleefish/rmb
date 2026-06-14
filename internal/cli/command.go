@@ -12,9 +12,7 @@ import (
 	"github.com/colinleefish/mypast/internal/client"
 	"github.com/colinleefish/mypast/internal/config"
 	"github.com/colinleefish/mypast/internal/db"
-	"github.com/colinleefish/mypast/internal/db/pgarray"
 	"github.com/colinleefish/mypast/internal/hook"
-	"github.com/colinleefish/mypast/internal/llm"
 	"github.com/colinleefish/mypast/internal/model"
 	"github.com/colinleefish/mypast/internal/service/assertion"
 	"github.com/colinleefish/mypast/internal/service/inspect"
@@ -51,8 +49,6 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 		return r.runT3(ctx, args[1:])
 	case "embed":
 		return r.runEmbed(ctx, args[1:])
-	case "find":
-		return r.runFind(ctx, args[1:])
 	case "search":
 		return r.runSearch(ctx, args[1:])
 	case "assertion":
@@ -154,114 +150,40 @@ func (r Runner) runT3(ctx context.Context, args []string) error {
 	return nil
 }
 
-func (r Runner) embedQuery(ctx context.Context, query string) (pgarray.Vector, error) {
-	client, err := llm.NewEmbeddingClient(r.Config.Embed)
-	if err != nil {
-		return nil, fmt.Errorf("embedding client: %w", err)
-	}
-	vecs, err := client.Embed(ctx, []string{query})
-	if err != nil {
-		return nil, err
-	}
-	if len(vecs) != 1 {
-		return nil, fmt.Errorf("expected 1 query vector, got %d", len(vecs))
-	}
-	return pgarray.Vector(vecs[0]), nil
-}
-
-// runFind is single-query vector recall over long-term memories. When MYPAST_URL
-// is configured it calls a remote server; otherwise it queries the local DB.
-func (r Runner) runFind(ctx context.Context, args []string) error {
+func (r Runner) runSearch(ctx context.Context, args []string) error {
 	query := strings.TrimSpace(strings.Join(positionalArgs(args), " "))
 	if query == "" {
-		return fmt.Errorf("usage: mypast find <query> [--k=<n>]")
+		return fmt.Errorf("usage: mypast search \"<query>\" [--scope=memory,scene] [--k=<n>]")
 	}
-	k := parseK(args, 5)
+	k := parseK(args, 0) // 0 → server default (5)
+	scopes := parseScopes(args)
 
-	if cl, ok := client.Resolve(); ok {
-		matches, err := cl.Find(ctx, query, k)
-		if err != nil {
-			return err
-		}
-		printMatches(r.stdout(), matches)
-		return nil
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("search requires MYPAST_URL (the server owns the database)")
 	}
-
-	queryVec, err := r.embedQuery(ctx, query)
+	matches, err := cl.Search(ctx, query, k, scopes)
 	if err != nil {
-		return err
-	}
-	database, closeDB, err := r.openDB(ctx)
-	if err != nil {
-		return err
-	}
-	defer closeDB()
-
-	matches, err := recall.VectorMemories(ctx, database, queryVec, k)
-	if err != nil {
-		return err
-	}
-	if err := recall.AttachCorrections(ctx, database, matches); err != nil {
 		return err
 	}
 	printMatches(r.stdout(), matches)
 	return nil
 }
 
-// runSearch is hybrid recall: vector + FTS across memories and scenes, fused
-// with reciprocal rank fusion. When MYPAST_URL is configured it calls a remote
-// server; otherwise it queries the local DB. The design's LLM intent analysis
-// and hierarchical score propagation are deferred.
-func (r Runner) runSearch(ctx context.Context, args []string) error {
-	query := strings.TrimSpace(strings.Join(positionalArgs(args), " "))
-	if query == "" {
-		return fmt.Errorf("usage: mypast search <query> [--k=<n>]")
-	}
-	k := parseK(args, 8)
-
-	if cl, ok := client.Resolve(); ok {
-		matches, err := cl.Search(ctx, query, k)
-		if err != nil {
-			return err
-		}
-		printMatches(r.stdout(), matches)
+// parseScopes reads --scope=memory,scene and returns the list. Returns nil
+// (server default) when the flag is absent or empty.
+func parseScopes(args []string) []string {
+	raw := strings.TrimSpace(parseFlagValue(args, "--scope"))
+	if raw == "" {
 		return nil
 	}
-
-	queryVec, err := r.embedQuery(ctx, query)
-	if err != nil {
-		return err
+	var out []string
+	for _, s := range strings.Split(raw, ",") {
+		if s = strings.TrimSpace(s); s != "" {
+			out = append(out, s)
+		}
 	}
-	database, closeDB, err := r.openDB(ctx)
-	if err != nil {
-		return err
-	}
-	defer closeDB()
-
-	perList := k * 2
-	vecMem, err := recall.VectorMemories(ctx, database, queryVec, perList)
-	if err != nil {
-		return err
-	}
-	vecScene, err := recall.VectorScenes(ctx, database, queryVec, perList)
-	if err != nil {
-		return err
-	}
-	ftsMem, err := recall.FTSMemories(ctx, database, query, perList)
-	if err != nil {
-		return err
-	}
-	ftsScene, err := recall.FTSScenes(ctx, database, query, perList)
-	if err != nil {
-		return err
-	}
-
-	fused := recall.FuseRRF([][]recall.Match{vecMem, ftsMem, vecScene, ftsScene}, 60, k)
-	if err := recall.AttachCorrections(ctx, database, fused); err != nil {
-		return err
-	}
-	printMatches(r.stdout(), fused)
-	return nil
+	return out
 }
 
 // runAssertion dispatches the human-correction subcommands:
@@ -609,10 +531,11 @@ Usage:
   mypast t3 backfill          Enqueue T3 memory rollup for sessions with scenes
                               Optional: --session=<uuid>
   mypast embed status         Show embedding coverage across atoms/scenes/memories
-  mypast find <query>         Vector recall over long-term memories
-                              Optional: --k=<n>
-  mypast search <query>       Hybrid recall (vector + FTS) across memories and scenes
-                              Optional: --k=<n>
+  mypast search "<query>"     Hybrid recall (vector + FTS) across memories and scenes
+                              --scope=memory,scene  Tiers to search (default: memory,scene)
+                                memory  Long-term distilled facts
+                                scene   Per-session conversation summaries
+                              --k=<n>              Number of results (default: 5)
   mypast assertion add correct <uri> [<uri>...] "statement"
                               Attach a human correction that overrides memory at recall
   mypast assertion rm <assertion-uri>

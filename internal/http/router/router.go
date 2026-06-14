@@ -66,7 +66,6 @@ func New(
 	}
 
 	if recallHandler != nil {
-		protected.GET("/api/v1/find", recallHandler.Find)
 		protected.GET("/api/v1/search", recallHandler.Search)
 	}
 

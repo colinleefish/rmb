@@ -135,12 +135,11 @@ func (c *Client) EmbedStatus(ctx context.Context) ([]EmbedStatusItem, error) {
 	return out.Items, nil
 }
 
-func (c *Client) Find(ctx context.Context, query string, k int) ([]recall.Match, error) {
-	return c.recall(ctx, "/api/v1/find", query, k)
-}
-
-func (c *Client) Search(ctx context.Context, query string, k int) ([]recall.Match, error) {
-	return c.recall(ctx, "/api/v1/search", query, k)
+// Search runs hybrid recall against the remote server. scopes filters which
+// tiers are searched ("memory", "scene"); nil uses the server default
+// (memory,scene). k=0 uses the server default (5).
+func (c *Client) Search(ctx context.Context, query string, k int, scopes []string) ([]recall.Match, error) {
+	return c.recall(ctx, "/api/v1/search", query, k, scopes)
 }
 
 // CreateAssertion posts a human correction and returns the new assertion URI.
@@ -223,11 +222,14 @@ func (c *Client) Inspect(ctx context.Context, kind, uri string) (string, error) 
 	return string(body), nil
 }
 
-func (c *Client) recall(ctx context.Context, path, query string, k int) ([]recall.Match, error) {
+func (c *Client) recall(ctx context.Context, path, query string, k int, scopes []string) ([]recall.Match, error) {
 	q := url.Values{}
 	q.Set("q", query)
 	if k > 0 {
 		q.Set("k", strconv.Itoa(k))
+	}
+	if len(scopes) > 0 {
+		q.Set("scope", strings.Join(scopes, ","))
 	}
 	endpoint := c.baseURL + path + "?" + q.Encode()
 

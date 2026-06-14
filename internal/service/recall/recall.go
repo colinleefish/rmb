@@ -1,6 +1,5 @@
 // Package recall provides retrieval over the memory pyramid: lexical (full-text)
-// and vector (cosine), plus rank fusion. It backs `mypast eval`, `find`, and
-// `search`.
+// and vector (cosine), plus rank fusion. It backs `mypast search`.
 package recall
 
 import (
@@ -151,53 +150,62 @@ func VectorScenes(ctx context.Context, db *gorm.DB, queryVec pgarray.Vector, k i
 // QueryEmbedder embeds a single query string for vector recall.
 type QueryEmbedder func(ctx context.Context, query string) (pgarray.Vector, error)
 
-// Find runs single-query vector recall over long-term memories.
-func Find(ctx context.Context, db *gorm.DB, embed QueryEmbedder, query string, k int) ([]Match, error) {
+// DefaultScopes is the tier set used when no --scope flag is provided.
+var DefaultScopes = []string{"memory", "scene"}
+
+// Search runs hybrid recall (vector + FTS, fused with RRF) over the requested
+// scopes. Valid scope values are "memory" and "scene"; passing nil or an empty
+// slice uses DefaultScopes. Default k is 5.
+func Search(ctx context.Context, db *gorm.DB, embed QueryEmbedder, query string, k int, scopes []string) ([]Match, error) {
 	if k <= 0 {
 		k = 5
 	}
-	vec, err := embed(ctx, query)
-	if err != nil {
-		return nil, err
+	if len(scopes) == 0 {
+		scopes = DefaultScopes
 	}
-	matches, err := VectorMemories(ctx, db, vec, k)
-	if err != nil {
-		return nil, err
-	}
-	if err := AttachCorrections(ctx, db, matches); err != nil {
-		return nil, err
-	}
-	return matches, nil
-}
 
-// Search runs hybrid recall: vector + FTS across memories and scenes, fused with
-// reciprocal rank fusion.
-func Search(ctx context.Context, db *gorm.DB, embed QueryEmbedder, query string, k int) ([]Match, error) {
-	if k <= 0 {
-		k = 8
+	wantMemory, wantScene := false, false
+	for _, s := range scopes {
+		switch s {
+		case "memory":
+			wantMemory = true
+		case "scene":
+			wantScene = true
+		}
 	}
+
 	vec, err := embed(ctx, query)
 	if err != nil {
 		return nil, err
 	}
+
 	perList := k * 2
-	vecMem, err := VectorMemories(ctx, db, vec, perList)
-	if err != nil {
-		return nil, err
+	var lists [][]Match
+
+	if wantMemory {
+		vecMem, err := VectorMemories(ctx, db, vec, perList)
+		if err != nil {
+			return nil, err
+		}
+		ftsMem, err := FTSMemories(ctx, db, query, perList)
+		if err != nil {
+			return nil, err
+		}
+		lists = append(lists, vecMem, ftsMem)
 	}
-	vecScene, err := VectorScenes(ctx, db, vec, perList)
-	if err != nil {
-		return nil, err
+	if wantScene {
+		vecScene, err := VectorScenes(ctx, db, vec, perList)
+		if err != nil {
+			return nil, err
+		}
+		ftsScene, err := FTSScenes(ctx, db, query, perList)
+		if err != nil {
+			return nil, err
+		}
+		lists = append(lists, vecScene, ftsScene)
 	}
-	ftsMem, err := FTSMemories(ctx, db, query, perList)
-	if err != nil {
-		return nil, err
-	}
-	ftsScene, err := FTSScenes(ctx, db, query, perList)
-	if err != nil {
-		return nil, err
-	}
-	fused := FuseRRF([][]Match{vecMem, ftsMem, vecScene, ftsScene}, 60, k)
+
+	fused := FuseRRF(lists, 60, k)
 	if err := AttachCorrections(ctx, db, fused); err != nil {
 		return nil, err
 	}

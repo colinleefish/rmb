@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/colinleefish/mypast/internal/db/pgarray"
 	"github.com/colinleefish/mypast/internal/service/recall"
@@ -16,7 +17,7 @@ type queryEmbedder interface {
 	Embed(ctx context.Context, inputs []string) ([][]float32, error)
 }
 
-// RecallHandler exposes find/search over HTTP, reusing the recall service.
+// RecallHandler exposes search over HTTP.
 type RecallHandler struct {
 	db    *gorm.DB
 	embed queryEmbedder
@@ -34,27 +35,20 @@ func (h *RecallHandler) embedQuery(ctx context.Context, query string) (pgarray.V
 	return pgarray.Vector(vecs[0]), nil
 }
 
-func (h *RecallHandler) Find(c *gin.Context) {
-	h.handle(c, recall.Find)
-}
-
+// Search handles GET /api/v1/search?q=<query>[&scope=memory,scene][&k=<n>].
+// scope defaults to "memory,scene"; k defaults to 5.
 func (h *RecallHandler) Search(c *gin.Context) {
-	h.handle(c, recall.Search)
-}
-
-func (h *RecallHandler) handle(
-	c *gin.Context,
-	fn func(context.Context, *gorm.DB, recall.QueryEmbedder, string, int) ([]recall.Match, error),
-) {
 	if h.embed == nil {
 		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "embeddings not configured"})
 		return
 	}
+
 	query := c.Query("q")
 	if query == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "q is required"})
 		return
 	}
+
 	k := 0
 	if v := c.Query("k"); v != "" {
 		parsed, err := strconv.Atoi(v)
@@ -65,7 +59,19 @@ func (h *RecallHandler) handle(
 		k = parsed
 	}
 
-	matches, err := fn(c.Request.Context(), h.db, h.embedQuery, query, k)
+	var scopes []string
+	if raw := strings.TrimSpace(c.Query("scope")); raw != "" {
+		for _, s := range strings.Split(raw, ",") {
+			s = strings.TrimSpace(s)
+			if s != "memory" && s != "scene" {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "scope must be memory and/or scene"})
+				return
+			}
+			scopes = append(scopes, s)
+		}
+	}
+
+	matches, err := recall.Search(c.Request.Context(), h.db, h.embedQuery, query, k, scopes)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
