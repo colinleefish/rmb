@@ -124,8 +124,20 @@ are not edits to the memory; they overlay it and always win over the machine fac
 - If multiple corrections are attached, they are **additive** — apply them all;
   the **newest wins** only on a direct conflict.
 
-You normally only **read** these. Create one only when the user explicitly asks
-you to correct a memory:
+### When to write an assertion — strict rules
+
+**Only write an assertion when ALL of these are true:**
+
+1. The user **explicitly asks** you to correct or update a memory (e.g. "add this
+   to memory", "correct that", "remember that X is wrong").
+   - The user simply stating a fact ("Ma Xin is a colleague") is **not** a
+     request to write an assertion. Acknowledge it and move on.
+
+2. A **real URI already exists** for the target. Assertions patch existing
+   memories — they cannot create new ones.
+   - If `search` returns no URI for the subject, there is nothing to attach to.
+     Do not invent a URI. New entities enter memory automatically via background
+     workers after the conversation is processed.
 
 ```
 mypast assertion add correct <mypast://uri> [<uri>...] "the corrected fact"
@@ -147,6 +159,8 @@ correction, and unused memories fade on their own.)
 - Quote the `uri` when you rely on a memory, so the user can verify it.
 - Do not fabricate URIs; only use ones returned by `search`/`tree`.
 - Recall (`search`/`cat`/`meta`/`tree`) is read-only — memory is written
-  automatically by background workers, so you never store facts yourself. The
-  only writes you make are `mypast assertion` commands, and only when the user
-  explicitly asks you to correct a memory.
+  automatically by background workers after each conversation. You never store
+  new facts yourself.
+- The only writes you make are `mypast assertion` commands, and only when the
+  user **explicitly asks** you to correct a memory **and** a real URI already
+  exists for the target. A user stating a new fact is not a write request.
