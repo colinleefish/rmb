@@ -608,8 +608,6 @@ Usage:
                               Optional: --session=<uuid>
   mypast t3 backfill          Enqueue T3 memory rollup for sessions with scenes
                               Optional: --session=<uuid>
-  mypast eval                 Run recall probes (FTS) over memories vs raw turns
-                              Optional: --queries=<path> --k=<n>
   mypast embed status         Show embedding coverage across atoms/scenes/memories
   mypast find <query>         Vector recall over long-term memories
                               Optional: --k=<n>
