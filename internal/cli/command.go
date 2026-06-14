@@ -105,6 +105,19 @@ func (r Runner) runT1(ctx context.Context, args []string) error {
 
 	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
 
+	if cl, ok := client.Resolve(); ok {
+		n, err := cl.Backfill(ctx, "t1", sessionKey)
+		if err != nil {
+			return err
+		}
+		if sessionKey != "" {
+			fmt.Fprintln(r.stdout(), "enqueued t1 for session", sessionKey)
+		} else {
+			fmt.Fprintf(r.stdout(), "enqueued t1 for %d session(s)\n", n)
+		}
+		return nil
+	}
+
 	database, err := db.New(ctx, r.Config.DB.URL)
 	if err != nil {
 		return fmt.Errorf("db connect: %w", err)
@@ -154,6 +167,19 @@ func (r Runner) runT2(ctx context.Context, args []string) error {
 
 	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
 
+	if cl, ok := client.Resolve(); ok {
+		n, err := cl.Backfill(ctx, "t2", sessionKey)
+		if err != nil {
+			return err
+		}
+		if sessionKey != "" {
+			fmt.Fprintln(r.stdout(), "enqueued t2 for session", sessionKey)
+		} else {
+			fmt.Fprintf(r.stdout(), "enqueued t2 for %d session(s)\n", n)
+		}
+		return nil
+	}
+
 	database, err := db.New(ctx, r.Config.DB.URL)
 	if err != nil {
 		return fmt.Errorf("db connect: %w", err)
@@ -190,6 +216,19 @@ func (r Runner) runT3(ctx context.Context, args []string) error {
 	}
 
 	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
+
+	if cl, ok := client.Resolve(); ok {
+		n, err := cl.Backfill(ctx, "t3", sessionKey)
+		if err != nil {
+			return err
+		}
+		if sessionKey != "" {
+			fmt.Fprintln(r.stdout(), "enqueued t3 for session", sessionKey)
+		} else {
+			fmt.Fprintf(r.stdout(), "enqueued t3 for %d session(s)\n", n)
+		}
+		return nil
+	}
 
 	database, err := db.New(ctx, r.Config.DB.URL)
 	if err != nil {

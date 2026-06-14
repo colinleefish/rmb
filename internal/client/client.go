@@ -51,6 +51,48 @@ func Resolve() (*Client, bool) {
 // BaseURL reports the remote target (for user-facing messages).
 func (c *Client) BaseURL() string { return c.baseURL }
 
+// Backfill triggers a server-side pipeline backfill for the given tier ("t1",
+// "t2", or "t3"). When sessionKey is non-empty only that session is enqueued;
+// otherwise all eligible sessions are enqueued. Returns the number of sessions
+// that were enqueued.
+func (c *Client) Backfill(ctx context.Context, tier, sessionKey string) (int, error) {
+	endpoint := c.baseURL + "/api/v1/backfill/" + tier
+	if sessionKey != "" {
+		q := url.Values{}
+		q.Set("session", sessionKey)
+		endpoint += "?" + q.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
+	if err != nil {
+		return 0, fmt.Errorf("build request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("call backfill/%s: %w", tier, err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &e) == nil && e.Error != "" {
+			return 0, fmt.Errorf("remote backfill/%s: %s", tier, e.Error)
+		}
+		return 0, fmt.Errorf("remote backfill/%s returned %d", tier, resp.StatusCode)
+	}
+	var out struct {
+		Enqueued int `json:"enqueued"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return 0, fmt.Errorf("decode response: %w", err)
+	}
+	return out.Enqueued, nil
+}
+
 func (c *Client) Find(ctx context.Context, query string, k int) ([]recall.Match, error) {
 	return c.recall(ctx, "/api/v1/find", query, k)
 }

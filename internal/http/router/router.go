@@ -19,6 +19,7 @@ func New(
 	recallHandler *handler.RecallHandler,
 	inspectHandler *handler.InspectHandler,
 	assertionHandler *handler.AssertionHandler,
+	backfillHandler *handler.BackfillHandler,
 ) (*gin.Engine, error) {
 	r := gin.Default()
 
@@ -78,6 +79,12 @@ func New(
 		protected.GET("/api/v1/assertions", assertionHandler.List)
 		protected.POST("/api/v1/assertions", assertionHandler.Create)
 		protected.DELETE("/api/v1/assertions", assertionHandler.Retract)
+	}
+
+	if backfillHandler != nil {
+		protected.POST("/api/v1/backfill/t1", backfillHandler.T1)
+		protected.POST("/api/v1/backfill/t2", backfillHandler.T2)
+		protected.POST("/api/v1/backfill/t3", backfillHandler.T3)
 	}
 
 	return r, nil
