@@ -13,7 +13,7 @@ export interface OverviewCounts {
   memories: number;
   pipeline_states: number;
   tasks: number;
-  assertions: number;
+  corrections: number;
 }
 
 export interface Overview {
@@ -89,10 +89,9 @@ export interface TaskModel {
   UpdatedAt?: string;
 }
 
-// The assertions API returns explicit snake_case JSON (see handler/assertion.go).
-export interface AssertionModel {
+// The corrections API returns explicit snake_case JSON (see handler/correction.go).
+export interface CorrectionModel {
   uri: string;
-  kind: string;
   statement: string;
   target_uris: string[];
   created_at: string;

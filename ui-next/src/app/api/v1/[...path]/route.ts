@@ -24,7 +24,7 @@ async function forward(
   const target = `${API_BASE}/api/v1/${path.map(encodeURIComponent).join("/")}${request.nextUrl.search}`;
 
   // Forward the body verbatim for mutating methods so the upstream sees the
-  // same JSON the browser sent (e.g. assertion create payloads).
+  // same JSON the browser sent (e.g. correction create payloads).
   const hasBody = request.method !== "GET" && request.method !== "HEAD";
   const reqBody = hasBody ? await request.text() : undefined;
 

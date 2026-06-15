@@ -11,7 +11,6 @@ import (
 	"github.com/colinleefish/mypast/internal/client"
 	"github.com/colinleefish/mypast/internal/config"
 	"github.com/colinleefish/mypast/internal/hook"
-	"github.com/colinleefish/mypast/internal/model"
 	"github.com/colinleefish/mypast/internal/service/recall"
 	"github.com/colinleefish/mypast/internal/uri"
 )
@@ -45,8 +44,8 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 		return r.runEmbed(ctx, args[1:])
 	case "search":
 		return r.runSearch(ctx, args[1:])
-	case "assertion":
-		return r.runAssertion(ctx, args[1:])
+	case "correction":
+		return r.runCorrection(ctx, args[1:])
 	case "store", "read", "list", "delete", "load-context":
 		return fmt.Errorf("%q command is planned but not implemented yet", args[0])
 	default:
@@ -180,51 +179,32 @@ func parseScopes(args []string) []string {
 	return out
 }
 
-// runAssertion dispatches the human-correction subcommands:
+// runCorrection dispatches the human-correction subcommands:
 //
-//	mypast assertion add <kind> <uri> [<uri>...] "statement"
-//	mypast assertion rm  <assertion-uri>
-//	mypast assertion ls  [<target-uri>]
-func (r Runner) runAssertion(ctx context.Context, args []string) error {
+//	mypast correction add <uri> [<uri>...] "statement"
+//	mypast correction rm  <correction-uri>
+//	mypast correction ls  [<target-uri>]
+func (r Runner) runCorrection(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: mypast assertion <add|rm|ls> ...")
+		return fmt.Errorf("usage: mypast correction <add|rm|ls> ...")
 	}
 	switch args[0] {
 	case "add":
-		return r.runAssertionAdd(ctx, args[1:])
+		return r.runCorrectionAdd(ctx, args[1:])
 	case "rm":
-		return r.runRetract(ctx, args[1:])
+		return r.runCorrectionRm(ctx, args[1:])
 	case "ls":
-		return r.runAssertionList(ctx, args[1:])
+		return r.runCorrectionList(ctx, args[1:])
 	default:
-		return fmt.Errorf("unknown assertion action %q (use add|rm|ls)", args[0])
+		return fmt.Errorf("unknown correction action %q (use add|rm|ls)", args[0])
 	}
 }
 
-// parseAssertionKind maps a user-facing kind token to a canonical kind. "fix" is
-// accepted as a friendly alias for "correct". correct is the only kind:
-// forgetting is passive decay, not a human action (see docs/forget-rationale.md).
-func parseAssertionKind(tok string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(tok)) {
-	case "correct", "fix":
-		return model.AssertionKindCorrect, nil
-	default:
-		return "", fmt.Errorf("unsupported kind %q (only: correct)", tok)
-	}
-}
-
-func (r Runner) runAssertionAdd(ctx context.Context, args []string) error {
+func (r Runner) runCorrectionAdd(ctx context.Context, args []string) error {
 	pos := positionalArgs(args)
-	if len(pos) == 0 {
-		return fmt.Errorf("usage: mypast assertion add correct <mypast://uri> [<uri>...] \"statement\"")
-	}
-	kind, err := parseAssertionKind(pos[0])
-	if err != nil {
-		return err
-	}
 
 	var targets, words []string
-	for _, a := range pos[1:] {
+	for _, a := range pos {
 		if strings.HasPrefix(a, uri.Scheme+"://") {
 			targets = append(targets, a)
 		} else {
@@ -232,24 +212,23 @@ func (r Runner) runAssertionAdd(ctx context.Context, args []string) error {
 		}
 	}
 	statement := strings.TrimSpace(strings.Join(words, " "))
-	if len(targets) == 0 {
-		return fmt.Errorf("usage: mypast assertion add %s <mypast://uri> [<uri>...] \"statement\"", pos[0])
+	if len(targets) == 0 || statement == "" {
+		return fmt.Errorf("usage: mypast correction add <mypast://uri> [<uri>...] \"statement\"")
 	}
 
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("assertion add requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("correction add requires MYPAST_URL (the server owns the database)")
 	}
-	createdURI, err := cl.CreateAssertion(ctx, kind, targets, statement)
+	createdURI, err := cl.CreateCorrection(ctx, targets, statement)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(r.stdout(), "added %s: %s -> %s\n", kind, strings.Join(targets, ", "), createdURI)
+	fmt.Fprintf(r.stdout(), "added correction: %s -> %s\n", strings.Join(targets, ", "), createdURI)
 	return nil
 }
 
-
-func (r Runner) runAssertionList(ctx context.Context, args []string) error {
+func (r Runner) runCorrectionList(ctx context.Context, args []string) error {
 	pos := positionalArgs(args)
 	target := ""
 	if len(pos) > 0 {
@@ -258,19 +237,19 @@ func (r Runner) runAssertionList(ctx context.Context, args []string) error {
 
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("assertion ls requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("correction ls requires MYPAST_URL (the server owns the database)")
 	}
-	items, err := cl.ListAssertions(ctx, target)
+	items, err := cl.ListCorrections(ctx, target)
 	if err != nil {
 		return err
 	}
 	out := r.stdout()
 	if len(items) == 0 {
-		fmt.Fprintln(out, "no assertions")
+		fmt.Fprintln(out, "no corrections")
 		return nil
 	}
 	for _, it := range items {
-		fmt.Fprintf(out, "%s  [%s]\n", it.URI, it.Kind)
+		fmt.Fprintln(out, it.URI)
 		fmt.Fprintf(out, "   -> %s\n", strings.Join(it.TargetURIs, ", "))
 		if it.Statement != "" {
 			fmt.Fprintf(out, "   %s\n", it.Statement)
@@ -279,16 +258,16 @@ func (r Runner) runAssertionList(ctx context.Context, args []string) error {
 	return nil
 }
 
-func (r Runner) runRetract(ctx context.Context, args []string) error {
+func (r Runner) runCorrectionRm(ctx context.Context, args []string) error {
 	pos := positionalArgs(args)
 	if len(pos) != 1 {
-		return fmt.Errorf("usage: mypast assertion rm <mypast://assertions/...>")
+		return fmt.Errorf("usage: mypast correction rm <mypast://corrections/...>")
 	}
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("assertion rm requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("correction rm requires MYPAST_URL (the server owns the database)")
 	}
-	if err := cl.RetractAssertion(ctx, pos[0]); err != nil {
+	if err := cl.RetractCorrection(ctx, pos[0]); err != nil {
 		return err
 	}
 	fmt.Fprintf(r.stdout(), "retracted: %s\n", pos[0])
@@ -420,11 +399,11 @@ Usage:
                                 memory  Long-term distilled facts
                                 scene   Per-session conversation summaries
                               --k=<n>              Number of results (default: 5)
-  mypast assertion add correct <uri> [<uri>...] "statement"
+  mypast correction add <uri> [<uri>...] "statement"
                               Attach a human correction that overrides memory at recall
-  mypast assertion rm <assertion-uri>
+  mypast correction rm <correction-uri>
                               Retire a specific correction (URI from meta/ls output)
-  mypast assertion ls [<target-uri>]
+  mypast correction ls [<target-uri>]
                               List active corrections (optionally for one target)
   mypast store <uri>          Planned
   mypast read <uri>           Planned

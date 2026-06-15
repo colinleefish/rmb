@@ -5,41 +5,39 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/colinleefish/mypast/internal/service/assertion"
+	"github.com/colinleefish/mypast/internal/service/correction"
 	"github.com/colinleefish/mypast/internal/service/memory"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
 
-// AssertionHandler exposes writing human corrections over HTTP.
-type AssertionHandler struct {
-	service *assertion.Service
+// CorrectionHandler exposes writing human corrections over HTTP.
+type CorrectionHandler struct {
+	service *correction.Service
 	db      *gorm.DB
 }
 
-func NewAssertionHandler(service *assertion.Service, db *gorm.DB) *AssertionHandler {
-	return &AssertionHandler{service: service, db: db}
+func NewCorrectionHandler(service *correction.Service, db *gorm.DB) *CorrectionHandler {
+	return &CorrectionHandler{service: service, db: db}
 }
 
-type createAssertionRequest struct {
-	Kind       string   `json:"kind"`
+type createCorrectionRequest struct {
 	TargetURIs []string `json:"target_uris"`
 	Statement  string   `json:"statement"`
 }
 
-func (h *AssertionHandler) Create(c *gin.Context) {
-	var req createAssertionRequest
+func (h *CorrectionHandler) Create(c *gin.Context) {
+	var req createCorrectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	row, err := h.service.Create(c.Request.Context(), assertion.CreateInput{
-		Kind:       req.Kind,
+	row, err := h.service.Create(c.Request.Context(), correction.CreateInput{
 		TargetURIs: req.TargetURIs,
 		Statement:  req.Statement,
 	})
 	if err != nil {
-		if errors.Is(err, assertion.ErrInvalidInput) {
+		if errors.Is(err, correction.ErrInvalidInput) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -49,24 +47,23 @@ func (h *AssertionHandler) Create(c *gin.Context) {
 	wakeT3ForTargets(c, h.db, []string(row.TargetURIs))
 	c.JSON(http.StatusCreated, gin.H{
 		"uri":         row.URI,
-		"kind":        row.Kind,
 		"target_uris": row.TargetURIs,
 	})
 }
 
 // wakeT3ForTargets re-distills the targeted memories so the correction is baked
 // into the body. Best-effort: a failure here must not fail the write — the
-// assertion is already durable and the read-time overlay still applies.
+// correction is already durable and the read-time overlay still applies.
 func wakeT3ForTargets(c *gin.Context, db *gorm.DB, targets []string) {
 	if _, err := memory.EnqueueSessionsForMemoryTargets(c.Request.Context(), db, targets); err != nil {
-		log.Printf("assertion wake-t3 failed (overlay still applies): %v", err)
+		log.Printf("correction wake-t3 failed (overlay still applies): %v", err)
 	}
 }
 
-func (h *AssertionHandler) List(c *gin.Context) {
+func (h *CorrectionHandler) List(c *gin.Context) {
 	rows, err := h.service.List(c.Request.Context(), c.Query("target"))
 	if err != nil {
-		if errors.Is(err, assertion.ErrInvalidInput) {
+		if errors.Is(err, correction.ErrInvalidInput) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -81,7 +78,6 @@ func (h *AssertionHandler) List(c *gin.Context) {
 		}
 		items = append(items, gin.H{
 			"uri":         r.URI,
-			"kind":        r.Kind,
 			"statement":   statement,
 			"target_uris": []string(r.TargetURIs),
 			"created_at":  r.CreatedAt,
@@ -90,7 +86,7 @@ func (h *AssertionHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 
-func (h *AssertionHandler) Retract(c *gin.Context) {
+func (h *CorrectionHandler) Retract(c *gin.Context) {
 	target := c.Query("uri")
 	if target == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "uri is required"})
@@ -101,9 +97,9 @@ func (h *AssertionHandler) Retract(c *gin.Context) {
 	case err == nil:
 		wakeT3ForTargets(c, h.db, targets)
 		c.JSON(http.StatusOK, gin.H{"uri": target, "retracted": true})
-	case errors.Is(err, assertion.ErrInvalidInput):
+	case errors.Is(err, correction.ErrInvalidInput):
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-	case errors.Is(err, assertion.ErrNotFound):
+	case errors.Is(err, correction.ErrNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 	default:
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

@@ -16,12 +16,12 @@ import { Button } from "@/components/ui/button";
 import { CategoryBadge } from "@/components/category-badge";
 import { OutlineBadge } from "@/components/detail";
 import {
-  createAssertion,
-  listAssertions,
-  retractAssertion,
+  createCorrection,
+  listCorrections,
+  retractCorrection,
 } from "@/lib/api";
 import { fmtDateTime, pick } from "@/lib/format";
-import type { AssertionModel, MemoryModel } from "@/lib/types";
+import type { CorrectionModel, MemoryModel } from "@/lib/types";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -31,14 +31,14 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
-function AssertionsSection({
-  assertions,
+function CorrectionsSection({
+  corrections,
   loading,
   error,
   onRetract,
   retractingURI,
 }: {
-  assertions: AssertionModel[];
+  corrections: CorrectionModel[];
   loading: boolean;
   error: string | null;
   onRetract: (uri: string) => void;
@@ -53,7 +53,7 @@ function AssertionsSection({
     );
   if (error)
     return <p className="text-destructive text-sm">Failed to load: {error}</p>;
-  if (assertions.length === 0)
+  if (corrections.length === 0)
     return (
       <p className="text-muted-foreground text-sm">
         No corrections attached to this memory.
@@ -61,13 +61,12 @@ function AssertionsSection({
     );
   return (
     <div className="flex flex-col gap-2">
-      {assertions.map((a) => (
+      {corrections.map((a) => (
         <div
           key={a.uri}
           className="bg-muted/30 flex flex-col gap-1.5 rounded-lg border p-3"
         >
           <div className="flex items-center gap-2">
-            <OutlineBadge>{a.kind}</OutlineBadge>
             <span className="text-muted-foreground ml-auto text-xs">
               {fmtDateTime(a.created_at)}
             </span>
@@ -93,7 +92,7 @@ function AssertionsSection({
   );
 }
 
-function AddAssertionForm({
+function AddCorrectionForm({
   onAdd,
   submitting,
   submitError,
@@ -142,7 +141,7 @@ export function MemoryDetailDialog({
   memory: MemoryModel | null;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [assertions, setAssertions] = useState<AssertionModel[]>([]);
+  const [corrections, setCorrections] = useState<CorrectionModel[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -155,15 +154,15 @@ export function MemoryDetailDialog({
     if (!memoryURI) return;
     setLoading(true);
     setError(null);
-    listAssertions(memoryURI)
-      .then(setAssertions)
+    listCorrections(memoryURI)
+      .then(setCorrections)
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
   }, [memoryURI]);
 
   useEffect(() => {
     if (!memoryURI) return;
-    setAssertions([]);
+    setCorrections([]);
     setSubmitError(null);
     reload();
   }, [memoryURI, reload]);
@@ -173,7 +172,7 @@ export function MemoryDetailDialog({
       if (!memoryURI) return;
       setSubmitting(true);
       setSubmitError(null);
-      createAssertion({ statement, target_uris: [memoryURI] })
+      createCorrection({ statement, target_uris: [memoryURI] })
         .then(() => reload())
         .catch((err: Error) => setSubmitError(err.message))
         .finally(() => setSubmitting(false));
@@ -184,7 +183,7 @@ export function MemoryDetailDialog({
   const handleRetract = useCallback(
     (uri: string) => {
       setRetractingURI(uri);
-      retractAssertion(uri)
+      retractCorrection(uri)
         .then(() => reload())
         .catch((err: Error) => setError(err.message))
         .finally(() => setRetractingURI(null));
@@ -239,9 +238,9 @@ export function MemoryDetailDialog({
           <Separator />
 
           <section>
-            <SectionTitle>Corrections ({assertions.length})</SectionTitle>
-            <AssertionsSection
-              assertions={assertions}
+            <SectionTitle>Corrections ({corrections.length})</SectionTitle>
+            <CorrectionsSection
+              corrections={corrections}
               loading={loading}
               error={error}
               onRetract={handleRetract}
@@ -253,7 +252,7 @@ export function MemoryDetailDialog({
 
           <section>
             <SectionTitle>Add correction</SectionTitle>
-            <AddAssertionForm
+            <AddCorrectionForm
               onAdd={handleAdd}
               submitting={submitting}
               submitError={submitError}

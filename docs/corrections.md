@@ -30,10 +30,10 @@ human statement stays authoritative; neither clobbers the other. This keeps the
 discipline the rest of the pyramid already follows (append-first, versioned,
 URI-addressable) and makes corrections immune to re-distillation.
 
-## Data model — `assertions`
+## Data model — `corrections`
 
 A sibling table to `memories`, same discipline (append-only,
-URI-addressable as `mypast://assertions/<uuid>`) — but **not** keyed/versioned by
+URI-addressable as `mypast://corrections/<uuid>`) — but **not** keyed/versioned by
 target the way memories are keyed by `(category, slug)`; see Multiplicity &
 ordering.
 
@@ -41,25 +41,25 @@ ordering.
 |--------|-------|
 | `id` | uuid, append-only; never `UPDATE` |
 | `author` | `human` (vs implicit `worker` for derived rows) |
-| `kind` | `correct` (only human kind) \| `split` \| `alias` (reserved) — no `forget`, see docs/forget-rationale.md |
 | `target_uris` | `text[]` — the memories/entities/scenes this patches (1..N, any tier); **required, never empty** — a correction must correct something |
-| `target_selector` | jsonb, optional/deferred — pattern targeting (e.g. `{category, slug}`); reaches future memories |
 | `statement` | human text, e.g. "10.9.114.160 is the -uc source VM, not the RDS." |
-| `payload` | jsonb; machine-actionable detail for `split`/`alias` |
-| `superseded_at` | per-assertion identity, not per-target: set only when *this specific* assertion is explicitly retracted/replaced by its URI. Writing another correction on the same memory does **not** supersede it (see Multiplicity & ordering). |
+| `superseded_at` | per-correction identity, not per-target: set only when *this specific* correction is explicitly retracted/replaced by its URI. Writing another correction on the same memory does **not** supersede it (see Multiplicity & ordering). |
 | `created_at` | |
 
+A correction is a pure content patch: one kind, one statement, one or more
+targets. (The earlier `kind`/`payload` columns and the `split`/`alias` kinds are
+gone — entity resolution, including `alias`, is its own dedicated mechanism
+outside the correction umbrella. See "Entity resolution lives elsewhere".)
+
 No embedding column: every correction targets something, so it is reached purely
-via the `target_uris` join (no vectors, no FTS over assertion text). Corrections
-are never free-floating — there is no target-less/global assertion.
+via the `target_uris` join (no vectors, no FTS over correction text). Corrections
+are never free-floating — there is no target-less/global correction.
 
 ## Targeting — one correction, many targets
 
 A correction is **not** limited to a single memory. Targeting is necessarily
 one-to-many:
 
-- **Inherently multi:** `split` (one slug → two things) and `alias` (two
-  duplicates → one canonical) reference 2+ URIs by definition.
 - **Cross-cutting facts:** "10.9.114.160 is the `-uc` VM, not the RDS" touches
   both `mypast://entities/starlink-dev-all-in-one` and
   `mypast://entities/starlink-dev-all-in-one-uc`.
@@ -71,7 +71,6 @@ Resolution — a memory `M` receives correction `C` if:
 
 ```
 M.uri = ANY(C.target_uris)        -- explicit pin (GIN-indexed)
-  OR  M matches C.target_selector  -- optional/deferred pattern match
 ```
 
 **Rule of thumb: correct the thing, not the row.** Prefer the *logical* URI
@@ -87,7 +86,7 @@ corrections at once, and they are not keyed by their target — so writing a sec
 correction on the same memory **adds** to it; it never silently replaces the first.
 
 - **All active corrections surface together.** Fetching a memory returns every
-  active assertion that targets it, as a list — not just the latest.
+  active correction that targets it, as a list — not just the latest.
 - **Ordered newest-first.** The list is sorted by `created_at` descending, so the
   most recent correction is shown (and weighted) first.
 - **Newest wins on conflict.** If two corrections disagree about the same fact,
@@ -95,7 +94,7 @@ correction on the same memory **adds** to it; it never silently replaces the fir
   "resolve contradictions in favour of the most recent"). Non-conflicting
   corrections simply all apply.
 - **Removal is explicit.** A correction goes away only when *that specific
-  assertion* (by its URI) is retracted/replaced — which sets its `superseded_at`.
+  correction* (by its URI) is retracted/replaced — which sets its `superseded_at`.
   There is no automatic per-target supersession.
 
 Worked example — memory `mypast://entities/starlink-dev-all-in-one`:
@@ -110,13 +109,13 @@ fetch mypast://entities/starlink-dev-all-in-one
 ```
 
 B does **not** cancel A — both are live. If on day 3 you find A itself is wrong,
-you explicitly retract A (by its assertion URI) and write A2; only then is A
+you explicitly retract A (by its correction URI) and write A2; only then is A
 superseded.
 
 ## Two enforcement points (layered)
 
 **1. Read-time overlay — the guarantee.** When recall returns a memory, attach
-any active assertion that targets its URI (see Targeting above) via the
+any active correction that targets its URI (see Targeting above) via the
 `target_uris` join — no vectors involved. Result:
 
 ```
@@ -129,39 +128,42 @@ Unconditional: works even if distillation never runs again, and an LLM cannot
 lose it. This is what makes the fix "always" honored.
 
 **2. Write-time injection — the cleanup.** When T3 re-distills a bucket that has
-assertions, feed them into the distill prompt as **authoritative overrides**
+corrections, feed them into the distill prompt as **authoritative overrides**
 ("these human corrections take precedence over any extracted fact"). The
 regenerated body comes out clean, improving snippets/embeddings over time.
 
 Overlay is the safety net; injection is the polish. Overlay is required;
 injection is a quality bonus and can come later.
 
-## Kinds
+## One kind: a content overlay
 
-- **`correct`** — override/annotate a specific memory; positive ("she works at a
-  bank") or negative ("she does NOT work at Huawei"). The only human kind. *(v1)*
-- **`split`** — "this slug is really two things" — keep them apart. *(reserved)*
-- **`alias`** — "slug-a and slug-b are the same; canonical = X." *(reserved)*
+A correction overrides/annotates a specific memory; it may be positive ("she
+works at a bank") or negative ("she does NOT work at Huawei"). That is the whole
+feature — there is no `kind` column.
 
-There is no `forget` kind. Deliberate forgetting is not a human action mypast
-supports: a wrong fact is a negative `correct`, and disuse is handled by passive
+There is no `forget`. Deliberate forgetting is not a human action mypast
+supports: a wrong fact is a negative correction, and disuse is handled by passive
 usage-based decay (`docs/ebbinghaus-recall.md`). See `docs/forget-rationale.md`
 for the full reasoning.
 
-Every kind targets concrete memories — there is no target-less "assert a global
-fact" kind. A correction with nothing to correct is a contradiction; durable
+A correction always targets concrete memories — there is no target-less "assert a
+global fact". A correction with nothing to correct is a contradiction; durable
 facts that have no memory to attach to belong in the pipeline (or a future
 human-authored memory), not here.
 
-`split` + `alias` double as the **human-curated canonical-slug catalog** for
-entity resolution (the durable fix for slug drift). One mechanism, two payoffs:
-humans teach canonical names; catalog-aware slugging reads the same table.
+### Entity resolution lives elsewhere
+
+The old `split`/`alias` kinds are **not** part of corrections. Entity resolution
+(slug drift, "these two slugs are the same", "this slug is really two things")
+is its own dedicated mechanism — `alias` will be its own thing, outside the
+correction umbrella. Keeping corrections to a single content-patch shape is the
+point of this unification.
 
 ## Precedence & the agent contract
 
 Rule (to add to `cli-agent-guide.md`), two levels of precedence:
 
-1. **Human over machine:** an active human assertion outranks LLM-derived memory.
+1. **Human over machine:** an active human correction outranks LLM-derived memory.
 2. **Newest human over older human:** when corrections conflict, the most recent
    active one wins (all non-conflicting corrections still apply — see Multiplicity
    & ordering).
@@ -174,10 +176,10 @@ carries the overlay, so correctness is enforced at the answer boundary.
 
 - Corrections are append-only. They accumulate (see Multiplicity & ordering); a
   new correction does **not** supersede earlier ones just for sharing a target.
-- Supersession is **per assertion identity**: to remove or replace a specific
+- Supersession is **per correction identity**: to remove or replace a specific
   correction, retract it by its own URI (sets `superseded_at`), preserving the
   human-correction audit trail. Deleting is never required.
-- Assertions live in their own table, so the delete-and-rebuild T3 flow never
+- Corrections live in their own table, so the delete-and-rebuild T3 flow never
   touches them; after any rebuild the overlay re-applies and the next distill
   re-injects them. They are immune to derived-data churn because they are not
   derived.
@@ -185,28 +187,29 @@ carries the overlay, so correctness is enforced at the answer boundary.
 ## CLI surface
 
 ```
-mypast assertion add correct <uri> [<uri>...] "statement"
-mypast assertion rm  <assertion-uri>      # retire a specific correction
-mypast assertion ls  [<target-uri>]       # list active corrections
-mypast meta <uri>                         # also lists corrections attached to a memory
+mypast correction add <uri> [<uri>...] "statement"
+mypast correction rm  <correction-uri>     # retire a specific correction
+mypast correction ls  [<target-uri>]       # list active corrections
+mypast meta <uri>                          # also lists corrections attached to a memory
 ```
 
-Naming: the objects are **assertions** (table, model, `mypast://assertions/<uuid>`
-URI, `/api/v1/assertions`, and the `mypast assertion` command). "Correction" is
-the user-facing intent; the overlay label is `CORRECTION`.
+Naming: the concept is **correction** everywhere — the table (`corrections`),
+the model (`Correction`), the URI (`mypast://corrections/<uuid>`), the route
+(`/api/v1/corrections`), the `mypast correction` command, and the overlay label
+`CORRECTION`. ("Assertion" was the old internal genus name; it is gone.)
 
-Dual-mode like the rest of the CLI (local DB or remote API). Writing a
-correction is a privileged op, so the HTTP path requires auth.
+The CLI is a pure API client; writing a correction is a privileged op, so the
+HTTP path requires auth.
 
 ## Scope (delivered)
 
-- `assertions` table + migration.
-- `correct` kind only.
-- **Read-time overlay** wired into `find` / `search` / `cat` / `meta`.
+- `corrections` table + migration.
+- Single content-overlay shape (no `kind`).
+- **Read-time overlay** wired into `search` / `cat` / `meta`.
 - Precedence rule in `cli-agent-guide.md`.
-- **Write-time distill injection**: active `correct` assertions are fed into T3
+- **Write-time distill injection**: active corrections are fed into T3
   as authoritative input, so the regenerated memory body reflects them and
-  becomes searchable. Provenance is tracked in `memories.source_assertion_uris`;
+  becomes searchable. Provenance is tracked in `memories.source_correction_uris`;
   the gate re-distills a bucket when its active correction set changes; creating
   or retracting a correction wakes T3 for the targeted memory's sessions. Events
   stay immutable (overlay only — no body injection).
@@ -216,9 +219,10 @@ the merged truth (orthogonal corrections are combined by the distiller).
 
 ## Deferred
 
-- `split` / `alias` and catalog-aware slugging / entity resolution (bundle
-  together — see the drift discussion in the project review).
-- Scope-keying (work / personal / project) for assertions.
+- Entity resolution: `alias` (and catalog-aware slugging / slug-drift fixes) as
+  its own dedicated mechanism, separate from corrections — see the drift
+  discussion in the project review.
+- Scope-keying (work / personal / project) for corrections.
 
 ## Document map
 

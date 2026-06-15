@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/colinleefish/mypast/internal/model"
-	"github.com/colinleefish/mypast/internal/service/assertion"
+	"github.com/colinleefish/mypast/internal/service/correction"
 	"github.com/colinleefish/mypast/internal/uri"
 	"gorm.io/gorm"
 )
@@ -344,7 +344,7 @@ func (s *Service) catMemoryByURI(ctx context.Context, target string, w io.Writer
 // trailing annotation block (newest-first), or "" if none. This is the
 // read-time overlay guarantee from docs/corrections.md.
 func (s *Service) correctionsBlock(ctx context.Context, target string) (string, error) {
-	byTarget, err := assertion.ForTargets(ctx, s.db, []string{target})
+	byTarget, err := correction.ForTargets(ctx, s.db, []string{target})
 	if err != nil {
 		return "", err
 	}
@@ -391,7 +391,7 @@ func (s *Service) metaMemory(ctx context.Context, target string) (map[string]any
 		"created_at":         row.CreatedAt,
 		"updated_at":         row.UpdatedAt,
 	}
-	byTarget, err := assertion.ForTargets(ctx, s.db, []string{target})
+	byTarget, err := correction.ForTargets(ctx, s.db, []string{target})
 	if err != nil {
 		return nil, err
 	}

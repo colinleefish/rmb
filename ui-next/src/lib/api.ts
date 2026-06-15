@@ -1,5 +1,5 @@
 import type {
-  AssertionModel,
+  CorrectionModel,
   AtomModel,
   MemoryModel,
   Overview,
@@ -77,27 +77,27 @@ export const listPipelineStates = () =>
   listItems<PipelineRow>("/browse/pipeline-state");
 export const listTasks = () => listItems<TaskModel>("/browse/tasks");
 
-// Assertions: human corrections that overlay distilled memory.
-// `target` filters to assertions attached to a single memory URI.
-export const listAssertions = (target?: string) =>
-  listItems<AssertionModel>(
-    target ? `/assertions?target=${encodeURIComponent(target)}` : "/assertions",
+// Corrections: human corrections that overlay distilled memory.
+// `target` filters to corrections attached to a single memory URI.
+export const listCorrections = (target?: string) =>
+  listItems<CorrectionModel>(
+    target
+      ? `/corrections?target=${encodeURIComponent(target)}`
+      : "/corrections",
   );
 
-export function createAssertion(input: {
+export function createCorrection(input: {
   statement: string;
   target_uris: string[];
-  kind?: string;
-}): Promise<{ uri: string; kind: string; target_uris: string[] }> {
-  return apiSend("POST", "/assertions", {
-    kind: input.kind ?? "correct",
+}): Promise<{ uri: string; target_uris: string[] }> {
+  return apiSend("POST", "/corrections", {
     target_uris: input.target_uris,
     statement: input.statement,
   });
 }
 
-export function retractAssertion(
+export function retractCorrection(
   uri: string,
 ): Promise<{ uri: string; retracted: boolean }> {
-  return apiSend("DELETE", `/assertions?uri=${encodeURIComponent(uri)}`);
+  return apiSend("DELETE", `/corrections?uri=${encodeURIComponent(uri)}`);
 }

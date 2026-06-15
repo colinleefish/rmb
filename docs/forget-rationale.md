@@ -1,10 +1,14 @@
 # Why `mypast` has no `forget` assertion
 
-> Decision: **dropped.** The assertion layer collapses to a single human kind,
-> `correct`. Deliberate forgetting is not a human action mypast supports;
-> forgetting is the job of passive, usage-based decay (see
+> Decision: **dropped.** The human authority layer is a single thing — a
+> **correction** (a content overlay). Deliberate forgetting is not a human action
+> mypast supports; forgetting is the job of passive, usage-based decay (see
 > `docs/ebbinghaus-recall.md`). This doc records the reasoning so we don't
 > re-litigate it.
+>
+> (Terminology note: this doc predates the rename from "assertion" to
+> "correction" and the removal of the `split`/`alias` kinds. The reasoning stands;
+> read "assertion kind `correct`" as today's "correction".)
 
 ## Origin
 
@@ -85,10 +89,11 @@ there is no `forget`.*
 
 ## What we did NOT drop
 
-`split` / `alias` remain reserved in the schema. Unlike `forget`, they are
-**deferred-but-intended** (entity resolution), not decided against. The "she
-became a different entity under the same slug" edge case belongs to them, not to
-`forget`.
+Entity resolution (`alias`, slug-drift fixes) is **deferred-but-intended**, not
+decided against. Unlike `forget`, the "she became a different entity under the
+same slug" edge case is real — it just lives in its own dedicated mechanism,
+outside the correction umbrella (see `docs/corrections.md`), rather than as a
+correction kind.
 
 ## Cleanup performed
 

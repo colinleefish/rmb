@@ -54,8 +54,8 @@ handle for drilling down.
 
 If a result has a human correction attached, it is shown right under the
 snippet, flagged `⚑ CORRECTION:` (a human override of the fact). These come
-from the user and **outrank** the machine-distilled fact — see "Human
-corrections" below.
+from the user and **outrank** the machine-distilled fact — see "Corrections"
+below.
 
 ### Drill down
 
@@ -109,58 +109,57 @@ mypast tree mypast://
 mypast tree mypast://entities/
 ```
 
-## Human corrections (assertions)
+## Corrections
 
 Machine-distilled memory can be wrong or over-merged. The user can attach
-**assertions** — durable, human-authored patches — to any memory `uri`. They
+**corrections** — durable, human-authored patches — to any memory `uri`. They
 are not edits to the memory; they overlay it and always win over the machine fact.
 
 - `mypast cat <uri>`, `meta <uri>`, and `search` results automatically show any
-  active assertions on that target. You do not fetch them separately.
-- Each one is a **correct** assertion (`⚑ CORRECTION:`) — the user's
-  authoritative statement about the thing; treat it as the truth, over the
-  distilled snippet. It may be positive ("she works at a bank") or negative
-  ("she does NOT work at Huawei").
+  active corrections on that target. You do not fetch them separately.
+- Each one (`⚑ CORRECTION:`) is the user's authoritative statement about the
+  thing; treat it as the truth, over the distilled snippet. It may be positive
+  ("she works at a bank") or negative ("she does NOT work at Huawei").
 - If multiple corrections are attached, they are **additive** — apply them all;
   the **newest wins** only on a direct conflict.
 
-### When to write an assertion — strict rules
+### When to write a correction — strict rules
 
-**Only write an assertion when ALL of these are true:**
+**Only write a correction when ALL of these are true:**
 
 1. The user **explicitly asks** you to correct or update a memory (e.g. "add this
    to memory", "correct that", "remember that X is wrong").
    - The user simply stating a fact ("Ma Xin is a colleague") is **not** a
-     request to write an assertion. Acknowledge it and move on.
+     request to write a correction. Acknowledge it and move on.
 
-2. A **real URI already exists** for the target. Assertions patch existing
+2. A **real URI already exists** for the target. Corrections patch existing
    memories — they cannot create new ones.
    - If `search` returns no URI for the subject, there is nothing to attach to.
      Do not invent a URI. New entities enter memory automatically via background
      workers after the conversation is processed.
 
 ```
-mypast assertion add correct <mypast://uri> [<uri>...] "the corrected fact"
-mypast assertion ls [<target-uri>]                     # list active assertions
-mypast assertion rm <mypast://assertions/...>          # retract one you added
+mypast correction add <mypast://uri> [<uri>...] "the corrected fact"
+mypast correction ls [<target-uri>]                    # list active corrections
+mypast correction rm <mypast://corrections/...>        # retract one you added
 ```
 
-`correct` accepts `fix` as an alias. Always pass real `uri`s returned by
-recall — never invent them. (There is no "forget" — a wrong fact is a negative
-correction, and unused memories fade on their own.)
+Always pass real `uri`s returned by recall — never invent them. (There is no
+"forget" — a wrong fact is a negative correction, and unused memories fade on
+their own.)
 
 ## Rules
 
 - Recall **before** asking the user about anything that may be in past context.
 - Treat `memories` as the user's established truth; if a memory conflicts with a
   fresh statement from the user, prefer the user and note the discrepancy.
-- A human **correction** assertion on a memory beats the memory; corrections are
+- A human **correction** on a memory beats the memory; corrections are
   additive and the newest wins on a direct conflict. Honor them.
 - Quote the `uri` when you rely on a memory, so the user can verify it.
 - Do not fabricate URIs; only use ones returned by `search`/`tree`.
 - Recall (`search`/`cat`/`meta`/`tree`) is read-only — memory is written
   automatically by background workers after each conversation. You never store
   new facts yourself.
-- The only writes you make are `mypast assertion` commands, and only when the
+- The only writes you make are `mypast correction` commands, and only when the
   user **explicitly asks** you to correct a memory **and** a real URI already
   exists for the target. A user stating a new fact is not a write request.

@@ -1,11 +1,9 @@
-package assertion
+package correction
 
 import (
 	"context"
 	"errors"
 	"testing"
-
-	"github.com/colinleefish/mypast/internal/model"
 )
 
 func TestNormalizeTargets_dedupAndCanonicalize(t *testing.T) {
@@ -37,26 +35,17 @@ func TestNormalizeTargets_rejectsInvalidURI(t *testing.T) {
 
 // The following validation branches return before any DB access, so a nil-db
 // Service exercises them safely.
-func TestCreate_rejectsUnknownKind(t *testing.T) {
-	s := &Service{}
-	_, err := s.Create(context.Background(), CreateInput{Kind: "bogus", TargetURIs: []string{"mypast://profile"}})
-	if !errors.Is(err, ErrInvalidInput) {
-		t.Fatalf("expected ErrInvalidInput, got %v", err)
-	}
-}
-
 func TestCreate_requiresTarget(t *testing.T) {
 	s := &Service{}
-	_, err := s.Create(context.Background(), CreateInput{Kind: model.AssertionKindCorrect, Statement: "x"})
+	_, err := s.Create(context.Background(), CreateInput{Statement: "x"})
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("expected ErrInvalidInput, got %v", err)
 	}
 }
 
-func TestCreate_correctRequiresStatement(t *testing.T) {
+func TestCreate_requiresStatement(t *testing.T) {
 	s := &Service{}
 	_, err := s.Create(context.Background(), CreateInput{
-		Kind:       model.AssertionKindCorrect,
 		TargetURIs: []string{"mypast://entities/jenkins"},
 	})
 	if !errors.Is(err, ErrInvalidInput) {

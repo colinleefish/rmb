@@ -11,16 +11,16 @@ import (
 	"github.com/colinleefish/mypast/internal/db"
 	"github.com/colinleefish/mypast/internal/db/pgarray"
 	"github.com/colinleefish/mypast/internal/model"
-	"github.com/colinleefish/mypast/internal/service/assertion"
+	"github.com/colinleefish/mypast/internal/service/correction"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 // splitCorrections separates active corrections (newest-first, as returned by
-// assertion.ForTargets) into their statements (for the distiller) and their URIs
+// correction.ForTargets) into their statements (for the distiller) and their URIs
 // (for the provenance gate).
-func splitCorrections(sums []assertion.Summary) (statements, uris []string) {
+func splitCorrections(sums []correction.Summary) (statements, uris []string) {
 	statements = make([]string, 0, len(sums))
 	uris = make([]string, 0, len(sums))
 	for _, s := range sums {
@@ -148,7 +148,7 @@ func (w *Worker) rollup(ctx context.Context) error {
 	for _, b := range buckets {
 		bucketURIs = append(bucketURIs, b.URI)
 	}
-	corrByTarget, err := assertion.ForTargets(ctx, w.db, bucketURIs)
+	corrByTarget, err := correction.ForTargets(ctx, w.db, bucketURIs)
 	if err != nil {
 		return fmt.Errorf("load corrections: %w", err)
 	}
@@ -214,7 +214,7 @@ func (w *Worker) rollup(ctx context.Context) error {
 func (w *Worker) bucketUnchanged(ctx context.Context, bucket memoryBucket, srcScenes, corrURIs []string) (bool, error) {
 	var active model.Memory
 	err := w.db.WithContext(ctx).
-		Select("source_scene_uris", "source_assertion_uris").
+		Select("source_scene_uris", "source_correction_uris").
 		Where("uri = ? AND superseded_at IS NULL", bucket.URI).
 		Take(&active).Error
 	if err == gorm.ErrRecordNotFound {
@@ -229,7 +229,7 @@ func (w *Worker) bucketUnchanged(ctx context.Context, bucket memoryBucket, srcSc
 		return true, nil
 	}
 	return equalStringSets([]string(active.SourceSceneURIs), srcScenes) &&
-		equalStringSets([]string(active.SourceAssertionURIs), corrURIs), nil
+		equalStringSets([]string(active.SourceCorrectionURIs), corrURIs), nil
 }
 
 func (w *Worker) pendingSessionIDs(ctx context.Context) ([]uuid.UUID, error) {
@@ -304,7 +304,7 @@ func (w *Worker) persistMemory(
 	bucket memoryBucket,
 	pm parsedMemory,
 	sourceSceneURIs []string,
-	sourceAssertionURIs []string,
+	sourceCorrectionURIs []string,
 ) error {
 	return w.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		now := w.now().UTC()
@@ -325,7 +325,7 @@ func (w *Worker) persistMemory(
 			if existing > 0 {
 				return nil
 			}
-			return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, sourceAssertionURIs, 1, now)
+			return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, sourceCorrectionURIs, 1, now)
 		}
 
 		var active model.Memory
@@ -334,7 +334,7 @@ func (w *Worker) persistMemory(
 			Take(&active).Error
 		switch {
 		case err == gorm.ErrRecordNotFound:
-			return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, sourceAssertionURIs, 1, now)
+			return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, sourceCorrectionURIs, 1, now)
 		case err != nil:
 			return fmt.Errorf("load active memory: %w", err)
 		}
@@ -344,14 +344,14 @@ func (w *Worker) persistMemory(
 		// LLM produced the same text), refresh the provenance in place so the gate
 		// stops re-firing every cycle.
 		if active.Body != nil && *active.Body == pm.Body {
-			if equalStringSets([]string(active.SourceAssertionURIs), sourceAssertionURIs) {
+			if equalStringSets([]string(active.SourceCorrectionURIs), sourceCorrectionURIs) {
 				return nil
 			}
 			return tx.Model(&model.Memory{}).
 				Where("id = ?", active.ID).
 				Updates(map[string]any{
-					"source_assertion_uris": pgarray.TextArray(append([]string(nil), sourceAssertionURIs...)),
-					"updated_at":            now,
+					"source_correction_uris": pgarray.TextArray(append([]string(nil), sourceCorrectionURIs...)),
+					"updated_at":             now,
 				}).Error
 		}
 
@@ -360,7 +360,7 @@ func (w *Worker) persistMemory(
 			Update("superseded_at", now).Error; err != nil {
 			return fmt.Errorf("supersede memory: %w", err)
 		}
-		return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, sourceAssertionURIs, active.Version+1, now)
+		return insertMemory(tx, bucket, slugPtr, pm, sourceSceneURIs, sourceCorrectionURIs, active.Version+1, now)
 	})
 }
 
@@ -370,7 +370,7 @@ func insertMemory(
 	slugPtr *string,
 	pm parsedMemory,
 	sourceSceneURIs []string,
-	sourceAssertionURIs []string,
+	sourceCorrectionURIs []string,
 	version int,
 	now time.Time,
 ) error {
@@ -381,17 +381,17 @@ func insertMemory(
 	abstract := pm.Abstract
 	body := pm.Body
 	row := model.Memory{
-		ID:                  id,
-		URI:                 bucket.URI,
-		Category:            bucket.Category,
-		Slug:                slugPtr,
-		Version:             version,
-		Abstract:            &abstract,
-		Body:                &body,
-		SourceSceneURIs:     pgarray.TextArray(append([]string(nil), sourceSceneURIs...)),
-		SourceAssertionURIs: pgarray.TextArray(append([]string(nil), sourceAssertionURIs...)),
-		CreatedAt:           now,
-		UpdatedAt:           now,
+		ID:                   id,
+		URI:                  bucket.URI,
+		Category:             bucket.Category,
+		Slug:                 slugPtr,
+		Version:              version,
+		Abstract:             &abstract,
+		Body:                 &body,
+		SourceSceneURIs:      pgarray.TextArray(append([]string(nil), sourceSceneURIs...)),
+		SourceCorrectionURIs: pgarray.TextArray(append([]string(nil), sourceCorrectionURIs...)),
+		CreatedAt:            now,
+		UpdatedAt:            now,
 	}
 	if err := tx.Create(&row).Error; err != nil {
 		return fmt.Errorf("insert memory: %w", err)

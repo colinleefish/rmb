@@ -18,7 +18,7 @@ func New(
 	browseHandler *handler.BrowseHandler,
 	recallHandler *handler.RecallHandler,
 	inspectHandler *handler.InspectHandler,
-	assertionHandler *handler.AssertionHandler,
+	correctionHandler *handler.CorrectionHandler,
 	backfillHandler *handler.BackfillHandler,
 	embedHandler *handler.EmbedHandler,
 ) (*gin.Engine, error) {
@@ -75,10 +75,10 @@ func New(
 		protected.GET("/api/v1/inspect/meta", inspectHandler.Meta)
 	}
 
-	if assertionHandler != nil {
-		protected.GET("/api/v1/assertions", assertionHandler.List)
-		protected.POST("/api/v1/assertions", assertionHandler.Create)
-		protected.DELETE("/api/v1/assertions", assertionHandler.Retract)
+	if correctionHandler != nil {
+		protected.GET("/api/v1/corrections", correctionHandler.List)
+		protected.POST("/api/v1/corrections", correctionHandler.Create)
+		protected.DELETE("/api/v1/corrections", correctionHandler.Retract)
 	}
 
 	if backfillHandler != nil {

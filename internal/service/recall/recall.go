@@ -8,7 +8,7 @@ import (
 	"sort"
 
 	"github.com/colinleefish/mypast/internal/db/pgarray"
-	"github.com/colinleefish/mypast/internal/service/assertion"
+	"github.com/colinleefish/mypast/internal/service/correction"
 	"gorm.io/gorm"
 )
 
@@ -19,7 +19,7 @@ type Match struct {
 	Tier        string               `gorm:"column:tier" json:"tier"`
 	Rank        float64              `gorm:"column:rank" json:"rank"`
 	Snippet     string               `gorm:"column:snippet" json:"snippet"`
-	Corrections []assertion.Summary  `gorm:"-" json:"corrections,omitempty"`
+	Corrections []correction.Summary `gorm:"-" json:"corrections,omitempty"`
 }
 
 // AttachCorrections overlays active human corrections onto matches by target URI
@@ -32,7 +32,7 @@ func AttachCorrections(ctx context.Context, db *gorm.DB, matches []Match) error 
 	for _, m := range matches {
 		uris = append(uris, m.URI)
 	}
-	byTarget, err := assertion.ForTargets(ctx, db, uris)
+	byTarget, err := correction.ForTargets(ctx, db, uris)
 	if err != nil {
 		return err
 	}

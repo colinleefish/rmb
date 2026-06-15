@@ -9,16 +9,16 @@ import (
 )
 
 const (
-	Scheme      = "mypast"
-	MaxSegment  = 50
-	ScopeRoot   = ""
-	ScopeSessions = "sessions"
-	ScopeScenes   = "scenes"
-	ScopeProfile  = "profile"
-	ScopePrefs    = "preferences"
-	ScopeEntities = "entities"
-	ScopeEvents   = "events"
-	ScopeAssertions = "assertions"
+	Scheme           = "mypast"
+	MaxSegment       = 50
+	ScopeRoot        = ""
+	ScopeSessions    = "sessions"
+	ScopeScenes      = "scenes"
+	ScopeProfile     = "profile"
+	ScopePrefs       = "preferences"
+	ScopeEntities    = "entities"
+	ScopeEvents      = "events"
+	ScopeCorrections = "corrections"
 )
 
 var (
@@ -27,13 +27,13 @@ var (
 		`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`,
 	)
 	reservedSlug = map[string]struct{}{
-		ScopeSessions: {},
-		ScopeScenes:   {},
-		ScopeProfile:  {},
-		ScopePrefs:    {},
-		ScopeEntities: {},
-		ScopeEvents:   {},
-		ScopeAssertions: {},
+		ScopeSessions:    {},
+		ScopeScenes:      {},
+		ScopeProfile:     {},
+		ScopePrefs:       {},
+		ScopeEntities:    {},
+		ScopeEvents:      {},
+		ScopeCorrections: {},
 	}
 )
 
@@ -164,8 +164,8 @@ func BuildMemory(category, segment string) string {
 	return Scheme + "://" + category + "/" + segment
 }
 
-func BuildAssertion(id string) string {
-	return Scheme + "://" + ScopeAssertions + "/" + strings.ToLower(id)
+func BuildCorrection(id string) string {
+	return Scheme + "://" + ScopeCorrections + "/" + strings.ToLower(id)
 }
 
 // SanitizeSlug normalizes a label into a strict URI slug: lowercase ASCII,
@@ -239,7 +239,7 @@ func splitSegments(path string) []string {
 
 func validateScope(scope string) error {
 	switch scope {
-	case ScopeSessions, ScopeScenes, ScopeProfile, ScopePrefs, ScopeEntities, ScopeEvents, ScopeAssertions:
+	case ScopeSessions, ScopeScenes, ScopeProfile, ScopePrefs, ScopeEntities, ScopeEvents, ScopeCorrections:
 		return nil
 	default:
 		return fmt.Errorf("%w: unknown scope %q", ErrInvalidURI, scope)
@@ -297,12 +297,12 @@ func validateShape(scope string, segments []string) error {
 		if len(segments) != 1 {
 			return fmt.Errorf("%w: scenes require one id segment", ErrInvalidURI)
 		}
-	case ScopeAssertions:
+	case ScopeCorrections:
 		if len(segments) != 1 {
-			return fmt.Errorf("%w: assertions require one id segment", ErrInvalidURI)
+			return fmt.Errorf("%w: corrections require one id segment", ErrInvalidURI)
 		}
 		if !uuidSegment.MatchString(segments[0]) {
-			return fmt.Errorf("%w: assertion id must be uuid", ErrInvalidURI)
+			return fmt.Errorf("%w: correction id must be uuid", ErrInvalidURI)
 		}
 	case ScopePrefs, ScopeEntities, ScopeEvents:
 		// Zero segments is the category container (e.g. mypast://entities/),

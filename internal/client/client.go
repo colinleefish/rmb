@@ -1,7 +1,6 @@
 // Package client is the CLI's HTTP client for talking to a remote mypast server.
 // It is selected automatically when MYPAST_URL is configured (env or
-// ~/.mypast.conf), so the same `mypast find`/`search` commands work against a
-// remote service instead of a local database.
+// ~/.mypast.conf), so the CLI commands work against a remote service.
 package client
 
 import (
@@ -142,17 +141,16 @@ func (c *Client) Search(ctx context.Context, query string, k int, scopes []strin
 	return c.recall(ctx, "/api/v1/search", query, k, scopes)
 }
 
-// CreateAssertion posts a human correction and returns the new assertion URI.
-func (c *Client) CreateAssertion(ctx context.Context, kind string, targets []string, statement string) (string, error) {
+// CreateCorrection posts a human correction and returns the new correction URI.
+func (c *Client) CreateCorrection(ctx context.Context, targets []string, statement string) (string, error) {
 	reqBody, err := json.Marshal(map[string]any{
-		"kind":        kind,
 		"target_uris": targets,
 		"statement":   statement,
 	})
 	if err != nil {
 		return "", fmt.Errorf("encode request: %w", err)
 	}
-	endpoint := c.baseURL + "/api/v1/assertions"
+	endpoint := c.baseURL + "/api/v1/corrections"
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(reqBody)))
 	if err != nil {
 		return "", fmt.Errorf("build request: %w", err)
@@ -164,7 +162,7 @@ func (c *Client) CreateAssertion(ctx context.Context, kind string, targets []str
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("call assertions: %w", err)
+		return "", fmt.Errorf("call corrections: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -174,9 +172,9 @@ func (c *Client) CreateAssertion(ctx context.Context, kind string, targets []str
 			Error string `json:"error"`
 		}
 		if json.Unmarshal(body, &e) == nil && e.Error != "" {
-			return "", fmt.Errorf("remote assertions: %s", e.Error)
+			return "", fmt.Errorf("remote corrections: %s", e.Error)
 		}
-		return "", fmt.Errorf("remote assertions returned %d", resp.StatusCode)
+		return "", fmt.Errorf("remote corrections returned %d", resp.StatusCode)
 	}
 	var out struct {
 		URI string `json:"uri"`
@@ -261,18 +259,17 @@ func (c *Client) recall(ctx context.Context, path, query string, k int, scopes [
 	return out.Items, nil
 }
 
-// AssertionItem is a listed assertion from the remote server.
-type AssertionItem struct {
+// CorrectionItem is a listed correction from the remote server.
+type CorrectionItem struct {
 	URI        string   `json:"uri"`
-	Kind       string   `json:"kind"`
 	Statement  string   `json:"statement"`
 	TargetURIs []string `json:"target_uris"`
 }
 
-// ListAssertions returns active assertions; when target is non-empty, only those
-// targeting it.
-func (c *Client) ListAssertions(ctx context.Context, target string) ([]AssertionItem, error) {
-	endpoint := c.baseURL + "/api/v1/assertions"
+// ListCorrections returns active corrections; when target is non-empty, only
+// those targeting it.
+func (c *Client) ListCorrections(ctx context.Context, target string) ([]CorrectionItem, error) {
+	endpoint := c.baseURL + "/api/v1/corrections"
 	if t := strings.TrimSpace(target); t != "" {
 		q := url.Values{}
 		q.Set("target", t)
@@ -287,15 +284,15 @@ func (c *Client) ListAssertions(ctx context.Context, target string) ([]Assertion
 	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("call assertions list: %w", err)
+		return nil, fmt.Errorf("call corrections list: %w", err)
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("remote assertions list returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("remote corrections list returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 	var out struct {
-		Items []AssertionItem `json:"items"`
+		Items []CorrectionItem `json:"items"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
@@ -303,11 +300,11 @@ func (c *Client) ListAssertions(ctx context.Context, target string) ([]Assertion
 	return out.Items, nil
 }
 
-// RetractAssertion retires a correction by its assertion URI on the remote server.
-func (c *Client) RetractAssertion(ctx context.Context, assertionURI string) error {
+// RetractCorrection retires a correction by its URI on the remote server.
+func (c *Client) RetractCorrection(ctx context.Context, correctionURI string) error {
 	q := url.Values{}
-	q.Set("uri", assertionURI)
-	endpoint := c.baseURL + "/api/v1/assertions?" + q.Encode()
+	q.Set("uri", correctionURI)
+	endpoint := c.baseURL + "/api/v1/corrections?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
 	if err != nil {
 		return fmt.Errorf("build request: %w", err)
@@ -318,7 +315,7 @@ func (c *Client) RetractAssertion(ctx context.Context, assertionURI string) erro
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("call assertions delete: %w", err)
+		return fmt.Errorf("call corrections delete: %w", err)
 	}
 	defer resp.Body.Close()
 

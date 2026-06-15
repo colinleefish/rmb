@@ -5,25 +5,20 @@ import { type ColumnDef } from "@tanstack/react-table";
 
 import { DataTable, SortButton, type RowDetail } from "@/components/data-table";
 import {
-  DetailBadges,
   DetailLead,
   DetailMeta,
   DetailUri,
-  OutlineBadge,
 } from "@/components/detail";
-import { listAssertions } from "@/lib/api";
+import { listCorrections } from "@/lib/api";
 import { fmtDateShort, fmtDateTime, truncate } from "@/lib/format";
-import type { AssertionModel } from "@/lib/types";
+import type { CorrectionModel } from "@/lib/types";
 
-function detailOf(a: AssertionModel): RowDetail {
+function detailOf(a: CorrectionModel): RowDetail {
   return {
-    title: a.kind === "forget" ? "Retired" : "Correction",
+    title: "Correction",
     description: a.uri,
     body: (
       <>
-        <DetailBadges>
-          <OutlineBadge>{a.kind}</OutlineBadge>
-        </DetailBadges>
         {a.statement && <DetailLead>{a.statement}</DetailLead>}
         <div className="flex flex-col gap-1">
           <span className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
@@ -43,8 +38,8 @@ function detailOf(a: AssertionModel): RowDetail {
   };
 }
 
-export function AssertionsTable() {
-  const columns = useMemo<ColumnDef<AssertionModel>[]>(
+export function CorrectionsTable() {
+  const columns = useMemo<ColumnDef<CorrectionModel>[]>(
     () => [
       {
         id: "statement",
@@ -55,12 +50,6 @@ export function AssertionsTable() {
             {row.original.statement || "—"}
           </p>
         ),
-      },
-      {
-        id: "kind",
-        accessorFn: (a) => a.kind ?? "",
-        header: ({ column }) => <SortButton column={column} label="Kind" />,
-        cell: ({ row }) => <OutlineBadge>{row.original.kind}</OutlineBadge>,
       },
       {
         id: "targets",
@@ -98,15 +87,15 @@ export function AssertionsTable() {
 
   return (
     <DataTable
-      load={() => listAssertions()}
+      load={() => listCorrections()}
       columns={columns}
       searchText={(a) =>
-        [a.statement, a.kind, a.target_uris?.join(" "), a.uri]
+        [a.statement, a.target_uris?.join(" "), a.uri]
           .filter(Boolean)
           .join(" ")
       }
-      searchPlaceholder="Search assertions…"
-      emptyMessage="No assertions yet."
+      searchPlaceholder="Search corrections…"
+      emptyMessage="No corrections yet."
       initialSorting={[{ id: "created", desc: true }]}
       renderDetail={detailOf}
     />
