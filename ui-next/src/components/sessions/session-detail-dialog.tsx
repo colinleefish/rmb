@@ -75,7 +75,6 @@ function TurnsSection({ turns }: { turns: TurnRow[] }) {
           >
             <summary className="flex cursor-pointer list-none items-center gap-2 text-sm">
               <span className="font-mono text-xs">#{turn.turn_index}</span>
-              <StatusBadge status={turn.turn_status} className="text-xs" />
               <span className="text-muted-foreground ml-auto text-xs">
                 {fmtDateTime(turn.created_at)}
               </span>

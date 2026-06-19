@@ -6,6 +6,7 @@ services:
   mypast:
     build: .
     container_name: mypast-app
+    command: ["serve"]
     network_mode: host
     env_file: .env
     environment:

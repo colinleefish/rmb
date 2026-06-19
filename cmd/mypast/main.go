@@ -24,7 +24,6 @@ import (
 	"github.com/colinleefish/mypast/internal/service/memory"
 	"github.com/colinleefish/mypast/internal/service/scene"
 	"github.com/colinleefish/mypast/internal/service/session"
-	"github.com/colinleefish/mypast/internal/service/summarize"
 )
 
 func main() {
@@ -56,7 +55,7 @@ func main() {
 			healthSvc := health.NewService(database)
 			sessionUploadSvc := session.NewUploadService(database)
 
-			if cfg.Extraction.Enabled || cfg.Scene.Enabled || cfg.Memory.Enabled || cfg.Summarizer.Enabled {
+			if cfg.Extraction.Enabled || cfg.Scene.Enabled || cfg.Memory.Enabled {
 				llmClient, err := llm.NewOpenAICompatibleClient(llm.OpenAICompatibleConfig{
 					Provider:        cfg.LLM.Provider,
 					APIBase:         cfg.LLM.APIBase,
@@ -96,15 +95,6 @@ func main() {
 						go func() {
 							if err := t3Worker.Run(ctx); err != nil {
 								log.Printf("t3 memory worker exited with error: %v", err)
-							}
-						}()
-					}
-
-					if cfg.Summarizer.Enabled {
-						worker := summarize.NewWorker(database, llmClient, cfg.Summarizer)
-						go func() {
-							if err := worker.Run(ctx); err != nil {
-								log.Printf("summarization worker exited with error: %v", err)
 							}
 						}()
 					}

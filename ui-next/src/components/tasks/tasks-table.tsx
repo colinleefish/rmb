@@ -3,7 +3,11 @@
 import { useMemo } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 
-import { DataTable, SortButton, type RowDetail } from "@/components/data-table";
+import {
+  ServerDataTable,
+  SortButton,
+  type RowDetail,
+} from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
 import {
   DetailBadges,
@@ -12,7 +16,7 @@ import {
   DetailUri,
   OutlineBadge,
 } from "@/components/detail";
-import { listTasks } from "@/lib/api";
+import { pageTasks } from "@/lib/api";
 import { fmtDateShort, fmtDateTime, pick, shortKey } from "@/lib/format";
 import type { TaskModel } from "@/lib/types";
 
@@ -108,19 +112,9 @@ export function TasksTable() {
   );
 
   return (
-    <DataTable
-      load={listTasks}
+    <ServerDataTable
+      loadPage={pageTasks}
       columns={columns}
-      searchText={(t) =>
-        [
-          pick(t, "Kind", "kind"),
-          pick(t, "Status", "status"),
-          pick(t, "Error", "error"),
-          pick(t, "SessionID", "session_id"),
-        ]
-          .filter(Boolean)
-          .join(" ")
-      }
       searchPlaceholder="Search tasks…"
       emptyMessage="No tasks yet."
       initialSorting={[{ id: "created", desc: true }]}

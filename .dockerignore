@@ -11,3 +11,10 @@ README.md
 docker-compose.yml
 Dockerfile
 .dockerignore
+# UI: host-installed deps/build artifacts are platform-specific (macOS) and must
+# not enter the build context — the Docker UI stage installs and exports fresh.
+ui-next/node_modules
+ui-next/.next
+ui-next/out
+# macOS AppleDouble sidecar files break goose migration parsing if synced.
+**/._*

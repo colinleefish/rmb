@@ -25,7 +25,11 @@ type Runner struct {
 }
 
 func (r Runner) Run(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] == "serve" {
+	if len(args) == 0 {
+		fmt.Fprintln(r.stdout(), usage())
+		return nil
+	}
+	if args[0] == "serve" {
 		return r.Serve(ctx)
 	}
 
@@ -381,7 +385,7 @@ func parseFlagValue(args []string, key string) string {
 func usage() string {
 	return strings.TrimSpace(`
 Usage:
-  mypast serve                Start HTTP server (default)
+  mypast serve                Start HTTP server
   mypast hook-submit --source=<cursor|cc|codex>
                               Receive an agent transcript hook payload on stdin
   mypast cat <uri>            Print body / messages_jsonl for a URI

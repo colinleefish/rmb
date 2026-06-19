@@ -4,7 +4,11 @@ import { useMemo } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 
 import { Badge } from "@/components/ui/badge";
-import { DataTable, SortButton, type RowDetail } from "@/components/data-table";
+import {
+  ServerDataTable,
+  SortButton,
+  type RowDetail,
+} from "@/components/data-table";
 import { CategoryBadge } from "@/components/category-badge";
 import {
   DetailBadges,
@@ -13,7 +17,7 @@ import {
   DetailUri,
   OutlineBadge,
 } from "@/components/detail";
-import { listAtoms } from "@/lib/api";
+import { pageAtoms } from "@/lib/api";
 import { fmtDateTime, pick } from "@/lib/format";
 import type { AtomModel } from "@/lib/types";
 
@@ -98,20 +102,9 @@ export function AtomsTable() {
   );
 
   return (
-    <DataTable
-      load={listAtoms}
+    <ServerDataTable
+      loadPage={pageAtoms}
       columns={columns}
-      searchText={(a) =>
-        [
-          pick(a, "Content", "content"),
-          pick(a, "Category", "category"),
-          pick(a, "SceneName", "scene_name"),
-          pick(a, "Slug", "slug"),
-          pick(a, "URI", "uri"),
-        ]
-          .filter(Boolean)
-          .join(" ")
-      }
       searchPlaceholder="Search facts, category, topic…"
       emptyMessage="No atoms yet."
       renderDetail={detailOf}

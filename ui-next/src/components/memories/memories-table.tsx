@@ -3,10 +3,10 @@
 import { useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 
-import { DataTable, SortButton } from "@/components/data-table";
+import { ServerDataTable, SortButton } from "@/components/data-table";
 import { CategoryBadge } from "@/components/category-badge";
 import { MemoryDetailDialog } from "@/components/memories/memory-detail-dialog";
-import { listMemories } from "@/lib/api";
+import { pageMemories } from "@/lib/api";
 import { fmtDateShort, pick, truncate } from "@/lib/format";
 import type { MemoryModel } from "@/lib/types";
 
@@ -76,20 +76,9 @@ export function MemoriesTable() {
 
   return (
     <>
-      <DataTable
-        load={listMemories}
+      <ServerDataTable
+        loadPage={pageMemories}
         columns={columns}
-        searchText={(m) =>
-          [
-            pick(m, "Abstract", "abstract"),
-            pick(m, "Body", "body"),
-            pick(m, "Category", "category"),
-            pick(m, "Slug", "slug"),
-            pick(m, "URI", "uri"),
-          ]
-            .filter(Boolean)
-            .join(" ")
-        }
         searchPlaceholder="Search memories…"
         emptyMessage="No memories yet."
         initialSorting={[{ id: "updated", desc: true }]}

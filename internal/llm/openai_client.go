@@ -146,35 +146,6 @@ func buildThinkingBody(style string, enabled bool) (map[string]any, error) {
 	}
 }
 
-func (c *OpenAICompatibleClient) MergeOverview(
-	ctx context.Context,
-	previousOverview string,
-	messagesJSONL string,
-) (string, error) {
-	userPrompt := buildMergeOverviewPrompt(previousOverview, messagesJSONL)
-	req := chatCompletionRequest{
-		Model:       c.model,
-		Temperature: 0.2,
-		Messages: []chatMessage{
-			{
-				Role: "system",
-				Content: "You summarize chat history. Return plain text only. " +
-					"Keep key facts, goals, constraints, decisions, and unresolved tasks concise.",
-			},
-			{
-				Role:    "user",
-				Content: userPrompt,
-			},
-		},
-	}
-
-	merged, err := c.completeWithRetry(ctx, req)
-	if err != nil {
-		return "", fmt.Errorf("llm merge overview failed: %w", err)
-	}
-	return strings.TrimSpace(merged), nil
-}
-
 // ExtractAtoms asks the model to return JSON atoms for a batch of session turns.
 func (c *OpenAICompatibleClient) ExtractAtoms(ctx context.Context, messagesJSONL string) (string, error) {
 	req := chatCompletionRequest{
@@ -302,35 +273,6 @@ func (c *OpenAICompatibleClient) completeWithRetry(
 		}
 	}
 	return "", lastErr
-}
-
-func buildMergeOverviewPrompt(previousOverview string, messagesJSONL string) string {
-	prev := strings.TrimSpace(previousOverview)
-	if prev == "" {
-		prev = "(empty)"
-	}
-	current := strings.TrimSpace(messagesJSONL)
-	if current == "" {
-		current = "(empty)"
-	}
-
-	return strings.TrimSpace(`
-Task:
-You are given the previous session overview and one new chat chunk.
-Generate the NEW full session overview in plain text.
-
-Rules:
-- Keep it concise and factual.
-- Preserve still-valid context from previous overview.
-- Add new decisions, constraints, tasks, and user preferences from the new chunk.
-- Remove contradictions by preferring the latest chunk.
-- Do not output JSON or markdown headings.
-
-Previous overview:
-` + prev + `
-
-New chunk (JSONL):
-` + current)
 }
 
 func (c *OpenAICompatibleClient) chatCompletion(

@@ -22,7 +22,6 @@ type Config struct {
 	Server     ServerConfig
 	Auth       AuthConfig
 	LLM        LLMConfig
-	Summarizer SummarizerConfig
 	Extraction ExtractionConfig
 	Scene      SceneConfig
 	Memory     MemoryConfig
@@ -56,15 +55,6 @@ type LLMConfig struct {
 	Timeout         time.Duration
 	ThinkingStyle   string // "" | thinking_type | enable_thinking | reasoning_effort
 	ThinkingEnabled bool
-}
-
-type SummarizerConfig struct {
-	Enabled               bool
-	PollInterval          time.Duration
-	BatchSize             int
-	StaleSummarizingAfter time.Duration
-	MaxTurnsPerMerge      int
-	MaxCharsPerMerge      int
 }
 
 type ExtractionConfig struct {
@@ -125,14 +115,6 @@ type fileConfig struct {
 		Username string `toml:"username"`
 		Password string `toml:"password"`
 	} `toml:"auth"`
-	Summarizer struct {
-		Enabled               *bool  `toml:"enabled"`
-		PollInterval          string `toml:"poll_interval"`
-		BatchSize             *int   `toml:"batch_size"`
-		StaleSummarizingAfter string `toml:"stale_summarizing_after"`
-		MaxTurnsPerMerge      *int   `toml:"max_turns_per_merge"`
-		MaxCharsPerMerge      *int   `toml:"max_chars_per_merge"`
-	} `toml:"summarizer"`
 	Extraction struct {
 		Enabled          *bool  `toml:"enabled"`
 		PollInterval     string `toml:"poll_interval"`
@@ -186,19 +168,6 @@ func Load() (Config, error) {
 			Timeout:         30 * time.Second,
 			ThinkingStyle:   "",
 			ThinkingEnabled: true,
-		},
-		Summarizer: SummarizerConfig{
-			// Disabled by default — the rolling overview_text summarizer is
-			// being retired in favour of the T0→T3 atom/scene/memory
-			// pipeline (see docs/design-l0-l4.md). Set
-			// MYPAST_SUMMARIZER_ENABLED=true to opt back in until the new
-			// pipeline lands.
-			Enabled:               false,
-			PollInterval:          15 * time.Second,
-			BatchSize:             8,
-			StaleSummarizingAfter: 3 * time.Minute,
-			MaxTurnsPerMerge:      4,
-			MaxCharsPerMerge:      16000,
 		},
 		Extraction: ExtractionConfig{
 			Enabled:          true,
@@ -408,32 +377,6 @@ func loadFileConfig(cfg *Config, path string, explicitPath bool) error {
 		}
 		cfg.LLM.ThinkingEnabled = enabled
 	}
-	if fc.Summarizer.Enabled != nil {
-		cfg.Summarizer.Enabled = *fc.Summarizer.Enabled
-	}
-	if fc.Summarizer.PollInterval != "" {
-		v, err := time.ParseDuration(fc.Summarizer.PollInterval)
-		if err != nil {
-			return fmt.Errorf("parse summarizer.poll_interval in %q: %w", path, err)
-		}
-		cfg.Summarizer.PollInterval = v
-	}
-	if fc.Summarizer.BatchSize != nil {
-		cfg.Summarizer.BatchSize = *fc.Summarizer.BatchSize
-	}
-	if fc.Summarizer.StaleSummarizingAfter != "" {
-		v, err := time.ParseDuration(fc.Summarizer.StaleSummarizingAfter)
-		if err != nil {
-			return fmt.Errorf("parse summarizer.stale_summarizing_after in %q: %w", path, err)
-		}
-		cfg.Summarizer.StaleSummarizingAfter = v
-	}
-	if fc.Summarizer.MaxTurnsPerMerge != nil {
-		cfg.Summarizer.MaxTurnsPerMerge = *fc.Summarizer.MaxTurnsPerMerge
-	}
-	if fc.Summarizer.MaxCharsPerMerge != nil {
-		cfg.Summarizer.MaxCharsPerMerge = *fc.Summarizer.MaxCharsPerMerge
-	}
 	if fc.Extraction.Enabled != nil {
 		cfg.Extraction.Enabled = *fc.Extraction.Enabled
 	}
@@ -593,51 +536,6 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("parse MYPAST_LLM_THINKING: %w", err)
 		}
 		cfg.LLM.ThinkingEnabled = enabled
-	}
-	if v := os.Getenv("MYPAST_SUMMARIZER_ENABLED"); v != "" {
-		switch strings.ToLower(strings.TrimSpace(v)) {
-		case "1", "true", "yes", "on":
-			cfg.Summarizer.Enabled = true
-		case "0", "false", "no", "off":
-			cfg.Summarizer.Enabled = false
-		default:
-			return fmt.Errorf("parse MYPAST_SUMMARIZER_ENABLED: invalid boolean %q", v)
-		}
-	}
-	if v := os.Getenv("MYPAST_SUMMARIZER_POLL_INTERVAL"); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			return fmt.Errorf("parse MYPAST_SUMMARIZER_POLL_INTERVAL: %w", err)
-		}
-		cfg.Summarizer.PollInterval = d
-	}
-	if v := os.Getenv("MYPAST_SUMMARIZER_BATCH_SIZE"); v != "" {
-		parsed, err := strconv.Atoi(strings.TrimSpace(v))
-		if err != nil {
-			return fmt.Errorf("parse MYPAST_SUMMARIZER_BATCH_SIZE: %w", err)
-		}
-		cfg.Summarizer.BatchSize = parsed
-	}
-	if v := os.Getenv("MYPAST_SUMMARIZER_STALE_AFTER"); v != "" {
-		d, err := time.ParseDuration(v)
-		if err != nil {
-			return fmt.Errorf("parse MYPAST_SUMMARIZER_STALE_AFTER: %w", err)
-		}
-		cfg.Summarizer.StaleSummarizingAfter = d
-	}
-	if v := os.Getenv("MYPAST_SUMMARIZER_MAX_TURNS_PER_MERGE"); v != "" {
-		parsed, err := strconv.Atoi(strings.TrimSpace(v))
-		if err != nil {
-			return fmt.Errorf("parse MYPAST_SUMMARIZER_MAX_TURNS_PER_MERGE: %w", err)
-		}
-		cfg.Summarizer.MaxTurnsPerMerge = parsed
-	}
-	if v := os.Getenv("MYPAST_SUMMARIZER_MAX_CHARS_PER_MERGE"); v != "" {
-		parsed, err := strconv.Atoi(strings.TrimSpace(v))
-		if err != nil {
-			return fmt.Errorf("parse MYPAST_SUMMARIZER_MAX_CHARS_PER_MERGE: %w", err)
-		}
-		cfg.Summarizer.MaxCharsPerMerge = parsed
 	}
 	if v := os.Getenv("MYPAST_EXTRACTION_ENABLED"); v != "" {
 		switch strings.ToLower(strings.TrimSpace(v)) {

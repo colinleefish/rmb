@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/colinleefish/mypast/internal/model"
 	"github.com/colinleefish/mypast/internal/uri"
@@ -20,6 +21,82 @@ type Service struct {
 func NewService(db *gorm.DB) *Service {
 	return &Service{db: db}
 }
+
+// ListParams carries server-side pagination, search, and sort options for the
+// browse list endpoints. Limit/Offset are assumed already clamped by the
+// handler. Sort is matched against a per-entity allowlist (never interpolated
+// raw), so it is safe even though it reaches an ORDER BY clause.
+type ListParams struct {
+	Limit  int
+	Offset int
+	Query  string
+	Sort   string
+	Order  string
+}
+
+// sortColumns maps the allowlisted sort keys (which equal the UI column ids) to
+// their physical SQL columns, plus the default key when the request omits or
+// sends an unknown sort. Keeping the allowlist here is the injection guard.
+type sortColumns struct {
+	allowed    map[string]string
+	defaultKey string
+}
+
+func (sc sortColumns) clause(sort, order string) string {
+	col, ok := sc.allowed[sort]
+	if !ok {
+		col = sc.allowed[sc.defaultKey]
+	}
+	dir := "DESC"
+	if strings.EqualFold(order, "asc") {
+		dir = "ASC"
+	}
+	return col + " " + dir
+}
+
+// applySearch ORs a case-insensitive substring match across the given columns.
+// cols come from a fixed per-entity allowlist (not user input), so joining them
+// into SQL is safe; the query value itself is always parameterized.
+func applySearch(q *gorm.DB, query string, cols []string) *gorm.DB {
+	query = strings.TrimSpace(query)
+	if query == "" || len(cols) == 0 {
+		return q
+	}
+	like := "%" + query + "%"
+	parts := make([]string, len(cols))
+	args := make([]any, len(cols))
+	for i, c := range cols {
+		parts[i] = c + " ILIKE ?"
+		args[i] = like
+	}
+	return q.Where(strings.Join(parts, " OR "), args...)
+}
+
+var (
+	memorySearchCols = []string{"abstract", "body", "slug", "uri", "category"}
+	memorySort       = sortColumns{
+		allowed:    map[string]string{"updated": "updated_at", "category": "category", "version": "version"},
+		defaultKey: "updated",
+	}
+
+	atomSearchCols = []string{"content", "category", "scene_name", "slug", "uri"}
+	atomSort       = sortColumns{
+		allowed:    map[string]string{"created": "created_at", "category": "category", "priority": "priority"},
+		defaultKey: "created",
+	}
+
+	sceneSearchCols = []string{"display_name", "abstract", "body", "uri"}
+	sceneSort       = sortColumns{
+		allowed:    map[string]string{"updated": "updated_at", "created": "created_at"},
+		defaultKey: "updated",
+	}
+
+	taskSearchCols = []string{"kind", "status", "error", "CAST(session_id AS text)"}
+	taskSort       = sortColumns{
+		allowed:    map[string]string{"created": "created_at", "kind": "kind", "status": "status", "progress": "progress"},
+		defaultKey: "created",
+	}
+)
 
 type Overview struct {
 	Counts struct {
@@ -41,7 +118,6 @@ type SessionRow struct {
 	Title      *string   `json:"title"`
 	Status     string    `json:"status"`
 	Abstract   *string   `json:"abstract"`
-	Overview   *string   `json:"overview_text"`
 	TurnCount  int64     `json:"turn_count"`
 	URI        string    `json:"uri"`
 	CreatedAt  string    `json:"created_at"`
@@ -57,14 +133,12 @@ type SessionDetail struct {
 }
 
 type TurnRow struct {
-	ID                 uuid.UUID `json:"id"`
-	TurnIndex          int       `json:"turn_index"`
-	URI                string    `json:"uri"`
-	TurnStatus         string    `json:"turn_status"`
-	SummarizeStartedAt *string   `json:"summarize_started_at"`
-	MessagesJSONL      string    `json:"messages_jsonl"`
-	CreatedAt          string    `json:"created_at"`
-	UpdatedAt          string    `json:"updated_at"`
+	ID            uuid.UUID `json:"id"`
+	TurnIndex     int       `json:"turn_index"`
+	URI           string    `json:"uri"`
+	MessagesJSONL string    `json:"messages_jsonl"`
+	CreatedAt     string    `json:"created_at"`
+	UpdatedAt     string    `json:"updated_at"`
 }
 
 func (s *Service) Overview(ctx context.Context) (Overview, error) {
@@ -77,7 +151,6 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 		{&out.Counts.Turns, "session_turns"},
 		{&out.Counts.Atoms, "atoms"},
 		{&out.Counts.Scenes, "scenes"},
-		{&out.Counts.Memories, "memories"},
 		{&out.Counts.PipelineStates, "pipeline_state"},
 		{&out.Counts.Tasks, "tasks"},
 	}
@@ -85,6 +158,15 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 		if err := s.db.WithContext(ctx).Table(t.name).Count(t.dest).Error; err != nil {
 			return Overview{}, fmt.Errorf("count %s: %w", t.name, err)
 		}
+	}
+	// Memories are versioned (each rollup supersedes the prior row). Count only
+	// active versions so the badge matches the distinct memories the list shows,
+	// not the full version history.
+	if err := s.db.WithContext(ctx).
+		Table("memories").
+		Where("superseded_at IS NULL").
+		Count(&out.Counts.Memories).Error; err != nil {
+		return Overview{}, fmt.Errorf("count memories: %w", err)
 	}
 	// Corrections are append-only; count only active (non-retracted) ones so the
 	// badge matches what the corrections list shows.
@@ -178,38 +260,62 @@ func (s *Service) GetSession(ctx context.Context, sessionKey string) (SessionDet
 	}, nil
 }
 
-func (s *Service) ListAtoms(ctx context.Context) ([]model.Atom, error) {
+func (s *Service) ListAtoms(ctx context.Context, p ListParams) ([]model.Atom, int64, error) {
+	base := func() *gorm.DB {
+		return applySearch(s.db.WithContext(ctx).Model(&model.Atom{}), p.Query, atomSearchCols)
+	}
+	var total int64
+	if err := base().Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count atoms: %w", err)
+	}
 	var rows []model.Atom
-	if err := s.db.WithContext(ctx).
-		Order("created_at desc").
-		Limit(defaultListLimit).
+	if err := base().
+		Order(atomSort.clause(p.Sort, p.Order)).
+		Limit(p.Limit).Offset(p.Offset).
 		Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("list atoms: %w", err)
+		return nil, 0, fmt.Errorf("list atoms: %w", err)
 	}
-	return rows, nil
+	return rows, total, nil
 }
 
-func (s *Service) ListScenes(ctx context.Context) ([]model.Scene, error) {
+func (s *Service) ListScenes(ctx context.Context, p ListParams) ([]model.Scene, int64, error) {
+	base := func() *gorm.DB {
+		return applySearch(s.db.WithContext(ctx).Model(&model.Scene{}), p.Query, sceneSearchCols)
+	}
+	var total int64
+	if err := base().Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count scenes: %w", err)
+	}
 	var rows []model.Scene
-	if err := s.db.WithContext(ctx).
-		Order("updated_at desc").
-		Limit(defaultListLimit).
+	if err := base().
+		Order(sceneSort.clause(p.Sort, p.Order)).
+		Limit(p.Limit).Offset(p.Offset).
 		Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("list scenes: %w", err)
+		return nil, 0, fmt.Errorf("list scenes: %w", err)
 	}
-	return rows, nil
+	return rows, total, nil
 }
 
-func (s *Service) ListMemories(ctx context.Context) ([]model.Memory, error) {
-	var rows []model.Memory
-	if err := s.db.WithContext(ctx).
-		Where("superseded_at IS NULL").
-		Order("updated_at desc").
-		Limit(defaultListLimit).
-		Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("list memories: %w", err)
+// ListMemories returns one page of active (current-version) memories plus the
+// total active count. The superseded_at filter means the total reflects distinct
+// memories (one per uri), not the full version history the badge used to show.
+func (s *Service) ListMemories(ctx context.Context, p ListParams) ([]model.Memory, int64, error) {
+	base := func() *gorm.DB {
+		q := s.db.WithContext(ctx).Model(&model.Memory{}).Where("superseded_at IS NULL")
+		return applySearch(q, p.Query, memorySearchCols)
 	}
-	return rows, nil
+	var total int64
+	if err := base().Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count memories: %w", err)
+	}
+	var rows []model.Memory
+	if err := base().
+		Order(memorySort.clause(p.Sort, p.Order)).
+		Limit(p.Limit).Offset(p.Offset).
+		Find(&rows).Error; err != nil {
+		return nil, 0, fmt.Errorf("list memories: %w", err)
+	}
+	return rows, total, nil
 }
 
 func (s *Service) ListPipelineStates(ctx context.Context) ([]PipelineStateRow, error) {
@@ -246,15 +352,22 @@ type PipelineStateRow struct {
 	SessionURI string `json:"session_uri"`
 }
 
-func (s *Service) ListTasks(ctx context.Context) ([]model.Task, error) {
-	var rows []model.Task
-	if err := s.db.WithContext(ctx).
-		Order("created_at desc").
-		Limit(defaultListLimit).
-		Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("list tasks: %w", err)
+func (s *Service) ListTasks(ctx context.Context, p ListParams) ([]model.Task, int64, error) {
+	base := func() *gorm.DB {
+		return applySearch(s.db.WithContext(ctx).Model(&model.Task{}), p.Query, taskSearchCols)
 	}
-	return rows, nil
+	var total int64
+	if err := base().Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count tasks: %w", err)
+	}
+	var rows []model.Task
+	if err := base().
+		Order(taskSort.clause(p.Sort, p.Order)).
+		Limit(p.Limit).Offset(p.Offset).
+		Find(&rows).Error; err != nil {
+		return nil, 0, fmt.Errorf("list tasks: %w", err)
+	}
+	return rows, total, nil
 }
 
 func sessionToRow(session model.Session, turnCount int64) SessionRow {
@@ -265,7 +378,6 @@ func sessionToRow(session model.Session, turnCount int64) SessionRow {
 		Title:      session.Title,
 		Status:     session.Status,
 		Abstract:   session.Abstract,
-		Overview:   session.OverviewText,
 		TurnCount:  turnCount,
 		URI:        uri.BuildSession(session.SessionKey),
 		CreatedAt:  session.CreatedAt.UTC().Format(timeRFC3339),
@@ -274,20 +386,13 @@ func sessionToRow(session model.Session, turnCount int64) SessionRow {
 }
 
 func turnToRow(sessionKey string, idx int, turn model.SessionTurn) TurnRow {
-	var started *string
-	if turn.SummarizeStartedAt != nil {
-		v := turn.SummarizeStartedAt.UTC().Format(timeRFC3339)
-		started = &v
-	}
 	return TurnRow{
-		ID:                 turn.ID,
-		TurnIndex:          idx,
-		URI:                uri.BuildSessionTurn(sessionKey, idx),
-		TurnStatus:         turn.TurnStatus,
-		SummarizeStartedAt: started,
-		MessagesJSONL:      turn.MessagesJSONL,
-		CreatedAt:          turn.CreatedAt.UTC().Format(timeRFC3339),
-		UpdatedAt:          turn.UpdatedAt.UTC().Format(timeRFC3339),
+		ID:            turn.ID,
+		TurnIndex:     idx,
+		URI:           uri.BuildSessionTurn(sessionKey, idx),
+		MessagesJSONL: turn.MessagesJSONL,
+		CreatedAt:     turn.CreatedAt.UTC().Format(timeRFC3339),
+		UpdatedAt:     turn.UpdatedAt.UTC().Format(timeRFC3339),
 	}
 }
 

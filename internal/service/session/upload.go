@@ -128,7 +128,6 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (UploadRe
 		turn = model.SessionTurn{
 			ID:            turnID,
 			SessionID:     session.ID,
-			TurnStatus:    model.SessionTurnStatusNotSummarized,
 			MessagesJSONL: archiveMessagesContent,
 		}
 		if err := tx.Create(&turn).Error; err != nil {

@@ -3,11 +3,41 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/colinleefish/mypast/internal/service/browse"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
+
+const (
+	defaultPageLimit = 25
+	maxPageLimit     = 200
+)
+
+// parseListParams reads pagination/search/sort from the query string and clamps
+// limit/offset to safe bounds. Sort/order are validated downstream against a
+// per-entity allowlist, so they are passed through verbatim here.
+func parseListParams(c *gin.Context) browse.ListParams {
+	limit := defaultPageLimit
+	if v, err := strconv.Atoi(c.Query("limit")); err == nil && v > 0 {
+		limit = v
+	}
+	if limit > maxPageLimit {
+		limit = maxPageLimit
+	}
+	offset := 0
+	if v, err := strconv.Atoi(c.Query("offset")); err == nil && v > 0 {
+		offset = v
+	}
+	return browse.ListParams{
+		Limit:  limit,
+		Offset: offset,
+		Query:  c.Query("q"),
+		Sort:   c.Query("sort"),
+		Order:  c.Query("order"),
+	}
+}
 
 type BrowseHandler struct {
 	svc *browse.Service
@@ -50,30 +80,33 @@ func (h *BrowseHandler) GetSession(c *gin.Context) {
 }
 
 func (h *BrowseHandler) ListAtoms(c *gin.Context) {
-	rows, err := h.svc.ListAtoms(c.Request.Context())
+	p := parseListParams(c)
+	rows, total, err := h.svc.ListAtoms(c.Request.Context(), p)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": rows})
+	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
 }
 
 func (h *BrowseHandler) ListScenes(c *gin.Context) {
-	rows, err := h.svc.ListScenes(c.Request.Context())
+	p := parseListParams(c)
+	rows, total, err := h.svc.ListScenes(c.Request.Context(), p)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": rows})
+	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
 }
 
 func (h *BrowseHandler) ListMemories(c *gin.Context) {
-	rows, err := h.svc.ListMemories(c.Request.Context())
+	p := parseListParams(c)
+	rows, total, err := h.svc.ListMemories(c.Request.Context(), p)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": rows})
+	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
 }
 
 func (h *BrowseHandler) ListPipelineStates(c *gin.Context) {
@@ -86,10 +119,11 @@ func (h *BrowseHandler) ListPipelineStates(c *gin.Context) {
 }
 
 func (h *BrowseHandler) ListTasks(c *gin.Context) {
-	rows, err := h.svc.ListTasks(c.Request.Context())
+	p := parseListParams(c)
+	rows, total, err := h.svc.ListTasks(c.Request.Context(), p)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": rows})
+	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
 }

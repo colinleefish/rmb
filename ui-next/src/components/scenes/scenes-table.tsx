@@ -3,14 +3,18 @@
 import { useMemo } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 
-import { DataTable, SortButton, type RowDetail } from "@/components/data-table";
+import {
+  ServerDataTable,
+  SortButton,
+  type RowDetail,
+} from "@/components/data-table";
 import {
   DetailLead,
   DetailMeta,
   DetailText,
   DetailUri,
 } from "@/components/detail";
-import { listScenes } from "@/lib/api";
+import { pageScenes } from "@/lib/api";
 import { fmtDateShort, fmtDateTime, pick, truncate } from "@/lib/format";
 import type { SceneModel } from "@/lib/types";
 
@@ -91,19 +95,9 @@ export function ScenesTable() {
   );
 
   return (
-    <DataTable
-      load={listScenes}
+    <ServerDataTable
+      loadPage={pageScenes}
       columns={columns}
-      searchText={(s) =>
-        [
-          pick(s, "DisplayName", "display_name"),
-          pick(s, "Abstract", "abstract"),
-          pick(s, "Body", "body"),
-          pick(s, "URI", "uri"),
-        ]
-          .filter(Boolean)
-          .join(" ")
-      }
       searchPlaceholder="Search scenes…"
       emptyMessage="No scenes yet."
       initialSorting={[{ id: "updated", desc: true }]}

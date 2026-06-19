@@ -27,7 +27,6 @@ export interface SessionRow {
   title: string | null;
   status: string;
   abstract: string | null;
-  overview_text: string | null;
   turn_count: number;
   uri: string;
   created_at: string;
@@ -38,8 +37,6 @@ export interface TurnRow {
   id: string;
   turn_index: number;
   uri: string;
-  turn_status: string;
-  summarize_started_at: string | null;
   messages_jsonl: string;
   created_at: string;
   updated_at: string;

@@ -135,8 +135,6 @@ func (s *Service) catSessionPath(ctx context.Context, u uri.URI, w io.Writer) er
 		text := ""
 		if session.Abstract != nil {
 			text = *session.Abstract
-		} else if session.OverviewText != nil {
-			text = *session.OverviewText
 		}
 		_, err := io.WriteString(w, text)
 		return err
@@ -437,7 +435,6 @@ func (s *Service) metaSessionPath(ctx context.Context, u uri.URI) (map[string]an
 			"title":         session.Title,
 			"status":        session.Status,
 			"abstract":      session.Abstract,
-			"overview_text": session.OverviewText,
 			"created_at":    session.CreatedAt,
 			"updated_at":    session.UpdatedAt,
 		}, nil
@@ -466,12 +463,10 @@ func (s *Service) metaSessionPath(ctx context.Context, u uri.URI) (map[string]an
 		}
 		turn := turns[idx]
 		return map[string]any{
-			"uri":                  uri.BuildSessionTurn(sessionKey, idx),
-			"session_id":           turn.SessionID,
-			"turn_status":          turn.TurnStatus,
-			"summarize_started_at": turn.SummarizeStartedAt,
-			"created_at":           turn.CreatedAt,
-			"updated_at":           turn.UpdatedAt,
+			"uri":        uri.BuildSessionTurn(sessionKey, idx),
+			"session_id": turn.SessionID,
+			"created_at": turn.CreatedAt,
+			"updated_at": turn.UpdatedAt,
 		}, nil
 	}
 

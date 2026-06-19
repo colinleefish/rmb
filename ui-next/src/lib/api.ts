@@ -70,12 +70,47 @@ async function listItems<T>(path: string): Promise<T[]> {
   return items ?? [];
 }
 
-export const listAtoms = () => listItems<AtomModel>("/browse/atoms");
-export const listScenes = () => listItems<SceneModel>("/browse/scenes");
-export const listMemories = () => listItems<MemoryModel>("/browse/memories");
+// Server-side pagination contract for the browse list endpoints.
+export interface PageRequest {
+  limit: number;
+  offset: number;
+  q?: string;
+  sort?: string;
+  order?: "asc" | "desc";
+}
+
+export interface Page<T> {
+  items: T[];
+  total: number;
+}
+
+async function listPage<T>(path: string, req: PageRequest): Promise<Page<T>> {
+  const params = new URLSearchParams({
+    limit: String(req.limit),
+    offset: String(req.offset),
+  });
+  if (req.q) params.set("q", req.q);
+  if (req.sort) {
+    params.set("sort", req.sort);
+    params.set("order", req.order ?? "desc");
+  }
+  const { items, total } = await apiGet<{ items: T[]; total: number }>(
+    `${path}?${params.toString()}`,
+  );
+  return { items: items ?? [], total: total ?? 0 };
+}
+
+export const pageAtoms = (req: PageRequest) =>
+  listPage<AtomModel>("/browse/atoms", req);
+export const pageScenes = (req: PageRequest) =>
+  listPage<SceneModel>("/browse/scenes", req);
+export const pageMemories = (req: PageRequest) =>
+  listPage<MemoryModel>("/browse/memories", req);
+export const pageTasks = (req: PageRequest) =>
+  listPage<TaskModel>("/browse/tasks", req);
+
 export const listPipelineStates = () =>
   listItems<PipelineRow>("/browse/pipeline-state");
-export const listTasks = () => listItems<TaskModel>("/browse/tasks");
 
 // Corrections: human corrections that overlay distilled memory.
 // `target` filters to corrections attached to a single memory URI.

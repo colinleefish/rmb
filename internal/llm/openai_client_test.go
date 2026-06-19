@@ -6,21 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 )
-
-func TestBuildMergeOverviewPrompt(t *testing.T) {
-	prompt := buildMergeOverviewPrompt("prev text", "{\"role\":\"user\",\"content\":\"hello\"}")
-	if prompt == "" {
-		t.Fatalf("prompt should not be empty")
-	}
-	if want := "prev text"; !strings.Contains(prompt, want) {
-		t.Fatalf("prompt should include previous overview")
-	}
-}
 
 func TestBuildThinkingBody(t *testing.T) {
 	cases := []struct {
@@ -91,8 +80,8 @@ func TestChatRequestMergesThinkingBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create client: %v", err)
 	}
-	if _, err := client.MergeOverview(context.Background(), "old", `{"role":"user","content":"hi"}`); err != nil {
-		t.Fatalf("MergeOverview: %v", err)
+	if _, err := client.ExtractAtoms(context.Background(), `{"role":"user","content":"hi"}`); err != nil {
+		t.Fatalf("ExtractAtoms: %v", err)
 	}
 	think, ok := captured["thinking"].(map[string]any)
 	if !ok || think["type"] != "disabled" {
@@ -100,7 +89,7 @@ func TestChatRequestMergesThinkingBody(t *testing.T) {
 	}
 }
 
-func TestMergeOverviewRetriesAndSucceeds(t *testing.T) {
+func TestExtractAtomsRetriesAndSucceeds(t *testing.T) {
 	var attempts int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cur := atomic.AddInt32(&attempts, 1)
@@ -110,7 +99,7 @@ func TestMergeOverviewRetriesAndSucceeds(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"new merged overview"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"extracted atoms"}}]}`))
 	}))
 	defer srv.Close()
 
@@ -126,12 +115,12 @@ func TestMergeOverviewRetriesAndSucceeds(t *testing.T) {
 		t.Fatalf("create client: %v", err)
 	}
 
-	got, err := client.MergeOverview(context.Background(), "old", `{"role":"user","content":"hello"}`)
+	got, err := client.ExtractAtoms(context.Background(), `{"role":"user","content":"hello"}`)
 	if err != nil {
-		t.Fatalf("MergeOverview error: %v", err)
+		t.Fatalf("ExtractAtoms error: %v", err)
 	}
-	if got != "new merged overview" {
-		t.Fatalf("unexpected overview: %q", got)
+	if got != "extracted atoms" {
+		t.Fatalf("unexpected output: %q", got)
 	}
 	if atomic.LoadInt32(&attempts) != 2 {
 		t.Fatalf("expected 2 attempts, got %d", attempts)
