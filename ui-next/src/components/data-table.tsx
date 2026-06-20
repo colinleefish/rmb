@@ -94,6 +94,7 @@ interface ShellProps<T> {
   total: number;
   onRowClick?: (row: T) => void;
   renderDetail?: (row: T) => RowDetail;
+  toolbarActions?: React.ReactNode;
 }
 
 /** Presentational shell shared by the client- and server-paginated tables. */
@@ -110,6 +111,7 @@ function TableShell<T>({
   total,
   onRowClick,
   renderDetail,
+  toolbarActions,
 }: ShellProps<T>) {
   const [detail, setDetail] = useState<RowDetail | null>(null);
 
@@ -138,16 +140,18 @@ function TableShell<T>({
             aria-label="Search"
           />
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={refresh}
-          disabled={loading}
-          className="ml-auto"
-        >
-          <RefreshCw className={loading ? "animate-spin" : ""} />
-          Refresh
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          {toolbarActions}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={refresh}
+            disabled={loading}
+          >
+            <RefreshCw className={loading ? "animate-spin" : ""} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <Card className="overflow-hidden py-0">
@@ -287,6 +291,7 @@ export interface DataTableProps<T> {
   initialSorting?: SortingState;
   onRowClick?: (row: T) => void;
   renderDetail?: (row: T) => RowDetail;
+  toolbarActions?: React.ReactNode;
 }
 
 export function DataTable<T>({
@@ -299,6 +304,7 @@ export function DataTable<T>({
   initialSorting = [],
   onRowClick,
   renderDetail,
+  toolbarActions,
 }: DataTableProps<T>) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
@@ -349,6 +355,7 @@ export function DataTable<T>({
       total={table.getFilteredRowModel().rows.length}
       onRowClick={onRowClick}
       renderDetail={renderDetail}
+      toolbarActions={toolbarActions}
     />
   );
 }
@@ -367,6 +374,7 @@ export interface ServerDataTableProps<T> {
   initialSorting?: SortingState;
   onRowClick?: (row: T) => void;
   renderDetail?: (row: T) => RowDetail;
+  toolbarActions?: React.ReactNode;
 }
 
 export function ServerDataTable<T>({
@@ -378,6 +386,7 @@ export function ServerDataTable<T>({
   initialSorting = [],
   onRowClick,
   renderDetail,
+  toolbarActions,
 }: ServerDataTableProps<T>) {
   const [data, setData] = useState<T[]>([]);
   const [total, setTotal] = useState(0);
@@ -464,6 +473,7 @@ export function ServerDataTable<T>({
       total={total}
       onRowClick={onRowClick}
       renderDetail={renderDetail}
+      toolbarActions={toolbarActions}
     />
   );
 }

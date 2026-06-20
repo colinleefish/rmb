@@ -13,6 +13,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { MemoryUriInput } from "@/components/aliases/memory-uri-input";
 import { CategoryBadge } from "@/components/category-badge";
 import { OutlineBadge } from "@/components/detail";
 import {
@@ -245,8 +246,8 @@ function AliasesSection({
   );
 }
 
-const uriInputClass =
-  "border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-lg border bg-transparent px-2.5 py-2 font-mono text-xs transition-colors outline-none focus-visible:ring-3";
+const noteInputClass =
+  "border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-lg border bg-transparent px-2.5 py-2 text-xs transition-colors outline-none focus-visible:ring-3";
 
 function MarkAsAliasForm({
   memoryURI,
@@ -276,14 +277,14 @@ function MarkAsAliasForm({
         Mark <span className="font-mono">{memoryURI}</span> as an alias of another
         memory (the canonical).
       </p>
-      <input
-        className={uriInputClass}
+      <MemoryUriInput
         value={canonicalURI}
-        onChange={(e) => setCanonicalURI(e.target.value)}
+        onChange={setCanonicalURI}
         placeholder="mypast://entities/aliyun-rds"
+        excludeURIs={[memoryURI]}
       />
       <input
-        className={uriInputClass}
+        className={noteInputClass}
         value={note}
         onChange={(e) => setNote(e.target.value)}
         placeholder="Note (optional)"
@@ -298,62 +299,6 @@ function MarkAsAliasForm({
         >
           <Plus />
           {submitting ? "Creating…" : "Mark as alias"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function AddAliasPointingHereForm({
-  memoryURI,
-  onCreate,
-  submitting,
-  submitError,
-}: {
-  memoryURI: string;
-  onCreate: (aliasURI: string, note: string) => void;
-  submitting: boolean;
-  submitError: string | null;
-}) {
-  const [aliasURI, setAliasURI] = useState("");
-  const [note, setNote] = useState("");
-
-  const handleSubmit = () => {
-    const alias = aliasURI.trim();
-    if (!alias) return;
-    onCreate(alias, note.trim());
-    setAliasURI("");
-    setNote("");
-  };
-
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="text-muted-foreground text-xs">
-        Declare another memory as an alias pointing to{" "}
-        <span className="font-mono">{memoryURI}</span>.
-      </p>
-      <input
-        className={uriInputClass}
-        value={aliasURI}
-        onChange={(e) => setAliasURI(e.target.value)}
-        placeholder="mypast://entities/aliyun-rds-instance"
-      />
-      <input
-        className={uriInputClass}
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        placeholder="Note (optional)"
-      />
-      {submitError && <p className="text-destructive text-sm">{submitError}</p>}
-      <div className="flex justify-end">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={handleSubmit}
-          disabled={submitting || !aliasURI.trim()}
-        >
-          <Plus />
-          {submitting ? "Creating…" : "Add alias"}
         </Button>
       </div>
     </div>
@@ -565,20 +510,6 @@ export function MemoryDetailDialog({
                   </section>
                 </>
               )}
-
-              <Separator />
-
-              <section>
-                <SectionTitle>Add alias pointing here</SectionTitle>
-                <AddAliasPointingHereForm
-                  memoryURI={memoryURI ?? ""}
-                  onCreate={(alias, note) =>
-                    handleCreateAlias(alias, memoryURI ?? "", note)
-                  }
-                  submitting={aliasSubmitting}
-                  submitError={aliasSubmitError}
-                />
-              </section>
             </>
           )}
         </div>

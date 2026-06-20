@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 import { ArrowRight, Plus, Trash2 } from "lucide-react";
 
+import { AddAliasDialog } from "@/components/aliases/add-alias-dialog";
 import { DataTable, SortButton, type RowDetail } from "@/components/data-table";
 import {
   DetailLead,
@@ -11,89 +12,9 @@ import {
   DetailUri,
 } from "@/components/detail";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { createAlias, listAliases, retractAlias } from "@/lib/api";
+import { listAliases, retractAlias } from "@/lib/api";
 import { fmtDateShort, fmtDateTime, truncate } from "@/lib/format";
 import type { AliasModel } from "@/lib/types";
-
-function AddAliasForm({ onCreated }: { onCreated: () => void }) {
-  const [aliasURI, setAliasURI] = useState("");
-  const [canonicalURI, setCanonicalURI] = useState("");
-  const [note, setNote] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleSubmit = () => {
-    const alias = aliasURI.trim();
-    const canonical = canonicalURI.trim();
-    if (!alias || !canonical) return;
-    setSubmitting(true);
-    setError(null);
-    createAlias({ alias_uri: alias, canonical_uri: canonical, note: note.trim() })
-      .then(() => {
-        setAliasURI("");
-        setCanonicalURI("");
-        setNote("");
-        onCreated();
-      })
-      .catch((err: Error) => setError(err.message))
-      .finally(() => setSubmitting(false));
-  };
-
-  const inputClass =
-    "border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-lg border bg-transparent px-2.5 py-2 font-mono text-xs transition-colors outline-none focus-visible:ring-3";
-
-  return (
-    <Card className="flex flex-col gap-3 p-4">
-      <h2 className="text-sm font-semibold">Create alias</h2>
-      <p className="text-muted-foreground text-xs">
-        Declare the alias URI (redundant slug) to be the same entity as the
-        canonical URI. Both must be <code className="text-xs">preferences</code>{" "}
-        or <code className="text-xs">entities</code> memories in the same category.
-      </p>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-xs">
-          <span className="text-muted-foreground font-medium">Alias URI</span>
-          <input
-            className={inputClass}
-            value={aliasURI}
-            onChange={(e) => setAliasURI(e.target.value)}
-            placeholder="mypast://entities/aliyun-rds-instance"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5 text-xs">
-          <span className="text-muted-foreground font-medium">Canonical URI</span>
-          <input
-            className={inputClass}
-            value={canonicalURI}
-            onChange={(e) => setCanonicalURI(e.target.value)}
-            placeholder="mypast://entities/aliyun-rds"
-          />
-        </label>
-      </div>
-      <label className="flex flex-col gap-1.5 text-xs">
-        <span className="text-muted-foreground font-medium">Note (optional)</span>
-        <input
-          className={inputClass}
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="same DB, instance vs prod-role"
-        />
-      </label>
-      {error && <p className="text-destructive text-sm">{error}</p>}
-      <div className="flex justify-end">
-        <Button
-          size="sm"
-          onClick={handleSubmit}
-          disabled={submitting || !aliasURI.trim() || !canonicalURI.trim()}
-        >
-          <Plus />
-          {submitting ? "Creating…" : "Create alias"}
-        </Button>
-      </div>
-    </Card>
-  );
-}
 
 function detailOf(
   a: AliasModel,
@@ -132,6 +53,7 @@ function detailOf(
 
 export function AliasesView() {
   const [reloadKey, setReloadKey] = useState(0);
+  const [addOpen, setAddOpen] = useState(false);
   const [retractingURI, setRetractingURI] = useState<string | null>(null);
   const [retractError, setRetractError] = useState<string | null>(null);
 
@@ -205,7 +127,11 @@ export function AliasesView() {
 
   return (
     <div className="flex flex-col gap-6">
-      <AddAliasForm onCreated={reload} />
+      <AddAliasDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        onCreated={reload}
+      />
       {retractError && (
         <p className="text-destructive text-sm">Retract failed: {retractError}</p>
       )}
@@ -222,6 +148,12 @@ export function AliasesView() {
         emptyMessage="No aliases yet."
         initialSorting={[{ id: "created", desc: true }]}
         renderDetail={(a) => detailOf(a, handleRetract, retractingURI)}
+        toolbarActions={
+          <Button size="sm" onClick={() => setAddOpen(true)}>
+            <Plus />
+            Add alias
+          </Button>
+        }
       />
     </div>
   );
