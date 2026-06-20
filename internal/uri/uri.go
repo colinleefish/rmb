@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	Scheme           = "mypast"
+	Scheme           = "mem9"
 	MaxSegment       = 50
 	ScopeRoot        = ""
 	ScopeSessions    = "sessions"
@@ -23,7 +23,7 @@ const (
 )
 
 var (
-	ErrInvalidURI = errors.New("invalid mypast uri")
+	ErrInvalidURI = errors.New("invalid mem9 uri")
 	uuidSegment   = regexp.MustCompile(
 		`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`,
 	)
@@ -295,7 +295,7 @@ func validateShape(scope string, segments []string) error {
 		}
 		return fmt.Errorf("%w: invalid sessions path", ErrInvalidURI)
 	case ScopeScenes:
-		// Zero segments is the category container (e.g. mypast://scenes/),
+		// Zero segments is the category container (e.g. mem9://scenes/),
 		// which `tree` lists; one segment is a single scene.
 		if len(segments) == 0 {
 			return nil
@@ -318,7 +318,7 @@ func validateShape(scope string, segments []string) error {
 			return fmt.Errorf("%w: alias id must be uuid", ErrInvalidURI)
 		}
 	case ScopePrefs, ScopeEntities, ScopeEvents:
-		// Zero segments is the category container (e.g. mypast://entities/),
+		// Zero segments is the category container (e.g. mem9://entities/),
 		// which `tree` lists; one segment is a single memory.
 		if len(segments) == 0 {
 			return nil

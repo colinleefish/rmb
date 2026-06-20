@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/colinleefish/mypast/internal/config"
+	"github.com/colinleefish/mem9/internal/config"
 )
 
 func RunHTTP(ctx context.Context, cfg config.ServerConfig, handler http.Handler) error {

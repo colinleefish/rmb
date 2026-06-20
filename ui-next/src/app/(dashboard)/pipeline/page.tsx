@@ -1,6 +1,6 @@
 import { PipelineTable } from "@/components/pipeline/pipeline-table";
 
-export const metadata = { title: "Pipeline — MyPast Observer" };
+export const metadata = { title: "Pipeline — Mem9 Observer" };
 
 export default function PipelinePage() {
   return (

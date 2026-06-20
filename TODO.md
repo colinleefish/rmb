@@ -1,4 +1,4 @@
-# MyPast TODO
+# Mem9 TODO
 
 ## Now
 
@@ -6,10 +6,10 @@
   `store`, `read`, `list`, `delete`.
 - [ ] Create schema migration for `memories` and indexes.
 - [ ] Build CLI commands:
-  `mypast store`, `mypast read`, `mypast list`, `mypast delete`.
-- [ ] Write migration script from OpenViking URIs into `mypast://` URIs.
+  `mem9 store`, `mem9 read`, `mem9 list`, `mem9 delete`.
+- [ ] Write migration script from OpenViking URIs into `mem9://` URIs.
 - [ ] Add acceptance test:
-  replace OpenViking store/read/list flow with MyPast equivalents.
+  replace OpenViking store/read/list flow with Mem9 equivalents.
 
 ## Next
 
@@ -18,7 +18,7 @@
 - [ ] Implement hybrid recall:
   dense cosine plus FTS weighted score.
 - [ ] Define five sanity recall queries and compare with OpenViking behavior.
-- [ ] Add `mypast reembed` command for embedding dimension migration.
+- [ ] Add `mem9 reembed` command for embedding dimension migration.
 
 ## Agent model idea
 
@@ -35,7 +35,7 @@
 
 ## Later
 
-- [ ] Implement Slice 3 abstracts worker and `mypast abstract`.
+- [ ] Implement Slice 3 abstracts worker and `mem9 abstract`.
 - [ ] Add optional `mp_tree` browsing support.
 - [ ] Evaluate Chinese tokenizer upgrade only if recall quality is weak.
 - [ ] Add backup automation (`pg_dump` cron).
@@ -44,6 +44,6 @@
 ## Open decisions
 
 - [ ] Confirm URI migration strategy:
-  rewrite `viking://` to `mypast://` at migration time.
+  rewrite `viking://` to `mem9://` at migration time.
 - [ ] Confirm default embedding dimension:
   `1024` vs `2048`.

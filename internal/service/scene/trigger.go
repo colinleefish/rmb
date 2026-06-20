@@ -3,7 +3,7 @@ package scene
 import (
 	"time"
 
-	"github.com/colinleefish/mypast/internal/model"
+	"github.com/colinleefish/mem9/internal/model"
 )
 
 // shouldRunT2 decides whether to run T2 for a session on this worker tick.

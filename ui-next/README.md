@@ -1,6 +1,6 @@
-# MyPast Observer — `ui-next`
+# Mem9 Observer — `ui-next`
 
-A modern rebuild of the MyPast Observer UI using **Next.js (App Router) + TypeScript + Tailwind + shadcn/ui**. It consumes the existing mypast Go API (`/api/v1/browse/*`).
+A modern rebuild of the Mem9 Observer UI using **Next.js (App Router) + TypeScript + Tailwind + shadcn/ui**. It consumes the existing mem9 Go API (`/api/v1/browse/*`).
 
 This first cut ships the **Sessions** view as the reference pattern:
 
@@ -12,7 +12,7 @@ This first cut ships the **Sessions** view as the reference pattern:
 
 The client always talks to `/api/v1/*` on its own origin. How that origin reaches the real API differs by mode:
 
-- **Dev** (`pnpm dev`): `src/app/api/v1/[...path]/route.ts` is a same-origin proxy that forwards `/api/v1/*` to `MYPAST_API_URL`, injecting optional Basic-auth credentials server-side (so they never reach the browser) and avoiding CORS.
+- **Dev** (`pnpm dev`): `src/app/api/v1/[...path]/route.ts` is a same-origin proxy that forwards `/api/v1/*` to `MEM9_API_URL`, injecting optional Basic-auth credentials server-side (so they never reach the browser) and avoiding CORS.
 - **Embed** (`pnpm build:embed`): a static export served by the Go binary under `/ui`. The Go server serves both the UI and `/api/v1/*`, so it's already same-origin — no proxy needed. The export drops the dev proxy route (a dynamic route handler can't be statically exported); see `scripts/build-embed.mjs`.
 
 Other pieces:
@@ -26,12 +26,12 @@ Other pieces:
 Copy `.env.example` to `.env.local` and adjust:
 
 ```
-MYPAST_API_URL=http://localhost:8080   # upstream API base (serves /api/v1/*)
-MYPAST_API_USER=                       # optional Basic-auth user
-MYPAST_API_PASS=                       # optional Basic-auth password
+MEM9_API_URL=http://localhost:8080   # upstream API base (serves /api/v1/*)
+MEM9_API_USER=                       # optional Basic-auth user
+MEM9_API_PASS=                       # optional Basic-auth password
 ```
 
-Point `MYPAST_API_URL` at a local Go binary (`http://localhost:8080`) or the
+Point `MEM9_API_URL` at a local Go binary (`http://localhost:8080`) or the
 remote server (`https://mem.colinleefish.com`, which requires the Basic-auth
 credentials). `.env.local` is gitignored.
 
@@ -55,7 +55,7 @@ pnpm build:embed
 This static-exports the app (with `basePath: /ui`) and copies the output into `../internal/http/static/web/`, which `internal/http/static/static.go` embeds via `//go:embed all:web` (the `all:` prefix is required so the underscore-prefixed `_next/` asset dir is included). Rebuild the Go binary afterwards to pick up the new assets:
 
 ```bash
-(cd .. && go build ./cmd/mypast)
+(cd .. && go build ./cmd/mem9)
 ```
 
 The embedded `internal/http/static/web/` is generated output — regenerate it with `pnpm build:embed` rather than editing by hand.

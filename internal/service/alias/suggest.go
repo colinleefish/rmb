@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colinleefish/mypast/internal/config"
-	"github.com/colinleefish/mypast/internal/db"
-	"github.com/colinleefish/mypast/internal/llm"
-	"github.com/colinleefish/mypast/internal/model"
+	"github.com/colinleefish/mem9/internal/config"
+	"github.com/colinleefish/mem9/internal/db"
+	"github.com/colinleefish/mem9/internal/llm"
+	"github.com/colinleefish/mem9/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-const suggestLockKey = "mypast-alias-suggest"
+const suggestLockKey = "mem9-alias-suggest"
 
 // AliasJudge decides whether two memory entries are the same entity. The chat
 // LLM client satisfies it; tests supply a mock so candidate generation can be

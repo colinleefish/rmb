@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/colinleefish/mypast/internal/service/alias"
-	"github.com/colinleefish/mypast/internal/service/memory"
+	"github.com/colinleefish/mem9/internal/service/alias"
+	"github.com/colinleefish/mem9/internal/service/memory"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

@@ -1,22 +1,22 @@
-# Production: mypast + Caddy (host network).
-# - mypast → PostgreSQL 18 on host :5432 (set MYPAST_DB_URL in .env)
+# Production: mem9 + Caddy (host network).
+# - mem9 → PostgreSQL 18 on host :5432 (set MEM9_DB_URL in .env)
 # - caddy → :80 / :443 → reverse_proxy 127.0.0.1:8080
 
 services:
-  mypast:
-    image: registry.cn-beijing.aliyuncs.com/colinleefish/mypast:6f00842
-    container_name: mypast-app
+  mem9:
+    image: registry.cn-beijing.aliyuncs.com/colinleefish/mem9:6f00842
+    container_name: mem9-app
     command: ["serve"]
     network_mode: host
     env_file: .env
     environment:
-      MYPAST_ADDR: ":8080"
+      MEM9_ADDR: ":8080"
       GIN_MODE: release
     restart: unless-stopped
 
   caddy:
     image: caddy:2-alpine
-    container_name: mypast-caddy
+    container_name: mem9-caddy
     network_mode: host
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -24,7 +24,7 @@ services:
       - caddy_config:/config
     restart: unless-stopped
     depends_on:
-      - mypast
+      - mem9
 
 volumes:
   caddy_data:

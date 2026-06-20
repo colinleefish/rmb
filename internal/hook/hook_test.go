@@ -279,7 +279,7 @@ func TestSubmit_Cursor_UploadsToAPI(t *testing.T) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer srv.Close()
-	t.Setenv("MYPAST_URL", srv.URL)
+	t.Setenv("MEM9_URL", srv.URL)
 
 	payload := map[string]any{
 		"hook_event_name": "afterAgentResponse",
@@ -344,7 +344,7 @@ func TestSubmit_CC_UploadsWhenFiredByClaudeCode(t *testing.T) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer srv.Close()
-	t.Setenv("MYPAST_URL", srv.URL)
+	t.Setenv("MEM9_URL", srv.URL)
 
 	payload := map[string]any{
 		"hook_event_name":        "Stop",
@@ -370,26 +370,26 @@ func TestSubmit_CC_UploadsWhenFiredByClaudeCode(t *testing.T) {
 
 // ── hook.go — config ─────────────────────────────────────────────────────────
 
-func TestResolveMyPastURL(t *testing.T) {
-	t.Setenv("MYPAST_URL", "")
-	t.Setenv("MYPAST_CONF", t.TempDir()+"/missing.conf")
-	if got := resolveMyPastURL(); got != defaultMyPastURL {
-		t.Fatalf("default url = %q, want %q", got, defaultMyPastURL)
+func TestResolveMem9URL(t *testing.T) {
+	t.Setenv("MEM9_URL", "")
+	t.Setenv("MEM9_CONF", t.TempDir()+"/missing.conf")
+	if got := resolveMem9URL(); got != defaultMem9URL {
+		t.Fatalf("default url = %q, want %q", got, defaultMem9URL)
 	}
 
 	confURL := "http://localhost:28080"
-	confPath := t.TempDir() + "/.mypast.conf"
-	if err := os.WriteFile(confPath, []byte("MYPAST_URL="+confURL+"\n"), 0o600); err != nil {
+	confPath := t.TempDir() + "/.mem9.conf"
+	if err := os.WriteFile(confPath, []byte("MEM9_URL="+confURL+"\n"), 0o600); err != nil {
 		t.Fatalf("write conf: %v", err)
 	}
-	t.Setenv("MYPAST_CONF", confPath)
-	if got := resolveMyPastURL(); got != confURL {
+	t.Setenv("MEM9_CONF", confPath)
+	if got := resolveMem9URL(); got != confURL {
 		t.Fatalf("conf url = %q, want %q", got, confURL)
 	}
 
 	envURL := "http://localhost:18080"
-	t.Setenv("MYPAST_URL", envURL)
-	if got := resolveMyPastURL(); got != envURL {
+	t.Setenv("MEM9_URL", envURL)
+	if got := resolveMem9URL(); got != envURL {
 		t.Fatalf("env url = %q, want %q", got, envURL)
 	}
 }

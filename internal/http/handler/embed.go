@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/colinleefish/mypast/internal/service/embed"
+	"github.com/colinleefish/mem9/internal/service/embed"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

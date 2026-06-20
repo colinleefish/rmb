@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/colinleefish/mypast/internal/service/browse"
+	"github.com/colinleefish/mem9/internal/service/browse"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

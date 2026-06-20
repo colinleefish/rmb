@@ -1,36 +1,36 @@
 services:
   postgres:
     image: pgvector/pgvector:pg18
-    container_name: mypast-postgres
+    container_name: mem9-postgres
     environment:
-      POSTGRES_USER: mypast
-      POSTGRES_PASSWORD: mypast
-      POSTGRES_DB: mypast_dev
+      POSTGRES_USER: mem9
+      POSTGRES_PASSWORD: mem9
+      POSTGRES_DB: mem9_db
     ports:
       - "5433:5432"   # host 5433 to avoid clashing with local postgres@18
     volumes:
-      - mypast_pg:/var/lib/postgresql/data
+      - mem9_pg:/var/lib/postgresql/data
       - ./docker/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mypast -d mypast_dev"]
+      test: ["CMD-SHELL", "pg_isready -U mem9 -d mem9_db"]
       interval: 5s
       timeout: 3s
       retries: 10
     restart: unless-stopped
 
-  mypast:
+  mem9:
     build: .
-    container_name: mypast-app
+    container_name: mem9-app
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      MYPAST_DB_URL: postgres://mypast:mypast@postgres:5432/mypast_dev?sslmode=disable
-      MYPAST_ADDR: ":8080"
+      MEM9_DB_URL: postgres://mem9:mem9@postgres:5432/mem9_db?sslmode=disable
+      MEM9_ADDR: ":8080"
       GIN_MODE: release
     ports:
       - "8080:8080"
     restart: unless-stopped
 
 volumes:
-  mypast_pg:
+  mem9_pg:

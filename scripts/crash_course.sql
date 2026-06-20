@@ -1,5 +1,5 @@
--- MyPast crash course: pgvector + tsvector on a tiny demo table.
--- Run with: psql -h 127.0.0.1 -d mypast_dev -f scripts/crash_course.sql
+-- Mem9 crash course: pgvector + tsvector on a tiny demo table.
+-- Run with: psql -h 127.0.0.1 -d mem9_db -f scripts/crash_course.sql
 
 \echo === 0. Reset demo table ===
 DROP TABLE IF EXISTS memories;
@@ -24,19 +24,19 @@ CREATE INDEX memories_embed_idx
 -- Pretend dimensions are: [coffee, code, family]
 -- Each memory leans into one or two of those topics.
 INSERT INTO memories (uri, content, embedding) VALUES
-  ('mypast://drinks/latte.md',
+  ('mem9://drinks/latte.md',
    'Drank a delicious oat milk latte at the new specialty coffee shop.',
    '[0.95, 0.05, 0.10]'),
-  ('mypast://drinks/cold-brew.md',
+  ('mem9://drinks/cold-brew.md',
    'Cold brew tasting at the cafe near the office.',
    '[0.90, 0.20, 0.05]'),
-  ('mypast://work/refactor.md',
+  ('mem9://work/refactor.md',
    'Refactored the CI pipeline in Go and removed three legacy scripts.',
    '[0.05, 0.95, 0.05]'),
-  ('mypast://work/postgres.md',
+  ('mem9://work/postgres.md',
    'Wrote a Postgres migration to add pgvector for semantic recall.',
    '[0.10, 0.90, 0.05]'),
-  ('mypast://family/dinner.md',
+  ('mem9://family/dinner.md',
    'Had dinner with my parents and talked about their trip plans.',
    '[0.05, 0.05, 0.95]');
 

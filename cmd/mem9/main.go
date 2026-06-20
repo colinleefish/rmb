@@ -8,23 +8,23 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/colinleefish/mypast/internal/cli"
-	"github.com/colinleefish/mypast/internal/config"
-	"github.com/colinleefish/mypast/internal/db"
-	"github.com/colinleefish/mypast/internal/http/handler"
-	"github.com/colinleefish/mypast/internal/http/router"
-	"github.com/colinleefish/mypast/internal/llm"
-	"github.com/colinleefish/mypast/internal/server"
-	"github.com/colinleefish/mypast/internal/service/alias"
-	"github.com/colinleefish/mypast/internal/service/browse"
-	"github.com/colinleefish/mypast/internal/service/correction"
-	"github.com/colinleefish/mypast/internal/service/health"
-	"github.com/colinleefish/mypast/internal/service/embed"
-	"github.com/colinleefish/mypast/internal/service/extract"
-	"github.com/colinleefish/mypast/internal/service/inspect"
-	"github.com/colinleefish/mypast/internal/service/memory"
-	"github.com/colinleefish/mypast/internal/service/scene"
-	"github.com/colinleefish/mypast/internal/service/session"
+	"github.com/colinleefish/mem9/internal/cli"
+	"github.com/colinleefish/mem9/internal/config"
+	"github.com/colinleefish/mem9/internal/db"
+	"github.com/colinleefish/mem9/internal/http/handler"
+	"github.com/colinleefish/mem9/internal/http/router"
+	"github.com/colinleefish/mem9/internal/llm"
+	"github.com/colinleefish/mem9/internal/server"
+	"github.com/colinleefish/mem9/internal/service/alias"
+	"github.com/colinleefish/mem9/internal/service/browse"
+	"github.com/colinleefish/mem9/internal/service/correction"
+	"github.com/colinleefish/mem9/internal/service/health"
+	"github.com/colinleefish/mem9/internal/service/embed"
+	"github.com/colinleefish/mem9/internal/service/extract"
+	"github.com/colinleefish/mem9/internal/service/inspect"
+	"github.com/colinleefish/mem9/internal/service/memory"
+	"github.com/colinleefish/mem9/internal/service/scene"
+	"github.com/colinleefish/mem9/internal/service/session"
 )
 
 func main() {
@@ -144,7 +144,7 @@ func main() {
 					recallHandler = handler.NewRecallHandler(database, recallEmbed)
 				}
 			} else {
-				log.Printf("recall endpoints unavailable; MYPAST_EMBED_API_KEY not set")
+				log.Printf("recall endpoints unavailable; MEM9_EMBED_API_KEY not set")
 			}
 
 			inspectHandler := handler.NewInspectHandler(inspect.NewService(database))

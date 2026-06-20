@@ -1,11 +1,11 @@
-# mypast — recall guide for AI agents
+# mem9 — recall guide for AI agents
 
-`mypast` is the user's long-term memory across past AI conversations. Use it to
+`mem9` is the user's long-term memory across past AI conversations. Use it to
 recall facts, decisions, configs, and context the user established in earlier
 sessions, instead of asking them to repeat themselves.
 
-The `mypast` command is on the PATH. It talks to the user's remote memory server
-automatically (configured in `~/.mypast.conf`); you do not manage connections or
+The `mem9` command is on the PATH. It talks to the user's remote memory server
+automatically (configured in `~/.mem9.conf`); you do not manage connections or
 auth — just run the commands.
 
 ## When to use it
@@ -14,7 +14,7 @@ Before asking the user a question, or when a task references something that
 likely happened before (a server, project, credential location, past decision,
 preference), **search your memory first**:
 
-- The user mentions a host/project/tool by name → `mypast search` it.
+- The user mentions a host/project/tool by name → `mem9 search` it.
 - You need a path, port, config location, or prior decision → recall it.
 - The user says "like last time" / "the usual" / "where we left off" → recall it.
 
@@ -25,10 +25,10 @@ If recall returns nothing relevant, then ask the user.
 ### Search (use this most)
 
 ```
-mypast search "<natural language query>"
-mypast search "<query>" --scope=memory      # distilled long-term facts only
-mypast search "<query>" --scope=scene       # per-session conversation context only
-mypast search "<query>" --k=<n>             # control result count (default: 5)
+mem9 search "<natural language query>"
+mem9 search "<query>" --scope=memory      # distilled long-term facts only
+mem9 search "<query>" --scope=scene       # per-session conversation context only
+mem9 search "<query>" --k=<n>             # control result count (default: 5)
 ```
 
 `search` blends semantic (vector) and keyword (FTS) matching, fused with
@@ -43,9 +43,9 @@ reciprocal rank fusion. By default it covers both `memory` and `scene` tiers.
 Output is a ranked list:
 
 ```
- 1. [memories] mypast://entities/tokyo-shadowsocks-config
+ 1. [memories] mem9://entities/tokyo-shadowsocks-config
       Shadowsocks config on tokyo-endpoint is at /etc/shadowsocks-rust/config.json ...
- 2. [scenes]   mypast://scenes/<uuid>
+ 2. [scenes]   mem9://scenes/<uuid>
       ...one-line abstract...
 ```
 
@@ -60,9 +60,9 @@ below.
 ### Drill down
 
 ```
-mypast cat <uri>      # full body/content of a memory, scene, or turn
-mypast meta <uri>     # metadata as JSON (category, slug, version, source links, timestamps)
-mypast tree <uri>     # list child URIs under a prefix
+mem9 cat <uri>      # full body/content of a memory, scene, or turn
+mem9 meta <uri>     # metadata as JSON (category, slug, version, source links, timestamps)
+mem9 tree <uri>     # list child URIs under a prefix
 ```
 
 Typical flow: `search` to find a relevant `uri`, then `cat <uri>` to read the
@@ -74,9 +74,9 @@ Memory is a pyramid; results carry a `tier` and a `uri`:
 
 | Tier | URI shape | What it is |
 |------|-----------|------------|
-| memories | `mypast://profile`, `mypast://preferences/<slug>`, `mypast://entities/<slug>`, `mypast://events/<slug>` | Long-term, cross-session distilled facts. Most useful. |
-| scenes | `mypast://scenes/<uuid>` | Per-conversation summaries ("what we were doing"). |
-| sessions/turns | `mypast://sessions/<id>`, `.../turns/<n>` | Raw conversation evidence (ground truth). |
+| memories | `mem9://profile`, `mem9://preferences/<slug>`, `mem9://entities/<slug>`, `mem9://events/<slug>` | Long-term, cross-session distilled facts. Most useful. |
+| scenes | `mem9://scenes/<uuid>` | Per-conversation summaries ("what we were doing"). |
+| sessions/turns | `mem9://sessions/<id>`, `.../turns/<n>` | Raw conversation evidence (ground truth). |
 
 Memory categories:
 
@@ -92,21 +92,21 @@ To trace a fact to its source: `meta <memory-uri>` shows `source_scene_uris`;
 
 ```
 # "What's the config for the tokyo endpoint?"
-mypast search "tokyo endpoint shadowsocks config" --scope=memory
-mypast cat mypast://entities/tokyo-shadowsocks-config
+mem9 search "tokyo endpoint shadowsocks config" --scope=memory
+mem9 cat mem9://entities/tokyo-shadowsocks-config
 
 # "Where does Jenkins store its data again?"
-mypast search "jenkins home directory disk" --scope=memory
+mem9 search "jenkins home directory disk" --scope=memory
 
 # "What did we decide about storage?"
-mypast search "storage decision postgres"
+mem9 search "storage decision postgres"
 
 # "What were we working on last session?"
-mypast search "recent work" --scope=scene
+mem9 search "recent work" --scope=scene
 
 # Browse what categories exist
-mypast tree mypast://
-mypast tree mypast://entities/
+mem9 tree mem9://
+mem9 tree mem9://entities/
 ```
 
 ## Corrections
@@ -115,7 +115,7 @@ Machine-distilled memory can be wrong or over-merged. The user can attach
 **corrections** — durable, human-authored patches — to any memory `uri`. They
 are not edits to the memory; they overlay it and always win over the machine fact.
 
-- `mypast cat <uri>`, `meta <uri>`, and `search` results automatically show any
+- `mem9 cat <uri>`, `meta <uri>`, and `search` results automatically show any
   active corrections on that target. You do not fetch them separately.
 - Each one (`⚑ CORRECTION:`) is the user's authoritative statement about the
   thing; treat it as the truth, over the distilled snippet. It may be positive
@@ -139,9 +139,9 @@ are not edits to the memory; they overlay it and always win over the machine fac
      workers after the conversation is processed.
 
 ```
-mypast correction add <mypast://uri> [<uri>...] "the corrected fact"
-mypast correction ls [<target-uri>]                    # list active corrections
-mypast correction rm <mypast://corrections/...>        # retract one you added
+mem9 correction add <mem9://uri> [<uri>...] "the corrected fact"
+mem9 correction ls [<target-uri>]                    # list active corrections
+mem9 correction rm <mem9://corrections/...>        # retract one you added
 ```
 
 Always pass real `uri`s returned by recall — never invent them. (There is no
@@ -160,6 +160,6 @@ their own.)
 - Recall (`search`/`cat`/`meta`/`tree`) is read-only — memory is written
   automatically by background workers after each conversation. You never store
   new facts yourself.
-- The only writes you make are `mypast correction` commands, and only when the
+- The only writes you make are `mem9 correction` commands, and only when the
   user **explicitly asks** you to correct a memory **and** a real URI already
   exists for the target. A user stating a new fact is not a write request.

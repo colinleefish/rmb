@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colinleefish/mypast/internal/config"
-	"github.com/colinleefish/mypast/internal/db"
-	"github.com/colinleefish/mypast/internal/db/pgarray"
-	"github.com/colinleefish/mypast/internal/model"
-	"github.com/colinleefish/mypast/internal/service/alias"
-	"github.com/colinleefish/mypast/internal/service/correction"
+	"github.com/colinleefish/mem9/internal/config"
+	"github.com/colinleefish/mem9/internal/db"
+	"github.com/colinleefish/mem9/internal/db/pgarray"
+	"github.com/colinleefish/mem9/internal/model"
+	"github.com/colinleefish/mem9/internal/service/alias"
+	"github.com/colinleefish/mem9/internal/service/correction"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -34,7 +34,7 @@ func splitCorrections(sums []correction.Summary) (statements, uris []string) {
 }
 
 const (
-	globalLockKey = "mypast-t3-rollup"
+	globalLockKey = "mem9-t3-rollup"
 	distillDelay  = 1 * time.Second
 )
 

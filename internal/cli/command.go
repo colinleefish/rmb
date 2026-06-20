@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/colinleefish/mypast/internal/client"
-	"github.com/colinleefish/mypast/internal/config"
-	"github.com/colinleefish/mypast/internal/hook"
-	"github.com/colinleefish/mypast/internal/service/recall"
-	"github.com/colinleefish/mypast/internal/uri"
+	"github.com/colinleefish/mem9/internal/client"
+	"github.com/colinleefish/mem9/internal/config"
+	"github.com/colinleefish/mem9/internal/hook"
+	"github.com/colinleefish/mem9/internal/service/recall"
+	"github.com/colinleefish/mem9/internal/uri"
 )
 
 type ServeFunc func(context.Context) error
@@ -88,12 +88,12 @@ func (r Runner) runHookSubmit(ctx context.Context, args []string) error {
 
 func (r Runner) runT1(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] != "backfill" {
-		return fmt.Errorf("usage: mypast t1 backfill [--session=<uuid>]")
+		return fmt.Errorf("usage: mem9 t1 backfill [--session=<uuid>]")
 	}
 	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("t1 backfill requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("t1 backfill requires MEM9_URL (the server owns the database)")
 	}
 	n, err := cl.Backfill(ctx, "t1", sessionKey)
 	if err != nil {
@@ -109,12 +109,12 @@ func (r Runner) runT1(ctx context.Context, args []string) error {
 
 func (r Runner) runT2(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] != "backfill" {
-		return fmt.Errorf("usage: mypast t2 backfill [--session=<uuid>]")
+		return fmt.Errorf("usage: mem9 t2 backfill [--session=<uuid>]")
 	}
 	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("t2 backfill requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("t2 backfill requires MEM9_URL (the server owns the database)")
 	}
 	n, err := cl.Backfill(ctx, "t2", sessionKey)
 	if err != nil {
@@ -130,12 +130,12 @@ func (r Runner) runT2(ctx context.Context, args []string) error {
 
 func (r Runner) runT3(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] != "backfill" {
-		return fmt.Errorf("usage: mypast t3 backfill [--session=<uuid>]")
+		return fmt.Errorf("usage: mem9 t3 backfill [--session=<uuid>]")
 	}
 	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("t3 backfill requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("t3 backfill requires MEM9_URL (the server owns the database)")
 	}
 	n, err := cl.Backfill(ctx, "t3", sessionKey)
 	if err != nil {
@@ -152,14 +152,14 @@ func (r Runner) runT3(ctx context.Context, args []string) error {
 func (r Runner) runSearch(ctx context.Context, args []string) error {
 	query := strings.TrimSpace(strings.Join(positionalArgs(args), " "))
 	if query == "" {
-		return fmt.Errorf("usage: mypast search \"<query>\" [--scope=memory,scene] [--k=<n>]")
+		return fmt.Errorf("usage: mem9 search \"<query>\" [--scope=memory,scene] [--k=<n>]")
 	}
 	k := parseK(args, 0) // 0 → server default (5)
 	scopes := parseScopes(args)
 
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("search requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("search requires MEM9_URL (the server owns the database)")
 	}
 	matches, err := cl.Search(ctx, query, k, scopes)
 	if err != nil {
@@ -187,12 +187,12 @@ func parseScopes(args []string) []string {
 
 // runCorrection dispatches the human-correction subcommands:
 //
-//	mypast correction add <uri> [<uri>...] "statement"
-//	mypast correction rm  <correction-uri>
-//	mypast correction ls  [<target-uri>]
+//	mem9 correction add <uri> [<uri>...] "statement"
+//	mem9 correction rm  <correction-uri>
+//	mem9 correction ls  [<target-uri>]
 func (r Runner) runCorrection(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: mypast correction <add|rm|ls> ...")
+		return fmt.Errorf("usage: mem9 correction <add|rm|ls> ...")
 	}
 	switch args[0] {
 	case "add":
@@ -219,12 +219,12 @@ func (r Runner) runCorrectionAdd(ctx context.Context, args []string) error {
 	}
 	statement := strings.TrimSpace(strings.Join(words, " "))
 	if len(targets) == 0 || statement == "" {
-		return fmt.Errorf("usage: mypast correction add <mypast://uri> [<uri>...] \"statement\"")
+		return fmt.Errorf("usage: mem9 correction add <mem9://uri> [<uri>...] \"statement\"")
 	}
 
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("correction add requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("correction add requires MEM9_URL (the server owns the database)")
 	}
 	createdURI, err := cl.CreateCorrection(ctx, targets, statement)
 	if err != nil {
@@ -243,7 +243,7 @@ func (r Runner) runCorrectionList(ctx context.Context, args []string) error {
 
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("correction ls requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("correction ls requires MEM9_URL (the server owns the database)")
 	}
 	items, err := cl.ListCorrections(ctx, target)
 	if err != nil {
@@ -267,11 +267,11 @@ func (r Runner) runCorrectionList(ctx context.Context, args []string) error {
 func (r Runner) runCorrectionRm(ctx context.Context, args []string) error {
 	pos := positionalArgs(args)
 	if len(pos) != 1 {
-		return fmt.Errorf("usage: mypast correction rm <mypast://corrections/...>")
+		return fmt.Errorf("usage: mem9 correction rm <mem9://corrections/...>")
 	}
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("correction rm requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("correction rm requires MEM9_URL (the server owns the database)")
 	}
 	if err := cl.RetractCorrection(ctx, pos[0]); err != nil {
 		return err
@@ -282,15 +282,15 @@ func (r Runner) runCorrectionRm(ctx context.Context, args []string) error {
 
 // runAlias dispatches the entity-alias subcommands:
 //
-//	mypast alias set <alias-uri> <canonical-uri> ["note"]
-//	mypast alias rm  <alias-record-uri>
-//	mypast alias ls  [<uri>]
-//	mypast alias candidates [--status=pending]
-//	mypast alias confirm <candidate-id>
-//	mypast alias reject  <candidate-id>
+//	mem9 alias set <alias-uri> <canonical-uri> ["note"]
+//	mem9 alias rm  <alias-record-uri>
+//	mem9 alias ls  [<uri>]
+//	mem9 alias candidates [--status=pending]
+//	mem9 alias confirm <candidate-id>
+//	mem9 alias reject  <candidate-id>
 func (r Runner) runAlias(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: mypast alias <set|rm|ls|candidates|confirm|reject> ...")
+		return fmt.Errorf("usage: mem9 alias <set|rm|ls|candidates|confirm|reject> ...")
 	}
 	switch args[0] {
 	case "set":
@@ -314,7 +314,7 @@ func (r Runner) runAliasCandidates(ctx context.Context, args []string) error {
 	status := strings.TrimSpace(parseFlagValue(args, "--status"))
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("alias candidates requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("alias candidates requires MEM9_URL (the server owns the database)")
 	}
 	items, err := cl.ListAliasCandidates(ctx, status)
 	if err != nil {
@@ -338,11 +338,11 @@ func (r Runner) runAliasCandidates(ctx context.Context, args []string) error {
 func (r Runner) runAliasConfirm(ctx context.Context, args []string) error {
 	pos := positionalArgs(args)
 	if len(pos) != 1 {
-		return fmt.Errorf("usage: mypast alias confirm <candidate-id>")
+		return fmt.Errorf("usage: mem9 alias confirm <candidate-id>")
 	}
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("alias confirm requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("alias confirm requires MEM9_URL (the server owns the database)")
 	}
 	if err := cl.ConfirmAliasCandidate(ctx, pos[0]); err != nil {
 		return err
@@ -354,11 +354,11 @@ func (r Runner) runAliasConfirm(ctx context.Context, args []string) error {
 func (r Runner) runAliasReject(ctx context.Context, args []string) error {
 	pos := positionalArgs(args)
 	if len(pos) != 1 {
-		return fmt.Errorf("usage: mypast alias reject <candidate-id>")
+		return fmt.Errorf("usage: mem9 alias reject <candidate-id>")
 	}
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("alias reject requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("alias reject requires MEM9_URL (the server owns the database)")
 	}
 	if err := cl.RejectAliasCandidate(ctx, pos[0]); err != nil {
 		return err
@@ -379,13 +379,13 @@ func (r Runner) runAliasSet(ctx context.Context, args []string) error {
 		}
 	}
 	if len(uris) != 2 {
-		return fmt.Errorf("usage: mypast alias set <alias-uri> <canonical-uri> [\"note\"]")
+		return fmt.Errorf("usage: mem9 alias set <alias-uri> <canonical-uri> [\"note\"]")
 	}
 	note := strings.TrimSpace(strings.Join(words, " "))
 
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("alias set requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("alias set requires MEM9_URL (the server owns the database)")
 	}
 	createdURI, err := cl.CreateAlias(ctx, uris[0], uris[1], note)
 	if err != nil {
@@ -404,7 +404,7 @@ func (r Runner) runAliasList(ctx context.Context, args []string) error {
 
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("alias ls requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("alias ls requires MEM9_URL (the server owns the database)")
 	}
 	items, err := cl.ListAliases(ctx, filter)
 	if err != nil {
@@ -428,11 +428,11 @@ func (r Runner) runAliasList(ctx context.Context, args []string) error {
 func (r Runner) runAliasRm(ctx context.Context, args []string) error {
 	pos := positionalArgs(args)
 	if len(pos) != 1 {
-		return fmt.Errorf("usage: mypast alias rm <mypast://aliases/...>")
+		return fmt.Errorf("usage: mem9 alias rm <mem9://aliases/...>")
 	}
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("alias rm requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("alias rm requires MEM9_URL (the server owns the database)")
 	}
 	if err := cl.RetractAlias(ctx, pos[0]); err != nil {
 		return err
@@ -481,11 +481,11 @@ func parseK(args []string, def int) int {
 
 func (r Runner) runEmbed(ctx context.Context, args []string) error {
 	if len(args) == 0 || args[0] != "status" {
-		return fmt.Errorf("usage: mypast embed status")
+		return fmt.Errorf("usage: mem9 embed status")
 	}
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("embed status requires MYPAST_URL (the server owns the database)")
+		return fmt.Errorf("embed status requires MEM9_URL (the server owns the database)")
 	}
 	rows, err := cl.EmbedStatus(ctx)
 	if err != nil {
@@ -519,7 +519,7 @@ func (r Runner) runInspect(ctx context.Context, command string, args []string) e
 	}
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("%s requires MYPAST_URL (the server owns the database)", command)
+		return fmt.Errorf("%s requires MEM9_URL (the server owns the database)", command)
 	}
 	stdout := r.Stdout
 	if stdout == nil {
@@ -548,45 +548,45 @@ func parseFlagValue(args []string, key string) string {
 func usage() string {
 	return strings.TrimSpace(`
 Usage:
-  mypast serve                Start HTTP server
-  mypast hook-submit --source=<cursor|cc|codex>
+  mem9 serve                Start HTTP server
+  mem9 hook-submit --source=<cursor|cc|codex>
                               Receive an agent transcript hook payload on stdin
-  mypast cat <uri>            Print body / messages_jsonl for a URI
-  mypast tree <uri-prefix>    List child URIs under a prefix
-  mypast meta <uri>           Print row metadata as JSON
-  mypast t1 backfill          Enqueue T1 extraction for sessions with unprocessed turns
+  mem9 cat <uri>            Print body / messages_jsonl for a URI
+  mem9 tree <uri-prefix>    List child URIs under a prefix
+  mem9 meta <uri>           Print row metadata as JSON
+  mem9 t1 backfill          Enqueue T1 extraction for sessions with unprocessed turns
                               Optional: --session=<uuid>
-  mypast t2 backfill          Enqueue T2 scene build for sessions with atoms
+  mem9 t2 backfill          Enqueue T2 scene build for sessions with atoms
                               Optional: --session=<uuid>
-  mypast t3 backfill          Enqueue T3 memory rollup for sessions with scenes
+  mem9 t3 backfill          Enqueue T3 memory rollup for sessions with scenes
                               Optional: --session=<uuid>
-  mypast embed status         Show embedding coverage across atoms/scenes/memories
-  mypast search "<query>"     Hybrid recall (vector + FTS) across memories and scenes
+  mem9 embed status         Show embedding coverage across atoms/scenes/memories
+  mem9 search "<query>"     Hybrid recall (vector + FTS) across memories and scenes
                               --scope=memory,scene  Tiers to search (default: memory,scene)
                                 memory  Long-term distilled facts
                                 scene   Per-session conversation summaries
                               --k=<n>              Number of results (default: 5)
-  mypast correction add <uri> [<uri>...] "statement"
+  mem9 correction add <uri> [<uri>...] "statement"
                               Attach a human correction that overrides memory at recall
-  mypast correction rm <correction-uri>
+  mem9 correction rm <correction-uri>
                               Retire a specific correction (URI from meta/ls output)
-  mypast correction ls [<target-uri>]
+  mem9 correction ls [<target-uri>]
                               List active corrections (optionally for one target)
-  mypast alias set <alias-uri> <canonical-uri> ["note"]
+  mem9 alias set <alias-uri> <canonical-uri> ["note"]
                               Declare alias-uri to be the same entity as canonical-uri
-  mypast alias rm <alias-record-uri>
+  mem9 alias rm <alias-record-uri>
                               Retract a specific alias (URI from meta/ls output)
-  mypast alias ls [<uri>]     List active aliases (optionally for one URI, either side)
-  mypast alias candidates [--status=pending]
+  mem9 alias ls [<uri>]     List active aliases (optionally for one URI, either side)
+  mem9 alias candidates [--status=pending]
                               List machine-proposed alias candidates (pending|confirmed|rejected|all)
-  mypast alias confirm <candidate-id>
+  mem9 alias confirm <candidate-id>
                               Promote a candidate into a live alias
-  mypast alias reject <candidate-id>
+  mem9 alias reject <candidate-id>
                               Reject a candidate so it is never re-proposed
-  mypast store <uri>          Planned
-  mypast read <uri>           Planned
-  mypast list <prefix>        Planned
-  mypast delete <uri>         Planned
-  mypast load-context         Planned
+  mem9 store <uri>          Planned
+  mem9 read <uri>           Planned
+  mem9 list <prefix>        Planned
+  mem9 delete <uri>         Planned
+  mem9 load-context         Planned
 `)
 }

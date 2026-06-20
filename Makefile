@@ -1,5 +1,5 @@
-APP := mypast
-CMD := ./cmd/mypast
+APP := mem9
+CMD := ./cmd/mem9
 BIN := ./bin/$(APP)
 
 .PHONY: build run ci deploy

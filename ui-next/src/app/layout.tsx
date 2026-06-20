@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MyPast — Observer",
-  description: "Browse the mypast memory pipeline: sessions → turns → atoms → scenes → memories.",
+  title: "Mem9 — Observer",
+  description: "Browse the mem9 memory pipeline: sessions → turns → atoms → scenes → memories.",
 };
 
 export default function RootLayout({

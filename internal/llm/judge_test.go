@@ -6,17 +6,17 @@ import (
 )
 
 func TestParseAliasVerdict_plainJSON(t *testing.T) {
-	v, err := parseAliasVerdict(`{"same":true,"canonical_uri":"mypast://entities/x","rationale":"same thing"}`)
+	v, err := parseAliasVerdict(`{"same":true,"canonical_uri":"mem9://entities/x","rationale":"same thing"}`)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !v.Same || v.CanonicalURI != "mypast://entities/x" || v.Rationale != "same thing" {
+	if !v.Same || v.CanonicalURI != "mem9://entities/x" || v.Rationale != "same thing" {
 		t.Fatalf("unexpected verdict: %+v", v)
 	}
 }
 
 func TestParseAliasVerdict_toleratesFenceAndProse(t *testing.T) {
-	raw := "Here is my answer:\n```json\n{\"same\": false, \"canonical_uri\": \"mypast://entities/a\", \"rationale\": \"dev vs prod\"}\n```\n"
+	raw := "Here is my answer:\n```json\n{\"same\": false, \"canonical_uri\": \"mem9://entities/a\", \"rationale\": \"dev vs prod\"}\n```\n"
 	v, err := parseAliasVerdict(raw)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -36,8 +36,8 @@ func TestParseAliasVerdict_noJSON(t *testing.T) {
 }
 
 func TestBuildJudgeAliasPrompt_substitutesAll(t *testing.T) {
-	p := buildJudgeAliasPrompt("mypast://entities/a", "body A", "mypast://entities/b", "body B")
-	for _, want := range []string{"mypast://entities/a", "body A", "mypast://entities/b", "body B"} {
+	p := buildJudgeAliasPrompt("mem9://entities/a", "body A", "mem9://entities/b", "body B")
+	for _, want := range []string{"mem9://entities/a", "body A", "mem9://entities/b", "body B"} {
 		if !strings.Contains(p, want) {
 			t.Fatalf("prompt missing %q:\n%s", want, p)
 		}

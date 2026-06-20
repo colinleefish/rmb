@@ -1,6 +1,6 @@
 import { MemoriesTable } from "@/components/memories/memories-table";
 
-export const metadata = { title: "Memories — MyPast Observer" };
+export const metadata = { title: "Memories — Mem9 Observer" };
 
 export default function MemoriesPage() {
   return (

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colinleefish/mypast/internal/db/pgarray"
-	"github.com/colinleefish/mypast/internal/model"
-	"github.com/colinleefish/mypast/internal/uri"
+	"github.com/colinleefish/mem9/internal/db/pgarray"
+	"github.com/colinleefish/mem9/internal/model"
+	"github.com/colinleefish/mem9/internal/uri"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

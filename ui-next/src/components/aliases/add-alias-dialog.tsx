@@ -78,7 +78,7 @@ export function AddAliasDialog({
             <MemoryUriInput
               value={aliasURI}
               onChange={setAliasURI}
-              placeholder="mypast://entities/aliyun-rds-instance"
+              placeholder="mem9://entities/aliyun-rds-instance"
               excludeURIs={[canonicalURI]}
             />
           </label>
@@ -87,7 +87,7 @@ export function AddAliasDialog({
             <MemoryUriInput
               value={canonicalURI}
               onChange={setCanonicalURI}
-              placeholder="mypast://entities/aliyun-rds"
+              placeholder="mem9://entities/aliyun-rds"
               excludeURIs={[aliasURI]}
             />
           </label>

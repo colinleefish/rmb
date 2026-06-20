@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/colinleefish/mypast/internal/db/pgarray"
-	"github.com/colinleefish/mypast/internal/model"
-	"github.com/colinleefish/mypast/internal/service/session"
+	"github.com/colinleefish/mem9/internal/db/pgarray"
+	"github.com/colinleefish/mem9/internal/model"
+	"github.com/colinleefish/mem9/internal/service/session"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

@@ -1,4 +1,4 @@
-// Types mirroring the mypast Go API.
+// Types mirroring the mem9 Go API.
 //
 // Note: the `browse` wrapper structs (SessionRow, TurnRow, Overview) carry
 // explicit snake_case JSON tags, whereas raw GORM models (Atom, Scene,

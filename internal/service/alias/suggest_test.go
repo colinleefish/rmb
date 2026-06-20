@@ -3,8 +3,8 @@ package alias
 import (
 	"testing"
 
-	"github.com/colinleefish/mypast/internal/llm"
-	"github.com/colinleefish/mypast/internal/model"
+	"github.com/colinleefish/mem9/internal/llm"
+	"github.com/colinleefish/mem9/internal/model"
 )
 
 func set(keys ...string) map[string]struct{} {
@@ -17,10 +17,10 @@ func set(keys ...string) map[string]struct{} {
 
 func TestSelectPairsToJudge_dedupsUnorderedPairs(t *testing.T) {
 	raw := []pair{
-		{AURI: "mypast://entities/a", BURI: "mypast://entities/b"},
+		{AURI: "mem9://entities/a", BURI: "mem9://entities/b"},
 		// reverse direction of the same unordered pair must collapse
-		{AURI: "mypast://entities/b", BURI: "mypast://entities/a"},
-		{AURI: "mypast://entities/a", BURI: "mypast://entities/c"},
+		{AURI: "mem9://entities/b", BURI: "mem9://entities/a"},
+		{AURI: "mem9://entities/a", BURI: "mem9://entities/c"},
 	}
 	got := selectPairsToJudge(raw, nil, nil)
 	if len(got) != 2 {
@@ -30,35 +30,35 @@ func TestSelectPairsToJudge_dedupsUnorderedPairs(t *testing.T) {
 
 func TestSelectPairsToJudge_skipsAlreadyJudged(t *testing.T) {
 	raw := []pair{
-		{AURI: "mypast://entities/a", BURI: "mypast://entities/b"},
-		{AURI: "mypast://entities/a", BURI: "mypast://entities/c"},
+		{AURI: "mem9://entities/a", BURI: "mem9://entities/b"},
+		{AURI: "mem9://entities/a", BURI: "mem9://entities/c"},
 	}
 	// judged set is keyed by the same unordered key, in reverse direction.
-	judged := set(pairKey("mypast://entities/b", "mypast://entities/a"))
+	judged := set(pairKey("mem9://entities/b", "mem9://entities/a"))
 	got := selectPairsToJudge(raw, judged, nil)
-	if len(got) != 1 || got[0].BURI != "mypast://entities/c" {
+	if len(got) != 1 || got[0].BURI != "mem9://entities/c" {
 		t.Fatalf("expected only the a~c pair, got %+v", got)
 	}
 }
 
 func TestSelectPairsToJudge_skipsAlreadyAliased(t *testing.T) {
 	raw := []pair{
-		{AURI: "mypast://entities/a", BURI: "mypast://entities/b"},
-		{AURI: "mypast://entities/c", BURI: "mypast://entities/d"},
+		{AURI: "mem9://entities/a", BURI: "mem9://entities/b"},
+		{AURI: "mem9://entities/c", BURI: "mem9://entities/d"},
 	}
 	// b is already in an active alias (either side) → drop any pair touching it.
-	aliased := set("mypast://entities/b")
+	aliased := set("mem9://entities/b")
 	got := selectPairsToJudge(raw, nil, aliased)
-	if len(got) != 1 || got[0].AURI != "mypast://entities/c" {
+	if len(got) != 1 || got[0].AURI != "mem9://entities/c" {
 		t.Fatalf("expected only the c~d pair, got %+v", got)
 	}
 }
 
 func TestSelectPairsToJudge_skipsSelfAndEmpty(t *testing.T) {
 	raw := []pair{
-		{AURI: "mypast://entities/a", BURI: "mypast://entities/a"},
-		{AURI: "", BURI: "mypast://entities/b"},
-		{AURI: "mypast://entities/c", BURI: ""},
+		{AURI: "mem9://entities/a", BURI: "mem9://entities/a"},
+		{AURI: "", BURI: "mem9://entities/b"},
+		{AURI: "mem9://entities/c", BURI: ""},
 	}
 	if got := selectPairsToJudge(raw, nil, nil); len(got) != 0 {
 		t.Fatalf("expected 0 pairs, got %+v", got)
@@ -66,7 +66,7 @@ func TestSelectPairsToJudge_skipsSelfAndEmpty(t *testing.T) {
 }
 
 func TestCandidateFromVerdict_samePicksDirection(t *testing.T) {
-	p := pair{AURI: "mypast://entities/aliyun-rds-instance", BURI: "mypast://entities/aliyun-rds", Sim: 0.91}
+	p := pair{AURI: "mem9://entities/aliyun-rds-instance", BURI: "mem9://entities/aliyun-rds", Sim: 0.91}
 	v := llm.AliasVerdict{Same: true, CanonicalURI: p.BURI, Rationale: "same RDS instance"}
 	row := candidateFromVerdict(p, v, p.Sim)
 
@@ -85,7 +85,7 @@ func TestCandidateFromVerdict_samePicksDirection(t *testing.T) {
 }
 
 func TestCandidateFromVerdict_differentIsRejectedDeterministic(t *testing.T) {
-	p := pair{AURI: "mypast://entities/aliyun-rds-prod", BURI: "mypast://entities/aliyun-rds-dev", Sim: 0.95}
+	p := pair{AURI: "mem9://entities/aliyun-rds-prod", BURI: "mem9://entities/aliyun-rds-dev", Sim: 0.95}
 	v := llm.AliasVerdict{Same: false, Rationale: "prod vs dev are distinct"}
 	row := candidateFromVerdict(p, v, p.Sim)
 
@@ -102,8 +102,8 @@ func TestCandidateFromVerdict_differentIsRejectedDeterministic(t *testing.T) {
 func TestCandidateFromVerdict_invalidCanonicalFallsBackToRejected(t *testing.T) {
 	// A "same" verdict whose canonical is neither supplied URI is untrustworthy;
 	// record it as rejected rather than fabricate a direction.
-	p := pair{AURI: "mypast://entities/a", BURI: "mypast://entities/b"}
-	v := llm.AliasVerdict{Same: true, CanonicalURI: "mypast://entities/somewhere-else"}
+	p := pair{AURI: "mem9://entities/a", BURI: "mem9://entities/b"}
+	v := llm.AliasVerdict{Same: true, CanonicalURI: "mem9://entities/somewhere-else"}
 	row := candidateFromVerdict(p, v, 0.9)
 	if row.Status != model.AliasCandidateStatusRejected {
 		t.Fatalf("expected rejected for invalid canonical, got %q", row.Status)

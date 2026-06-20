@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defaultDBURL = "postgres://admin@127.0.0.1:5432/mypast_dev?sslmode=disable"
+	defaultDBURL = "postgres://admin@127.0.0.1:5432/mem9_db?sslmode=disable"
 	defaultAddr  = ":8080"
 )
 
@@ -326,7 +326,7 @@ func loadDotEnv(path string) error {
 }
 
 func resolveConfigPath() (string, bool) {
-	if v := os.Getenv("MYPAST_CONFIG"); v != "" {
+	if v := os.Getenv("MEM9_CONFIG"); v != "" {
 		return v, true
 	}
 
@@ -335,7 +335,7 @@ func resolveConfigPath() (string, bool) {
 		return "", false
 	}
 
-	return filepath.Join(home, ".config", "mypast", "config.toml"), false
+	return filepath.Join(home, ".config", "mem9", "config.toml"), false
 }
 
 func loadFileConfig(cfg *Config, path string, explicitPath bool) error {
@@ -527,267 +527,267 @@ func loadFileConfig(cfg *Config, path string, explicitPath bool) error {
 }
 
 func applyEnvOverrides(cfg *Config) error {
-	if v := os.Getenv("MYPAST_DB_URL"); v != "" {
+	if v := os.Getenv("MEM9_DB_URL"); v != "" {
 		cfg.DB.URL = v
 	}
-	if v := os.Getenv("MYPAST_ADDR"); v != "" {
+	if v := os.Getenv("MEM9_ADDR"); v != "" {
 		cfg.Server.Addr = v
 	}
-	if v := os.Getenv("MYPAST_SHUTDOWN_TIMEOUT"); v != "" {
+	if v := os.Getenv("MEM9_SHUTDOWN_TIMEOUT"); v != "" {
 		timeout, err := time.ParseDuration(v)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_SHUTDOWN_TIMEOUT: %w", err)
+			return fmt.Errorf("parse MEM9_SHUTDOWN_TIMEOUT: %w", err)
 		}
 		cfg.Server.ShutdownTimeout = timeout
 	}
-	if v := firstEnv("MYPAST_USERNAME", "USERNAME"); v != "" {
+	if v := firstEnv("MEM9_USERNAME", "USERNAME"); v != "" {
 		cfg.Auth.Username = v
 	}
-	if v := firstEnv("MYPAST_PASSWORD", "PASSWORD"); v != "" {
+	if v := firstEnv("MEM9_PASSWORD", "PASSWORD"); v != "" {
 		cfg.Auth.Password = v
 	}
-	if v := os.Getenv("MYPAST_LLM_PROVIDER"); v != "" {
+	if v := os.Getenv("MEM9_LLM_PROVIDER"); v != "" {
 		cfg.LLM.Provider = v
 	}
-	if v := os.Getenv("MYPAST_LLM_API_BASE"); v != "" {
+	if v := os.Getenv("MEM9_LLM_API_BASE"); v != "" {
 		cfg.LLM.APIBase = v
 	}
-	if v := os.Getenv("MYPAST_LLM_API_KEY"); v != "" {
+	if v := os.Getenv("MEM9_LLM_API_KEY"); v != "" {
 		cfg.LLM.APIKey = v
 	}
-	if v := os.Getenv("MYPAST_LLM_MODEL"); v != "" {
+	if v := os.Getenv("MEM9_LLM_MODEL"); v != "" {
 		cfg.LLM.Model = v
 	}
-	if v := os.Getenv("MYPAST_LLM_MAX_RETRIES"); v != "" {
+	if v := os.Getenv("MEM9_LLM_MAX_RETRIES"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_LLM_MAX_RETRIES: %w", err)
+			return fmt.Errorf("parse MEM9_LLM_MAX_RETRIES: %w", err)
 		}
 		cfg.LLM.MaxRetries = parsed
 	}
-	if v := os.Getenv("MYPAST_LLM_TIMEOUT"); v != "" {
+	if v := os.Getenv("MEM9_LLM_TIMEOUT"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_LLM_TIMEOUT: %w", err)
+			return fmt.Errorf("parse MEM9_LLM_TIMEOUT: %w", err)
 		}
 		cfg.LLM.Timeout = d
 	}
-	if v := os.Getenv("MYPAST_LLM_THINKING_STYLE"); v != "" {
+	if v := os.Getenv("MEM9_LLM_THINKING_STYLE"); v != "" {
 		cfg.LLM.ThinkingStyle = strings.TrimSpace(v)
 	}
-	if v := os.Getenv("MYPAST_LLM_THINKING"); v != "" {
+	if v := os.Getenv("MEM9_LLM_THINKING"); v != "" {
 		enabled, err := parseThinking(v)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_LLM_THINKING: %w", err)
+			return fmt.Errorf("parse MEM9_LLM_THINKING: %w", err)
 		}
 		cfg.LLM.ThinkingEnabled = enabled
 	}
-	if v := os.Getenv("MYPAST_EXTRACTION_ENABLED"); v != "" {
+	if v := os.Getenv("MEM9_EXTRACTION_ENABLED"); v != "" {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "1", "true", "yes", "on":
 			cfg.Extraction.Enabled = true
 		case "0", "false", "no", "off":
 			cfg.Extraction.Enabled = false
 		default:
-			return fmt.Errorf("parse MYPAST_EXTRACTION_ENABLED: invalid boolean %q", v)
+			return fmt.Errorf("parse MEM9_EXTRACTION_ENABLED: invalid boolean %q", v)
 		}
 	}
-	if v := os.Getenv("MYPAST_EXTRACTION_POLL_INTERVAL"); v != "" {
+	if v := os.Getenv("MEM9_EXTRACTION_POLL_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_EXTRACTION_POLL_INTERVAL: %w", err)
+			return fmt.Errorf("parse MEM9_EXTRACTION_POLL_INTERVAL: %w", err)
 		}
 		cfg.Extraction.PollInterval = d
 	}
-	if v := os.Getenv("MYPAST_EXTRACTION_EVERY_N"); v != "" {
+	if v := os.Getenv("MEM9_EXTRACTION_EVERY_N"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_EXTRACTION_EVERY_N: %w", err)
+			return fmt.Errorf("parse MEM9_EXTRACTION_EVERY_N: %w", err)
 		}
 		cfg.Extraction.EveryN = parsed
 	}
-	if v := os.Getenv("MYPAST_EXTRACTION_IDLE_SECONDS"); v != "" {
+	if v := os.Getenv("MEM9_EXTRACTION_IDLE_SECONDS"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_EXTRACTION_IDLE_SECONDS: %w", err)
+			return fmt.Errorf("parse MEM9_EXTRACTION_IDLE_SECONDS: %w", err)
 		}
 		cfg.Extraction.IdleSeconds = d
 	}
-	if v := os.Getenv("MYPAST_EXTRACTION_WARMUP"); v != "" {
+	if v := os.Getenv("MEM9_EXTRACTION_WARMUP"); v != "" {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "1", "true", "yes", "on":
 			cfg.Extraction.Warmup = true
 		case "0", "false", "no", "off":
 			cfg.Extraction.Warmup = false
 		default:
-			return fmt.Errorf("parse MYPAST_EXTRACTION_WARMUP: invalid boolean %q", v)
+			return fmt.Errorf("parse MEM9_EXTRACTION_WARMUP: invalid boolean %q", v)
 		}
 	}
-	if v := os.Getenv("MYPAST_EXTRACTION_BATCH_SESSIONS"); v != "" {
+	if v := os.Getenv("MEM9_EXTRACTION_BATCH_SESSIONS"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_EXTRACTION_BATCH_SESSIONS: %w", err)
+			return fmt.Errorf("parse MEM9_EXTRACTION_BATCH_SESSIONS: %w", err)
 		}
 		cfg.Extraction.BatchSessions = parsed
 	}
-	if v := os.Getenv("MYPAST_EXTRACTION_MAX_TURNS_PER_BATCH"); v != "" {
+	if v := os.Getenv("MEM9_EXTRACTION_MAX_TURNS_PER_BATCH"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_EXTRACTION_MAX_TURNS_PER_BATCH: %w", err)
+			return fmt.Errorf("parse MEM9_EXTRACTION_MAX_TURNS_PER_BATCH: %w", err)
 		}
 		cfg.Extraction.MaxTurnsPerBatch = parsed
 	}
-	if v := os.Getenv("MYPAST_EXTRACTION_MAX_CHARS_PER_BATCH"); v != "" {
+	if v := os.Getenv("MEM9_EXTRACTION_MAX_CHARS_PER_BATCH"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_EXTRACTION_MAX_CHARS_PER_BATCH: %w", err)
+			return fmt.Errorf("parse MEM9_EXTRACTION_MAX_CHARS_PER_BATCH: %w", err)
 		}
 		cfg.Extraction.MaxCharsPerBatch = parsed
 	}
-	if v := os.Getenv("MYPAST_SCENE_ENABLED"); v != "" {
+	if v := os.Getenv("MEM9_SCENE_ENABLED"); v != "" {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "1", "true", "yes", "on":
 			cfg.Scene.Enabled = true
 		case "0", "false", "no", "off":
 			cfg.Scene.Enabled = false
 		default:
-			return fmt.Errorf("parse MYPAST_SCENE_ENABLED: invalid boolean %q", v)
+			return fmt.Errorf("parse MEM9_SCENE_ENABLED: invalid boolean %q", v)
 		}
 	}
-	if v := os.Getenv("MYPAST_SCENE_POLL_INTERVAL"); v != "" {
+	if v := os.Getenv("MEM9_SCENE_POLL_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_SCENE_POLL_INTERVAL: %w", err)
+			return fmt.Errorf("parse MEM9_SCENE_POLL_INTERVAL: %w", err)
 		}
 		cfg.Scene.PollInterval = d
 	}
-	if v := os.Getenv("MYPAST_SCENE_DELAY_AFTER_T1"); v != "" {
+	if v := os.Getenv("MEM9_SCENE_DELAY_AFTER_T1"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_SCENE_DELAY_AFTER_T1: %w", err)
+			return fmt.Errorf("parse MEM9_SCENE_DELAY_AFTER_T1: %w", err)
 		}
 		cfg.Scene.DelayAfterT1 = d
 	}
-	if v := os.Getenv("MYPAST_SCENE_BATCH_SESSIONS"); v != "" {
+	if v := os.Getenv("MEM9_SCENE_BATCH_SESSIONS"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_SCENE_BATCH_SESSIONS: %w", err)
+			return fmt.Errorf("parse MEM9_SCENE_BATCH_SESSIONS: %w", err)
 		}
 		cfg.Scene.BatchSessions = parsed
 	}
-	if v := os.Getenv("MYPAST_SCENE_MAX_ATOMS_PER_BATCH"); v != "" {
+	if v := os.Getenv("MEM9_SCENE_MAX_ATOMS_PER_BATCH"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_SCENE_MAX_ATOMS_PER_BATCH: %w", err)
+			return fmt.Errorf("parse MEM9_SCENE_MAX_ATOMS_PER_BATCH: %w", err)
 		}
 		cfg.Scene.MaxAtomsPerBatch = parsed
 	}
-	if v := os.Getenv("MYPAST_MEMORY_ENABLED"); v != "" {
+	if v := os.Getenv("MEM9_MEMORY_ENABLED"); v != "" {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "1", "true", "yes", "on":
 			cfg.Memory.Enabled = true
 		case "0", "false", "no", "off":
 			cfg.Memory.Enabled = false
 		default:
-			return fmt.Errorf("parse MYPAST_MEMORY_ENABLED: invalid boolean %q", v)
+			return fmt.Errorf("parse MEM9_MEMORY_ENABLED: invalid boolean %q", v)
 		}
 	}
-	if v := os.Getenv("MYPAST_MEMORY_POLL_INTERVAL"); v != "" {
+	if v := os.Getenv("MEM9_MEMORY_POLL_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_MEMORY_POLL_INTERVAL: %w", err)
+			return fmt.Errorf("parse MEM9_MEMORY_POLL_INTERVAL: %w", err)
 		}
 		cfg.Memory.PollInterval = d
 	}
-	if v := os.Getenv("MYPAST_MEMORY_MAX_ATOMS_PER_BATCH"); v != "" {
+	if v := os.Getenv("MEM9_MEMORY_MAX_ATOMS_PER_BATCH"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_MEMORY_MAX_ATOMS_PER_BATCH: %w", err)
+			return fmt.Errorf("parse MEM9_MEMORY_MAX_ATOMS_PER_BATCH: %w", err)
 		}
 		cfg.Memory.MaxAtomsPerBatch = parsed
 	}
-	if v := os.Getenv("MYPAST_EMBED_ENABLED"); v != "" {
+	if v := os.Getenv("MEM9_EMBED_ENABLED"); v != "" {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "1", "true", "yes", "on":
 			cfg.Embed.Enabled = true
 		case "0", "false", "no", "off":
 			cfg.Embed.Enabled = false
 		default:
-			return fmt.Errorf("parse MYPAST_EMBED_ENABLED: invalid boolean %q", v)
+			return fmt.Errorf("parse MEM9_EMBED_ENABLED: invalid boolean %q", v)
 		}
 	}
-	if v := os.Getenv("MYPAST_EMBED_API_BASE"); v != "" {
+	if v := os.Getenv("MEM9_EMBED_API_BASE"); v != "" {
 		cfg.Embed.APIBase = v
 	}
-	if v := os.Getenv("MYPAST_EMBED_API_KEY"); v != "" {
+	if v := os.Getenv("MEM9_EMBED_API_KEY"); v != "" {
 		cfg.Embed.APIKey = v
 	}
-	if v := os.Getenv("MYPAST_EMBED_MODEL"); v != "" {
+	if v := os.Getenv("MEM9_EMBED_MODEL"); v != "" {
 		cfg.Embed.Model = v
 	}
-	if v := os.Getenv("MYPAST_EMBED_DIMENSIONS"); v != "" {
+	if v := os.Getenv("MEM9_EMBED_DIMENSIONS"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_EMBED_DIMENSIONS: %w", err)
+			return fmt.Errorf("parse MEM9_EMBED_DIMENSIONS: %w", err)
 		}
 		cfg.Embed.Dimensions = parsed
 	}
-	if v := os.Getenv("MYPAST_EMBED_POLL_INTERVAL"); v != "" {
+	if v := os.Getenv("MEM9_EMBED_POLL_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_EMBED_POLL_INTERVAL: %w", err)
+			return fmt.Errorf("parse MEM9_EMBED_POLL_INTERVAL: %w", err)
 		}
 		cfg.Embed.PollInterval = d
 	}
-	if v := os.Getenv("MYPAST_EMBED_BATCH_SIZE"); v != "" {
+	if v := os.Getenv("MEM9_EMBED_BATCH_SIZE"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_EMBED_BATCH_SIZE: %w", err)
+			return fmt.Errorf("parse MEM9_EMBED_BATCH_SIZE: %w", err)
 		}
 		cfg.Embed.BatchSize = parsed
 	}
-	if v := os.Getenv("MYPAST_EMBED_TIMEOUT"); v != "" {
+	if v := os.Getenv("MEM9_EMBED_TIMEOUT"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_EMBED_TIMEOUT: %w", err)
+			return fmt.Errorf("parse MEM9_EMBED_TIMEOUT: %w", err)
 		}
 		cfg.Embed.Timeout = d
 	}
-	if v := os.Getenv("MYPAST_ALIAS_SUGGEST_ENABLED"); v != "" {
+	if v := os.Getenv("MEM9_ALIAS_SUGGEST_ENABLED"); v != "" {
 		switch strings.ToLower(strings.TrimSpace(v)) {
 		case "1", "true", "yes", "on":
 			cfg.AliasSuggest.Enabled = true
 		case "0", "false", "no", "off":
 			cfg.AliasSuggest.Enabled = false
 		default:
-			return fmt.Errorf("parse MYPAST_ALIAS_SUGGEST_ENABLED: invalid boolean %q", v)
+			return fmt.Errorf("parse MEM9_ALIAS_SUGGEST_ENABLED: invalid boolean %q", v)
 		}
 	}
-	if v := os.Getenv("MYPAST_ALIAS_SUGGEST_POLL_INTERVAL"); v != "" {
+	if v := os.Getenv("MEM9_ALIAS_SUGGEST_POLL_INTERVAL"); v != "" {
 		d, err := time.ParseDuration(v)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_ALIAS_SUGGEST_POLL_INTERVAL: %w", err)
+			return fmt.Errorf("parse MEM9_ALIAS_SUGGEST_POLL_INTERVAL: %w", err)
 		}
 		cfg.AliasSuggest.PollInterval = d
 	}
-	if v := os.Getenv("MYPAST_ALIAS_SUGGEST_BATCH_MEMORIES"); v != "" {
+	if v := os.Getenv("MEM9_ALIAS_SUGGEST_BATCH_MEMORIES"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_ALIAS_SUGGEST_BATCH_MEMORIES: %w", err)
+			return fmt.Errorf("parse MEM9_ALIAS_SUGGEST_BATCH_MEMORIES: %w", err)
 		}
 		cfg.AliasSuggest.BatchMemories = parsed
 	}
-	if v := os.Getenv("MYPAST_ALIAS_SUGGEST_NEIGHBORS"); v != "" {
+	if v := os.Getenv("MEM9_ALIAS_SUGGEST_NEIGHBORS"); v != "" {
 		parsed, err := strconv.Atoi(strings.TrimSpace(v))
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_ALIAS_SUGGEST_NEIGHBORS: %w", err)
+			return fmt.Errorf("parse MEM9_ALIAS_SUGGEST_NEIGHBORS: %w", err)
 		}
 		cfg.AliasSuggest.Neighbors = parsed
 	}
-	if v := os.Getenv("MYPAST_ALIAS_SUGGEST_MIN_SIMILARITY"); v != "" {
+	if v := os.Getenv("MEM9_ALIAS_SUGGEST_MIN_SIMILARITY"); v != "" {
 		parsed, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
 		if err != nil {
-			return fmt.Errorf("parse MYPAST_ALIAS_SUGGEST_MIN_SIMILARITY: %w", err)
+			return fmt.Errorf("parse MEM9_ALIAS_SUGGEST_MIN_SIMILARITY: %w", err)
 		}
 		cfg.AliasSuggest.MinSimilarity = parsed
 	}

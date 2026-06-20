@@ -1,6 +1,6 @@
 import { AliasesTabs } from "@/components/aliases/aliases-tabs";
 
-export const metadata = { title: "Aliases — MyPast Observer" };
+export const metadata = { title: "Aliases — Mem9 Observer" };
 
 export default function AliasesPage() {
   return (

@@ -5,8 +5,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/colinleefish/mypast/internal/service/correction"
-	"github.com/colinleefish/mypast/internal/service/memory"
+	"github.com/colinleefish/mem9/internal/service/correction"
+	"github.com/colinleefish/mem9/internal/service/memory"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

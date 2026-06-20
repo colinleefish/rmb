@@ -3,7 +3,7 @@ package pgarray
 import "testing"
 
 func TestTextArrayValue_quotedURI(t *testing.T) {
-	v, err := TextArray{"mypast://sessions/x/atoms/y"}.Value()
+	v, err := TextArray{"mem9://sessions/x/atoms/y"}.Value()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -11,7 +11,7 @@ func TestTextArrayValue_quotedURI(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected string, got %T", v)
 	}
-	want := `{"mypast://sessions/x/atoms/y"}`
+	want := `{"mem9://sessions/x/atoms/y"}`
 	if got != want {
 		t.Fatalf("Value() = %q, want %q", got, want)
 	}
@@ -19,8 +19,8 @@ func TestTextArrayValue_quotedURI(t *testing.T) {
 
 func TestTextArrayScanRoundTrip(t *testing.T) {
 	src := TextArray{
-		"mypast://sessions/a/atoms/1",
-		"mypast://sessions/b/atoms/2",
+		"mem9://sessions/a/atoms/1",
+		"mem9://sessions/b/atoms/2",
 	}
 	val, err := src.Value()
 	if err != nil {

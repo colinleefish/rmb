@@ -1,6 +1,6 @@
 import { OverviewView } from "@/components/overview/overview-view";
 
-export const metadata = { title: "Overview — MyPast Observer" };
+export const metadata = { title: "Overview — Mem9 Observer" };
 
 export default function HomePage() {
   return (

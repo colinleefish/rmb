@@ -18,7 +18,7 @@ ALTER TABLE corrections DROP COLUMN IF EXISTS payload;
 UPDATE corrections
 SET uri = replace(uri, '://assertions/', '://corrections/'),
     updated_at = now()
-WHERE uri LIKE 'mypast://assertions/%';
+WHERE uri LIKE 'mem9://assertions/%';
 
 -- Provenance column on memories, plus its stored URI contents.
 ALTER TABLE memories RENAME COLUMN source_assertion_uris TO source_correction_uris;
@@ -41,7 +41,7 @@ ALTER TABLE memories RENAME COLUMN source_correction_uris TO source_assertion_ur
 UPDATE corrections
 SET uri = replace(uri, '://corrections/', '://assertions/'),
     updated_at = now()
-WHERE uri LIKE 'mypast://corrections/%';
+WHERE uri LIKE 'mem9://corrections/%';
 
 ALTER TABLE corrections ADD COLUMN IF NOT EXISTS payload jsonb;
 ALTER TABLE corrections ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'correct';

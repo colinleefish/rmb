@@ -3,9 +3,9 @@ package handler
 import (
 	"net/http"
 
-	"github.com/colinleefish/mypast/internal/service/extract"
-	"github.com/colinleefish/mypast/internal/service/memory"
-	"github.com/colinleefish/mypast/internal/service/scene"
+	"github.com/colinleefish/mem9/internal/service/extract"
+	"github.com/colinleefish/mem9/internal/service/memory"
+	"github.com/colinleefish/mem9/internal/service/scene"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"

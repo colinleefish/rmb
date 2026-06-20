@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colinleefish/mypast/internal/service/session"
+	"github.com/colinleefish/mem9/internal/service/session"
 	"github.com/gin-gonic/gin"
 )
 

@@ -7,7 +7,7 @@
 
 ## Idea
 
-mypast currently distills and never forgets. Borrow the Ebbinghaus forgetting
+mem9 currently distills and never forgets. Borrow the Ebbinghaus forgetting
 curve: track each memory's **hits** (retrievals) as a usefulness signal. Two
 forces shape strength:
 
@@ -33,7 +33,7 @@ hit data, a decay function would only penalize memories by age and could hide
 useful ones. So record and observe first, then calibrate the decay against real
 data.
 
-- **v1** — record hits + make them visible (`mypast memory stats`). No ranking
+- **v1** — record hits + make them visible (`mem9 memory stats`). No ranking
   change.
 - **v2** — wire decay/reinforcement into `find`/`search` ranking, calibrated
   against v1 data.
@@ -69,10 +69,10 @@ remote-API modes automatically:
 
 ### 3. Eval excluded for free
 
-`mypast eval` calls the low-level `recall.FTSMemories` / `recall.VectorMemories`
+`mem9 eval` calls the low-level `recall.FTSMemories` / `recall.VectorMemories`
 directly, not `Find` / `Search`, so synthetic probe queries never inflate hits.
 
-### 4. `mypast memory stats`
+### 4. `mem9 memory stats`
 
 View the curve: per-memory weak/strong counts, last-hit time, and age; surface
 both the hottest and coldest memories. DB-direct (operational, like

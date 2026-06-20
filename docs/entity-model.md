@@ -68,14 +68,14 @@ many scenes (across sessions)
 - **Identity:** `session_key` = the agent’s conversation UUID.
 - **Human fields:** optional `title`, `scope_key`, `status`.
 - **Summaries:** `abstract` (new pipeline); `overview_text` (legacy summarizer, being retired).
-- **URI:** `mypast://sessions/<session_key>`
-- **“Body”:** not a single blob — read turns via `mypast tree mypast://sessions/<id>/`.
+- **URI:** `mem9://sessions/<session_key>`
+- **“Body”:** not a single blob — read turns via `mem9 tree mem9://sessions/<id>/`.
 
 ### `session_turns` (T0)
 
 - **One row** = one captured Q/A pair (`messages_jsonl`).
 - **Links:** `session_id` → `sessions`.
-- **URI:** `mypast://sessions/<session_key>/turns/<n>` (`n` = 0, 1, 2, … in order).
+- **URI:** `mem9://sessions/<session_key>/turns/<n>` (`n` = 0, 1, 2, … in order).
 - **Status:** `turn_status` tracks the old per-turn summarizer (`not_summarized` → …); future T1 worker uses `pipeline_state` instead.
 
 ### `atoms` (T1)
@@ -84,14 +84,14 @@ many scenes (across sessions)
 - **Links:** `session_id`; `source_turn_ids[]` points at T0 rows it was extracted from.
 - **Taxonomy:** `category` ∈ `profile` | `preferences` | `entities` | `events`.
 - **Grouping:** `scene_name` hints which scene segment this atom belongs to (filled at extraction).
-- **URI:** `mypast://sessions/<session_key>/atoms/<uuid>` (opaque id; content can change when deduped).
+- **URI:** `mem9://sessions/<session_key>/atoms/<uuid>` (opaque id; content can change when deduped).
 
 ### `scenes` (T2)
 
 - **One row** = one coherent segment inside a session (“debugging hooks”, “L0–L3 design”).
 - **Links:** `session_id`; `source_atom_uris[]` → atoms in this scene.
 - **Content:** `abstract` (~100 tokens, embedded) + `body` (Markdown, full text, FTS).
-- **URI:** `mypast://scenes/<uuid>` with optional `display_name` for humans only.
+- **URI:** `mem9://scenes/<uuid>` with optional `display_name` for humans only.
 
 ### `memories` (T3)
 
@@ -99,7 +99,7 @@ many scenes (across sessions)
 - **Versioning:** multiple physical rows per URI; `superseded_at IS NULL` = active (see `design-l0-l4.md` §7.1, migration `00003_memories_versioning.sql`). Workers INSERT + supersede — no in-place `body` updates.
 - **Links:** `source_scene_uris[]` → scenes that contributed; not session-scoped.
 - **Special cases:**
-  - `profile` → singleton at `mypast://profile`
+  - `profile` → singleton at `mem9://profile`
   - `preferences` / `entities` → semantic slug URIs when possible
   - `events` → dated slug, append-only (no merge at T1 or T3)
 - **Content:** `abstract` + `body`, same facet idea as scenes.

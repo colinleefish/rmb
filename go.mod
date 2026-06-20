@@ -1,4 +1,4 @@
-module github.com/colinleefish/mypast
+module github.com/colinleefish/mem9
 
 go 1.26.1
 

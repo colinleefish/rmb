@@ -1,7 +1,7 @@
 import { SessionsTable } from "@/components/sessions/sessions-table";
 
 export const metadata = {
-  title: "Sessions — MyPast Observer",
+  title: "Sessions — Mem9 Observer",
 };
 
 export default function SessionsPage() {

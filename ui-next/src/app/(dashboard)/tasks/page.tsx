@@ -1,6 +1,6 @@
 import { TasksTable } from "@/components/tasks/tasks-table";
 
-export const metadata = { title: "Tasks — MyPast Observer" };
+export const metadata = { title: "Tasks — Mem9 Observer" };
 
 export default function TasksPage() {
   return (

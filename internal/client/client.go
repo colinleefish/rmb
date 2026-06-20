@@ -1,6 +1,6 @@
-// Package client is the CLI's HTTP client for talking to a remote mypast server.
-// It is selected automatically when MYPAST_URL is configured (env or
-// ~/.mypast.conf), so the CLI commands work against a remote service.
+// Package client is the CLI's HTTP client for talking to a remote mem9 server.
+// It is selected automatically when MEM9_URL is configured (env or
+// ~/.mem9.conf), so the CLI commands work against a remote service.
 package client
 
 import (
@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colinleefish/mypast/internal/service/recall"
+	"github.com/colinleefish/mem9/internal/service/recall"
 )
 
-// Client calls a remote mypast HTTP API with optional basic auth.
+// Client calls a remote mem9 HTTP API with optional basic auth.
 type Client struct {
 	baseURL    string
 	username   string
@@ -28,17 +28,17 @@ type Client struct {
 	httpClient *http.Client
 }
 
-// Resolve returns a Client when MYPAST_URL is explicitly configured (env or
-// ~/.mypast.conf), and ok=false otherwise so the caller falls back to local DB
+// Resolve returns a Client when MEM9_URL is explicitly configured (env or
+// ~/.mem9.conf), and ok=false otherwise so the caller falls back to local DB
 // access. Unlike hook-submit, there is no localhost default: absence of a URL
 // means "use the local database".
 func Resolve() (*Client, bool) {
-	base := confValue("MYPAST_URL")
+	base := confValue("MEM9_URL")
 	if base == "" {
 		return nil, false
 	}
-	user := firstNonEmpty(confValue("MYPAST_USERNAME"), confValue("USERNAME"))
-	pass := firstNonEmpty(confValue("MYPAST_PASSWORD"), confValue("PASSWORD"))
+	user := firstNonEmpty(confValue("MEM9_USERNAME"), confValue("USERNAME"))
+	pass := firstNonEmpty(confValue("MEM9_PASSWORD"), confValue("PASSWORD"))
 	return &Client{
 		baseURL:    strings.TrimRight(base, "/"),
 		username:   user,
@@ -545,16 +545,16 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
-// confValue reads a key from the environment, falling back to ~/.mypast.conf
-// (path overridable via MYPAST_CONF).
+// confValue reads a key from the environment, falling back to ~/.mem9.conf
+// (path overridable via MEM9_CONF).
 func confValue(key string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v
 	}
-	confPath := strings.TrimSpace(os.Getenv("MYPAST_CONF"))
+	confPath := strings.TrimSpace(os.Getenv("MEM9_CONF"))
 	if confPath == "" {
 		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-			confPath = filepath.Join(home, ".mypast.conf")
+			confPath = filepath.Join(home, ".mem9.conf")
 		}
 	}
 	if confPath == "" {

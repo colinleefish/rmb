@@ -1,6 +1,6 @@
-# mypast — L0 → L3 Knowledge Distillation Design
+# mem9 — L0 → L3 Knowledge Distillation Design
 
-> Status: draft. Synthesizes lessons from TencentDB Agent Memory (TDAI) and OpenViking against mypast's tool-agnostic, hook-driven capture model.
+> Status: draft. Synthesizes lessons from TencentDB Agent Memory (TDAI) and OpenViking against mem9's tool-agnostic, hook-driven capture model.
 >
 > See also: [`design-l0-l4.zh.md`](./design-l0-l4.zh.md) for the Mandarin version.
 >
@@ -21,7 +21,7 @@
 - Production multi-tenant isolation with separate accounts/keys (OpenViking has it; out of scope until needed).
 - At-rest encryption.
 - Audit-log / rollback infrastructure (`memory_diff.json`). Not yet justified; can be added later as an append-only table.
-- Filesystem-backed artifacts (`~/.mypast/`). DB columns are the source of truth.
+- Filesystem-backed artifacts (`~/.mem9/`). DB columns are the source of truth.
 - Anything that requires editing an agent's runtime.
 
 ## 3. Background: what we're taking from each
@@ -37,8 +37,8 @@
 | Two-phase commit (`task_id` + async extraction) | OpenViking | Hook returns fast; extraction observable via polling. |
 | Hierarchical retrieval with score propagation | OpenViking | When search lands, don't go flat top-K. |
 | Per-session idle-debounce + threshold + warmup ramp | TDAI | Hooks fire often; don't pay an LLM call per turn. |
-| **Tool-agnostic hook capture** | mypast | Already differentiating. Keep. |
-| **Single Go binary, Postgres-native** | mypast | Operationally simple. Keep. |
+| **Tool-agnostic hook capture** | mem9 | Already differentiating. Keep. |
+| **Single Go binary, Postgres-native** | mem9 | Operationally simple. Keep. |
 
 ## 4. Two-axis model
 
@@ -53,7 +53,7 @@ Distillation lives on two orthogonal axes.
 | **T2 — Scene** | Group of atoms forming a coherent "what we were doing" segment, rendered as Markdown | LLM aggregation of T1 within a session | Few per session |
 | **T3 — Memory** | Long-term, cross-session distillation, in 4 categories | LLM rollup of T2 across sessions | Bounded (singleton `profile`; many per other category) |
 
-**Sessions are also a facet-bearing node.** The `sessions` row itself (parent of T0 turns) carries an `abstract` column for searchability. It is not a separate tier — it is the *aggregate view of one conversation*, addressable as `mypast://sessions/<sid>`. Populated as a small post-step after T2 finishes a session's scenes. A session's "body" is its turns (queried via `mypast tree mypast://sessions/<sid>`), so no separate body column.
+**Sessions are also a facet-bearing node.** The `sessions` row itself (parent of T0 turns) carries an `abstract` column for searchability. It is not a separate tier — it is the *aggregate view of one conversation*, addressable as `mem9://sessions/<sid>`. Populated as a small post-step after T2 finishes a session's scenes. A session's "body" is its turns (queried via `mem9 tree mem9://sessions/<sid>`), so no separate body column.
 
 ### 4.2 Horizontal axis — **Facets** (per row)
 
@@ -66,7 +66,7 @@ Each aggregate row (T2 scenes, T3 memories) carries two columns serving differen
 
 Sessions carry only `abstract` (their detail is the chronological `session_turns`). T0 turns and T1 atoms do not need facets — they're already short. `session_turns.messages_jsonl` and `atoms.content` are their own content.
 
-We considered a third middle facet (an `~1 k token` overview) modelled on OpenViking. Dropped: OpenViking's overview earns its keep as a navigation guide between directory nodes, but mypast has no such tree — drill-down between layers is via foreign-key arrays (`source_*_uris`), not free text. Rerank can chew on the full body at mypast's expected scale. Two views per row instead of three keeps drift risk and generation cost down. We can revisit if rerank cost becomes a real bottleneck.
+We considered a third middle facet (an `~1 k token` overview) modelled on OpenViking. Dropped: OpenViking's overview earns its keep as a navigation guide between directory nodes, but mem9 has no such tree — drill-down between layers is via foreign-key arrays (`source_*_uris`), not free text. Rerank can chew on the full body at mem9's expected scale. Two views per row instead of three keeps drift risk and generation cost down. We can revisit if rerank cost becomes a real bottleneck.
 
 `abstract` is the column we embed (pgvector); `body` is FTS-indexed (`tsvector`).
 
@@ -75,19 +75,19 @@ We considered a third middle facet (an `~1 k token` overview) modelled on OpenVi
 The single addressing layer for everything.
 
 ```
-mypast://{scope}/{path}
+mem9://{scope}/{path}
 ```
 
 ### 5.1 Public scopes and addressing styles
 
 | Scope | Tier | Addressing | Example URIs |
 |---|---|---|---|
-| `sessions` | session / T0 / T1 | session UUID (from agent); turns ordinal; atoms UUID | `mypast://sessions/<sid>` (session abstract)<br>`mypast://sessions/<sid>/turns/<n>` (T0)<br>`mypast://sessions/<sid>/atoms/<uuid>` (T1) |
-| `scenes` | T2 | UUID; optional `display_name` for readable rendering in `mypast cat` | `mypast://scenes/<scene-uuid>` |
-| `profile` | T3 | singleton; no path | `mypast://profile` |
-| `preferences` | T3 | **semantic slug** (topic name); UUID fallback if no slug | `mypast://preferences/coffee`<br>`mypast://preferences/ai-tone` |
-| `entities` | T3 | **semantic slug** (entity name); UUID fallback | `mypast://entities/tesla`<br>`mypast://entities/colin-mom` |
-| `events` | T3 | **date-prefixed slug**; UUID fallback | `mypast://events/2026-05-17-postgres-only-decision` |
+| `sessions` | session / T0 / T1 | session UUID (from agent); turns ordinal; atoms UUID | `mem9://sessions/<sid>` (session abstract)<br>`mem9://sessions/<sid>/turns/<n>` (T0)<br>`mem9://sessions/<sid>/atoms/<uuid>` (T1) |
+| `scenes` | T2 | UUID; optional `display_name` for readable rendering in `mem9 cat` | `mem9://scenes/<scene-uuid>` |
+| `profile` | T3 | singleton; no path | `mem9://profile` |
+| `preferences` | T3 | **semantic slug** (topic name); UUID fallback if no slug | `mem9://preferences/coffee`<br>`mem9://preferences/ai-tone` |
+| `entities` | T3 | **semantic slug** (entity name); UUID fallback | `mem9://entities/tesla`<br>`mem9://entities/colin-mom` |
+| `events` | T3 | **date-prefixed slug**; UUID fallback | `mem9://events/2026-05-17-postgres-only-decision` |
 
 Six public top-level scopes. No scope-keying, no T4 namespace.
 
@@ -95,11 +95,11 @@ Internal scopes (e.g. `tasks`, `_backfill`) are reserved for the server and not 
 
 ### 5.2 URI rules
 
-- **Trailing slash = container.** `mypast://sessions/<sid>` is the session entity itself (`mypast cat` prints its `abstract`). `mypast://sessions/<sid>/` is its container (`mypast tree` lists the turns and atoms beneath it). The same convention applies to every scope.
-- **Short forms.** CLI commands accept `/sessions/abc/turns/0` and `sessions/abc/turns/0`, both normalized to the canonical `mypast://...` form. Lowers typing friction; programmatic callers always emit the canonical form.
-- **Unicode-safe segments.** CJK / Cyrillic / Latin extended / Hiragana / Katakana / Hangul are preserved literally (no percent-encoding); `mypast://entities/李广慧` is a valid URI. Other special characters collapse to `_`. Max 50 chars per segment.
+- **Trailing slash = container.** `mem9://sessions/<sid>` is the session entity itself (`mem9 cat` prints its `abstract`). `mem9://sessions/<sid>/` is its container (`mem9 tree` lists the turns and atoms beneath it). The same convention applies to every scope.
+- **Short forms.** CLI commands accept `/sessions/abc/turns/0` and `sessions/abc/turns/0`, both normalized to the canonical `mem9://...` form. Lowers typing friction; programmatic callers always emit the canonical form.
+- **Unicode-safe segments.** CJK / Cyrillic / Latin extended / Hiragana / Katakana / Hangul are preserved literally (no percent-encoding); `mem9://entities/李广慧` is a valid URI. Other special characters collapse to `_`. Max 50 chars per segment.
 - **Reserved future syntax.** `{namespace:key}` shapes (e.g. `{date:today}`) are reserved and rejected as invalid for now, leaving room to add path-variable templates later without breaking compatibility.
-- **Forbidden slug values.** A slug must not equal a scope name (no `mypast://preferences/profile`). Sanitization rejects with an error rather than silently mangling.
+- **Forbidden slug values.** A slug must not equal a scope name (no `mem9://preferences/profile`). Sanitization rejects with an error rather than silently mangling.
 
 ### 5.3 Slugs and stable IDs
 
@@ -108,18 +108,18 @@ Semantic vs opaque is decided per tier based on whether the row has an intrinsic
 | Row | Why this style |
 |---|---|
 | T0 turn (ordinal) | Turns are chronological; numbering IS the name. |
-| T1 atom (UUID) | Append by default; merge only via explicit `mypast atom merge`. Workers must not silently rewrite content. |
+| T1 atom (UUID) | Append by default; merge only via explicit `mem9 atom merge`. Workers must not silently rewrite content. |
 | T2 scene (UUID + `display_name`) | Scene rows update as atoms accumulate; URI stable via UUID, name surfaced separately for display. |
 | T3 `preferences` / `entities` (slug) | Inherently named topics / entities. URI describes the *topic* or *identity*, not the current content — so the slug stays stable as the body evolves. |
 | T3 `events` (date + slug) | Events are immutable by category rule; date prefix sorts naturally. |
 
 **Source.** The LLM emits `slug` as part of the T1 extraction prompt for atoms tagged `preferences` / `entities` / `events`. T3 routes it directly into the corresponding `memories` row.
 
-**Stability.** Slugs are stable post-creation. Renames require explicit human action (`mypast mv <old-uri> <new-uri>`) which atomically updates the URI and all `source_*_uris` references. Auto-renaming on content drift is forbidden.
+**Stability.** Slugs are stable post-creation. Renames require explicit human action (`mem9 mv <old-uri> <new-uri>`) which atomically updates the URI and all `source_*_uris` references. Auto-renaming on content drift is forbidden.
 
 **Collisions.** `memories` carries `UNIQUE (category, slug) WHERE slug IS NOT NULL`. On conflict, the T3 worker appends `-2`, `-3`, …, and logs a warning so we can detect "the LLM keeps generating colliding slugs for genuinely distinct entities."
 
-**Empty fallback.** If the LLM produces an empty or unusable slug, the row falls back to UUID addressing (`mypast://preferences/<uuid>`). Worst case is ugly URI, never breakage.
+**Empty fallback.** If the LLM produces an empty or unusable slug, the row falls back to UUID addressing (`mem9://preferences/<uuid>`). Worst case is ugly URI, never breakage.
 
 ## 6. Memory taxonomy (T1 and T3 share these)
 
@@ -131,14 +131,14 @@ Aligned with arXiv:2605.12978 (*Useful Memories Become Faulty When Continuously 
 
 - **T0 (`session_turns`)** is append-only episodic evidence; no worker may rewrite it.
 - **Abstract tiers (T1–T3)** are LLM-produced; default policy is **Retain**: insert new rows; consolidation (merge / overwrite `body`) must be **sparse, explicit, and observable** — not the worker default path.
-- **T1 dedup merge is controlled and sparse, not the worker default.** Default: embedding top-K only tags `near_duplicate_uri` or downweights; **insert a new atom**. Merge runs only via `mypast atom merge` (or an equivalent human-triggered task).
+- **T1 dedup merge is controlled and sparse, not the worker default.** Default: embedding top-K only tags `near_duplicate_uri` or downweights; **insert a new atom**. Merge runs only via `mem9 atom merge` (or an equivalent human-triggered task).
 - **`events` (T1 and T3):** append only — no merge, delete, or in-place update.
 - **T3 `profile` / slug rows:** no in-place `body` updates; each rollup **INSERT**s a new row and sets `superseded_at` on the previous active row; reads use `WHERE superseded_at IS NULL`.
-- **Drift detection:** `mypast eval` (§12) after T3 rollup compares "T0+FTS" vs "full stack"; sustained regression triggers an alert.
+- **Drift detection:** `mem9 eval` (§12) after T3 rollup compares "T0+FTS" vs "full stack"; sustained regression triggers an alert.
 
 | Category | T1 worker | T3 worker | What it captures | Example |
 |---|---|---|---|---|
-| `profile` | insert atom; no merge | append new version (`mypast://profile`) | Stable identity — basics, health/taboos, core traits | "Colin lives in Beijing." "Allergic to peanuts." |
+| `profile` | insert atom; no merge | append new version (`mem9://profile`) | Stable identity — basics, health/taboos, core traits | "Colin lives in Beijing." "Allergic to peanuts." |
 | `preferences` | insert atom; no merge | append new version per slug | Recurring "prefers X / wants X", **including AI-behavior rules** | "Prefers single-binary Go services." "Always wants short answers." |
 | `entities` | insert atom; no merge | append new version per slug | Third parties: people, projects, companies, places | "Lisa from accounting prefers email." |
 | `events` | **insert only** | **insert only** | Dated facts, decisions, milestones — immutable | "2026-05-17: chose Postgres-only storage." |
@@ -172,17 +172,17 @@ T0–T2 keep `uri text primary key`; **`memories` uses `id uuid` as PK** (multip
 Phase A created `memories` with `uri` as PK. **Before the T3 worker (Phase D)**, apply `00003_memories_versioning.sql`:
 
 - Add `id uuid`, `version int`, `superseded_at timestamptz`.
-- Logical URI stays user-visible (`mypast cat mypast://profile` → latest row where `superseded_at IS NULL`).
+- Logical URI stays user-visible (`mem9 cat mem9://profile` → latest row where `superseded_at IS NULL`).
 - Workers **must not** `UPDATE … SET body = …`; rollup is always `INSERT` + supersede the previous active row.
-- `mypast cat` / retrieval / `mypast meta` default to the active row; `--version=N` / `--all-versions` for audit (CLI lands with Phase D).
+- `mem9 cat` / retrieval / `mem9 meta` default to the active row; `--version=N` / `--all-versions` for audit (CLI lands with Phase D).
 
 `scenes` may adopt the same pattern in Phase C if eval shows drift; in-place updates are acceptable initially.
 
 Inspection CLI:
 
-- `mypast cat <uri>` — print the row's `body` (or `messages_jsonl` for T0).
-- `mypast tree <uri-prefix>` — list child URIs.
-- `mypast meta <uri>` — print row metadata.
+- `mem9 cat <uri>` — print the row's `body` (or `messages_jsonl` for T0).
+- `mem9 tree <uri-prefix>` — list child URIs.
+- `mem9 meta <uri>` — print row metadata.
 
 ## 8. Capture flow (two-phase)
 
@@ -207,7 +207,7 @@ T1 worker (per session)
         → compare to existing atoms (embedding top-K): default **INSERT new atom**
             · near-duplicates: metadata (e.g. near_duplicate_uri) or downweight — **no** LLM merge
             · `events`: always INSERT; never dedup-merge
-            · merge only via `mypast atom merge <uri-a> <uri-b>` (explicit, sparse)
+            · merge only via `mem9 atom merge <uri-a> <uri-b>` (explicit, sparse)
         → set pipeline_state.t2_status='pending'
 
 T2 worker (per session)
@@ -227,7 +227,7 @@ T3 worker (global mutex)
   action: collect changed scenes
         → LLM call: distill into category-specific memory rows (abstract + body)
         → **INSERT new memories row** + supersede prior active row for same URI (no UPDATE body)
-        → optional: run `mypast eval` (§12)
+        → optional: run `mem9 eval` (§12)
 ```
 
 ## 9. Triggers and discipline
@@ -238,7 +238,7 @@ T3 worker (global mutex)
 | T2 | downward-only timer (delay-after-T1, min, max) | `scene.delay_after_t1=90s`, `scene.min_interval=15m`, `scene.max_interval=1h` |
 | T3 | session-pending or scheduled rollup | `memory.poll_interval=15m` |
 
-Coordination is via Postgres status columns + advisory locks. No in-memory scheduler state required; restart is safe by construction (mypast already does this for the current summarizer).
+Coordination is via Postgres status columns + advisory locks. No in-memory scheduler state required; restart is safe by construction (mem9 already does this for the current summarizer).
 
 ## 10. Retrieval (sketch, deferred implementation)
 
@@ -260,11 +260,11 @@ Current state:
 Migration steps:
 
 1. **Phase A (additive)** — add new Postgres tables (`atoms`, `scenes`, `memories`, `pipeline_state`, `tasks`) and the new columns on `sessions` (`abstract`, `embedding`). Existing tables otherwise untouched. Inspection CLI lands.
-2. **Phase B** — add T1 worker (§6.1 append policy); populate `atoms` from new turns. Backfill via `mypast t1 backfill`. Disable legacy `overview_text` summarizer in production (`MYPAST_SUMMARIZER_ENABLED=false`) so it does not compete with T2 `abstract`.
+2. **Phase B** — add T1 worker (§6.1 append policy); populate `atoms` from new turns. Backfill via `mem9 t1 backfill`. Disable legacy `overview_text` summarizer in production (`MEM9_SUMMARIZER_ENABLED=false`) so it does not compete with T2 `abstract`.
 3. **Phase C** — add T2 worker; refresh `sessions.{abstract, embedding}` from scenes.
 4. **Phase B+ (before Phase D)** — apply `00003_memories_versioning.sql`, then ship T3.
-5. **Phase D** — add T3 worker; `memories` populate; run `mypast eval` after rollups.
-6. **Phase E** — drop `sessions.overview_text` and retire the summarizer worker. Session narrative = `sessions.abstract` + scene bodies via `mypast tree`.
+5. **Phase D** — add T3 worker; `memories` populate; run `mem9 eval` after rollups.
+6. **Phase E** — drop `sessions.overview_text` and retire the summarizer worker. Session narrative = `sessions.abstract` + scene bodies via `mem9 tree`.
 
 Each phase ships independently. Existing capture surface (`POST /sessions/:id/upload`) does not change.
 
@@ -286,12 +286,12 @@ Fixed before implementing T1/T3 workers — see §6.1 and [`memory-consolidation
 
 1. **Embedding model and dimension.** Recommendation: same OpenAI-compatible provider as extraction; **1024** dims (matches Phase A).
 2. **Warmup ramp.** Recommendation: `2 → 4 → 8 → N=8` (`extraction.every_n=8`), not TDAI's 1→2→4→5.
-3. **`mypast eval` probe set.** At least five fixed recall queries; after each T3 rollup compare T0+FTS baseline vs full stack. If full stack underperforms baseline → alert / pause T3.
+3. **`mem9 eval` probe set.** At least five fixed recall queries; after each T3 rollup compare T0+FTS baseline vs full stack. If full stack underperforms baseline → alert / pause T3.
 
-### 12.3 `mypast eval` (minimal spec)
+### 12.3 `mem9 eval` (minimal spec)
 
 ```
-mypast eval [--queries=path] [--baseline=t0-fts|full]
+mem9 eval [--queries=path] [--baseline=t0-fts|full]
 ```
 
 - Default queries file: `scripts/eval_queries.txt` (one query per line; optional expected URI prefix).

@@ -14,9 +14,9 @@
 --
 -- Usage:
 --   Scoped (validate on one session first):
---     psql "$MYPAST_DB_URL" -v session_key="'<uuid>'" -f reextract_backfill.sql
+--     psql "$MEM9_DB_URL" -v session_key="'<uuid>'" -f reextract_backfill.sql
 --   Full (all sessions):
---     psql "$MYPAST_DB_URL" -v session_key=NULL -f reextract_backfill.sql
+--     psql "$MEM9_DB_URL" -v session_key=NULL -f reextract_backfill.sql
 --
 -- Note: there is a window of degraded recall until the rebuild completes.
 

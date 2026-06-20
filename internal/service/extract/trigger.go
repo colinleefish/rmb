@@ -3,7 +3,7 @@ package extract
 import (
 	"time"
 
-	"github.com/colinleefish/mypast/internal/model"
+	"github.com/colinleefish/mem9/internal/model"
 )
 
 // shouldRunT1 decides whether to run T1 for a session on this worker tick.

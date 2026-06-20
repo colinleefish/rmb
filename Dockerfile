@@ -36,7 +36,7 @@ COPY . .
 RUN rm -rf internal/http/static/web
 COPY --from=ui /ui/out internal/http/static/web
 
-RUN go build -trimpath -ldflags="-s -w" -o /out/mypast ./cmd/mypast
+RUN go build -trimpath -ldflags="-s -w" -o /out/mem9 ./cmd/mem9
 
 # --- Runtime stage ------------------------------------------------------------
 # Docker Hub base (reachable via the configured registry accelerator) instead of
@@ -46,7 +46,7 @@ RUN go build -trimpath -ldflags="-s -w" -o /out/mypast ./cmd/mypast
 FROM alpine:3.21
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 RUN addgroup -S app && adduser -S -G app app
-COPY --from=build /out/mypast /mypast
+COPY --from=build /out/mem9 /mem9
 
 USER app
-ENTRYPOINT ["/mypast", "serve"]
+ENTRYPOINT ["/mem9", "serve"]

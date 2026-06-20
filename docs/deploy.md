@@ -13,7 +13,7 @@ Runs `go test ./...` and a compile check.
 
 ## Deploy to production
 
-**Target:** `mem.colinleefish.com` — `/opt/mypast`, `docker compose -f docker-compose.prod.yml up -d --build`.
+**Target:** `mem.colinleefish.com` — `/opt/mem9`, `docker compose -f docker-compose.prod.yml up -d --build`.
 
 **Prerequisites**
 
@@ -52,6 +52,6 @@ For **test-only** or PR prep: stop after step 1.
 
 ## Server notes
 
-- Postgres runs on the host (`:5432`); app config in `/opt/mypast/.env`.
+- Postgres runs on the host (`:5432`); app config in `/opt/mem9/.env`.
 - Production compose: `docker-compose.prod.yml` + `deploy/Caddyfile`.
 - Do not commit secrets or `scripts/deploy.env`.

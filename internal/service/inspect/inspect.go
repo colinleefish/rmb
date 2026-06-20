@@ -9,10 +9,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/colinleefish/mypast/internal/model"
-	"github.com/colinleefish/mypast/internal/service/alias"
-	"github.com/colinleefish/mypast/internal/service/correction"
-	"github.com/colinleefish/mypast/internal/uri"
+	"github.com/colinleefish/mem9/internal/model"
+	"github.com/colinleefish/mem9/internal/service/alias"
+	"github.com/colinleefish/mem9/internal/service/correction"
+	"github.com/colinleefish/mem9/internal/uri"
 	"gorm.io/gorm"
 )
 
@@ -98,18 +98,18 @@ func (s *Service) Meta(ctx context.Context, raw string, w io.Writer) error {
 }
 
 func (s *Service) catRoot(w io.Writer) error {
-	_, err := fmt.Fprintln(w, "mypast root — use `mypast tree mypast://` to list scopes")
+	_, err := fmt.Fprintln(w, "mem9 root — use `mem9 tree mem9://` to list scopes")
 	return err
 }
 
 func (s *Service) treeRoot(w io.Writer) error {
 	scopes := []string{
 		uri.BuildProfile(),
-		"mypast://sessions/",
-		"mypast://scenes/",
-		"mypast://preferences/",
-		"mypast://entities/",
-		"mypast://events/",
+		"mem9://sessions/",
+		"mem9://scenes/",
+		"mem9://preferences/",
+		"mem9://entities/",
+		"mem9://events/",
 	}
 	for _, line := range scopes {
 		if _, err := fmt.Fprintln(w, line); err != nil {
@@ -180,7 +180,7 @@ func (s *Service) catSessionPath(ctx context.Context, u uri.URI, w io.Writer) er
 	}
 }
 
-// sessionPathKind classifies the shape of a mypast://sessions/... URI so that
+// sessionPathKind classifies the shape of a mem9://sessions/... URI so that
 // the cat dispatch (and any future reader) can route by intent rather than
 // re-deriving segment arithmetic at every call site.
 type sessionPathKind int

@@ -6,7 +6,7 @@
 
 - All database operations belong on the server (`internal/http/handler/`, workers, services).
 - Every CLI subcommand in `internal/cli/command.go` must call the HTTP API via `client.Resolve()`.
-- If `MYPAST_URL` is not configured, commands that require the server must return a clear error — there is no local-DB fallback for CLI operations.
+- If `MEM9_URL` is not configured, commands that require the server must return a clear error — there is no local-DB fallback for CLI operations.
 
 This is a hard constraint, not a soft preference. Do not add local-DB paths to CLI commands.
 

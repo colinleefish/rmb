@@ -11,7 +11,7 @@ fi
 
 DEPLOY_HOST="${DEPLOY_HOST:-mem.colinleefish.com}"
 DEPLOY_USER="${DEPLOY_USER:-root}"
-DEPLOY_PATH="${DEPLOY_PATH:-/opt/mypast}"
+DEPLOY_PATH="${DEPLOY_PATH:-/opt/mem9}"
 DEPLOY_PORT="${DEPLOY_PORT:-22}"
 DEPLOY_SSH_KEY_FILE="${DEPLOY_SSH_KEY_FILE:-$HOME/.ssh/colinleefish_ed25519}"
 GIT_REF="${GIT_REF:-main}"
