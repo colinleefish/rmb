@@ -108,6 +108,7 @@ type Overview struct {
 		PipelineStates int64 `json:"pipeline_states"`
 		Tasks          int64 `json:"tasks"`
 		Corrections    int64 `json:"corrections"`
+		Aliases        int64 `json:"aliases"`
 	} `json:"counts"`
 }
 
@@ -175,6 +176,14 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 		Where("superseded_at IS NULL").
 		Count(&out.Counts.Corrections).Error; err != nil {
 		return Overview{}, fmt.Errorf("count corrections: %w", err)
+	}
+	// Aliases are append-only with retraction via SupersededAt; count only active
+	// ones so the badge matches what the aliases list shows.
+	if err := s.db.WithContext(ctx).
+		Table("aliases").
+		Where("superseded_at IS NULL").
+		Count(&out.Counts.Aliases).Error; err != nil {
+		return Overview{}, fmt.Errorf("count aliases: %w", err)
 	}
 	return out, nil
 }

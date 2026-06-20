@@ -14,6 +14,7 @@ export interface OverviewCounts {
   pipeline_states: number;
   tasks: number;
   corrections: number;
+  aliases: number;
 }
 
 export interface Overview {
