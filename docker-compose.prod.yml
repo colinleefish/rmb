@@ -4,9 +4,7 @@
 
 services:
   mem9:
-    # Image is the mem9 binary; Aliyun namespace colinleefish/mem9 is not yet
-    # publicly pullable from the server, so we publish under colinleefish/mypast.
-    image: registry.cn-beijing.aliyuncs.com/colinleefish/mypast:8ec194c
+    image: registry.cn-beijing.aliyuncs.com/colinleefish/mem9:8ec194c
     container_name: mem9-app
     command: ["serve"]
     network_mode: host
