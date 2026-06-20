@@ -21,7 +21,7 @@ export interface NavItem {
   enabled: boolean;
 }
 
-// The mem9 distillation pyramid: sessions → turns → atoms → scenes → memories.
+// The rmb distillation pyramid: sessions → turns → atoms → scenes → memories.
 export const NAV_ITEMS: NavItem[] = [
   { id: "overview", label: "Overview", href: "/", icon: LayoutDashboard, enabled: true },
   { id: "sessions", label: "Sessions", href: "/sessions", icon: MessagesSquare, countKey: "sessions", enabled: true },

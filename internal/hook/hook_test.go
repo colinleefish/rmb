@@ -279,7 +279,7 @@ func TestSubmit_Cursor_UploadsToAPI(t *testing.T) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer srv.Close()
-	t.Setenv("MEM9_URL", srv.URL)
+	t.Setenv("RMB_URL", srv.URL)
 
 	payload := map[string]any{
 		"hook_event_name": "afterAgentResponse",
@@ -344,7 +344,7 @@ func TestSubmit_CC_UploadsWhenFiredByClaudeCode(t *testing.T) {
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	}))
 	defer srv.Close()
-	t.Setenv("MEM9_URL", srv.URL)
+	t.Setenv("RMB_URL", srv.URL)
 
 	payload := map[string]any{
 		"hook_event_name":        "Stop",
@@ -370,26 +370,26 @@ func TestSubmit_CC_UploadsWhenFiredByClaudeCode(t *testing.T) {
 
 // ── hook.go — config ─────────────────────────────────────────────────────────
 
-func TestResolveMem9URL(t *testing.T) {
-	t.Setenv("MEM9_URL", "")
-	t.Setenv("MEM9_CONF", t.TempDir()+"/missing.conf")
-	if got := resolveMem9URL(); got != defaultMem9URL {
-		t.Fatalf("default url = %q, want %q", got, defaultMem9URL)
+func TestResolveRMBURL(t *testing.T) {
+	t.Setenv("RMB_URL", "")
+	t.Setenv("RMB_CONF", t.TempDir()+"/missing.conf")
+	if got := resolveRMBURL(); got != defaultRMBURL {
+		t.Fatalf("default url = %q, want %q", got, defaultRMBURL)
 	}
 
 	confURL := "http://localhost:28080"
-	confPath := t.TempDir() + "/.mem9.conf"
-	if err := os.WriteFile(confPath, []byte("MEM9_URL="+confURL+"\n"), 0o600); err != nil {
+	confPath := t.TempDir() + "/.rmb.conf"
+	if err := os.WriteFile(confPath, []byte("RMB_URL="+confURL+"\n"), 0o600); err != nil {
 		t.Fatalf("write conf: %v", err)
 	}
-	t.Setenv("MEM9_CONF", confPath)
-	if got := resolveMem9URL(); got != confURL {
+	t.Setenv("RMB_CONF", confPath)
+	if got := resolveRMBURL(); got != confURL {
 		t.Fatalf("conf url = %q, want %q", got, confURL)
 	}
 
 	envURL := "http://localhost:18080"
-	t.Setenv("MEM9_URL", envURL)
-	if got := resolveMem9URL(); got != envURL {
+	t.Setenv("RMB_URL", envURL)
+	if got := resolveRMBURL(); got != envURL {
 		t.Fatalf("env url = %q, want %q", got, envURL)
 	}
 }

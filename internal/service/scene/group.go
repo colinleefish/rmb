@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/colinleefish/mem9/internal/model"
-	"github.com/colinleefish/mem9/internal/uri"
+	"github.com/colinleefish/rmb/internal/model"
+	"github.com/colinleefish/rmb/internal/uri"
 	"github.com/google/uuid"
 )
 

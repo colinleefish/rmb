@@ -13,7 +13,7 @@ T1–T3 are LLM-derived and occasionally wrong. Two failure shapes seen in
 practice:
 
 - **Bad fact** — the distiller stamped `10.9.114.160` onto the Aliyun RDS
-  `mem9://entities/starlink-dev-all-in-one`, but that IP is the UCloud source
+  `rmb://entities/starlink-dev-all-in-one`, but that IP is the UCloud source
   VM `…-uc`, a different machine.
 - **Over-merge / over-split** — two similar-named things collapse into one slug
   (or one thing fragments into many).
@@ -33,7 +33,7 @@ URI-addressable) and makes corrections immune to re-distillation.
 ## Data model — `corrections`
 
 A sibling table to `memories`, same discipline (append-only,
-URI-addressable as `mem9://corrections/<uuid>`) — but **not** keyed/versioned by
+URI-addressable as `rmb://corrections/<uuid>`) — but **not** keyed/versioned by
 target the way memories are keyed by `(category, slug)`; see Multiplicity &
 ordering.
 
@@ -61,8 +61,8 @@ A correction is **not** limited to a single memory. Targeting is necessarily
 one-to-many:
 
 - **Cross-cutting facts:** "10.9.114.160 is the `-uc` VM, not the RDS" touches
-  both `mem9://entities/starlink-dev-all-in-one` and
-  `mem9://entities/starlink-dev-all-in-one-uc`.
+  both `rmb://entities/starlink-dev-all-in-one` and
+  `rmb://entities/starlink-dev-all-in-one-uc`.
 - **Any tier ("or assets"):** every artifact is URI-addressable, so a correction
   can target a memory, a scene, or a session. The overlay matches the returned
   object's URI regardless of tier.
@@ -74,7 +74,7 @@ M.uri = ANY(C.target_uris)        -- explicit pin (GIN-indexed)
 ```
 
 **Rule of thumb: correct the thing, not the row.** Prefer the *logical* URI
-(`mem9://entities/<slug>`), which is stable across re-distillation, so the
+(`rmb://entities/<slug>`), which is stable across re-distillation, so the
 correction applies to every future version automatically. Scene URIs (UUIDv5)
 are stable too; raw atom URIs churn on re-extraction, so pinning a correction to
 a specific atom is fragile — avoid it.
@@ -97,13 +97,13 @@ correction on the same memory **adds** to it; it never silently replaces the fir
   correction* (by its URI) is retracted/replaced — which sets its `superseded_at`.
   There is no automatic per-target supersession.
 
-Worked example — memory `mem9://entities/starlink-dev-all-in-one`:
+Worked example — memory `rmb://entities/starlink-dev-all-in-one`:
 
 ```
 day 1  fix … "10.9.114.160 is the -uc source VM, not this RDS."   -> A
 day 2  fix … "This RDS is 100GB; expand to >=200GB."              -> B
 
-fetch mem9://entities/starlink-dev-all-in-one
+fetch rmb://entities/starlink-dev-all-in-one
   ⚑ CORRECTION (human, day 2): RDS is 100GB; expand to >=200GB     # B, newest first
   ⚑ CORRECTION (human, day 1): 10.9.114.160 is the -uc source VM   # A, still active
 ```
@@ -119,7 +119,7 @@ any active correction that targets its URI (see Targeting above) via the
 `target_uris` join — no vectors involved. Result:
 
 ```
-mem9://entities/starlink-dev-all-in-one
+rmb://entities/starlink-dev-all-in-one
   body: …Internal IP: 10.9.114.160…
   ⚑ CORRECTION (human, 2026-06-10): 10.9.114.160 is the -uc source VM, not the RDS.
 ```
@@ -141,7 +141,7 @@ A correction overrides/annotates a specific memory; it may be positive ("she
 works at a bank") or negative ("she does NOT work at Huawei"). That is the whole
 feature — there is no `kind` column.
 
-There is no `forget`. Deliberate forgetting is not a human action mem9
+There is no `forget`. Deliberate forgetting is not a human action rmb
 supports: a wrong fact is a negative correction, and disuse is handled by passive
 usage-based decay (`docs/ebbinghaus-recall.md`). See `docs/forget-rationale.md`
 for the full reasoning.
@@ -187,15 +187,15 @@ carries the overlay, so correctness is enforced at the answer boundary.
 ## CLI surface
 
 ```
-mem9 correction add <uri> [<uri>...] "statement"
-mem9 correction rm  <correction-uri>     # retire a specific correction
-mem9 correction ls  [<target-uri>]       # list active corrections
-mem9 meta <uri>                          # also lists corrections attached to a memory
+rmb correction add <uri> [<uri>...] "statement"
+rmb correction rm  <correction-uri>     # retire a specific correction
+rmb correction ls  [<target-uri>]       # list active corrections
+rmb meta <uri>                          # also lists corrections attached to a memory
 ```
 
 Naming: the concept is **correction** everywhere — the table (`corrections`),
-the model (`Correction`), the URI (`mem9://corrections/<uuid>`), the route
-(`/api/v1/corrections`), the `mem9 correction` command, and the overlay label
+the model (`Correction`), the URI (`rmb://corrections/<uuid>`), the route
+(`/api/v1/corrections`), the `rmb correction` command, and the overlay label
 `CORRECTION`. ("Assertion" was the old internal genus name; it is gone.)
 
 The CLI is a pure API client; writing a correction is a privileged op, so the

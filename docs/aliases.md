@@ -12,7 +12,7 @@
 
 ## Problem
 
-T3 roll-up routes facts into memory slugs (`mem9://entities/<slug>`) per
+T3 roll-up routes facts into memory slugs (`rmb://entities/<slug>`) per
 category. The same real entity can land under different slugs across sessions —
 slug drift — e.g. `entities/aliyun-rds` and `entities/aliyun-rds-instance`.
 Nothing tells the system they are one thing, so both surface independently in
@@ -39,12 +39,12 @@ own thing".
 ## Data model — `aliases`
 
 A sibling table to `memories`, append-only and URI-addressable as
-`mem9://aliases/<uuid>`.
+`rmb://aliases/<uuid>`.
 
 | Column | Notes |
 |--------|-------|
 | `id` | uuid, append-only; never `UPDATE` except to set `superseded_at` |
-| `uri` | `mem9://aliases/<uuid>` — identity of the *relationship*, the handle for `rm` |
+| `uri` | `rmb://aliases/<uuid>` — identity of the *relationship*, the handle for `rm` |
 | `alias_uri` | the redundant memory URI (the one that should disappear from results) |
 | `canonical_uri` | the authoritative memory URI it folds into |
 | `note` | optional human rationale |
@@ -112,7 +112,7 @@ the duplicate is actually born.
 
 `groupAtomsIntoBuckets` (in [`internal/service/memory/group.go`](../internal/service/memory/group.go))
 takes the active alias map (`alias.ActiveMap`). When an atom's routed URI
-`mem9://<cat>/<slug>` is an active alias, its atoms are folded into the
+`rmb://<cat>/<slug>` is an active alias, its atoms are folded into the
 **canonical** bucket. One `DistillMemory` call then sees the union of both
 slugs' atoms and regenerates a single complete body. The canonical's
 `source_scene_uris` naturally grows, so the existing provenance gate detects the
@@ -143,9 +143,9 @@ Because the alias slug's row is retired once folded, `cat`/`meta` on an alias UR
 
 - `cat <alias-uri>`:
   ```
-  This entity is an alias of mem9://entities/aliyun-rds.
+  This entity is an alias of rmb://entities/aliyun-rds.
 
-  → ALIAS OF: mem9://entities/aliyun-rds
+  → ALIAS OF: rmb://entities/aliyun-rds
   (showing canonical below)
 
   <canonical body…>
@@ -153,7 +153,7 @@ Because the alias slug's row is retired once folded, `cat`/`meta` on an alias UR
 - `cat <canonical-uri>` — prints the canonical body, then:
   ```
   --- aliases ---
-  ← mem9://entities/aliyun-rds-instance (note if any)
+  ← rmb://entities/aliyun-rds-instance (note if any)
   ```
 - `meta <alias-uri>` includes `"alias_of": "<canonical>"`.
 - `meta <canonical-uri>` includes `"aliases": ["<alias>", ...]`.
@@ -163,7 +163,7 @@ Because the alias slug's row is retired once folded, `cat`/`meta` on an alias UR
 A live alias is **only ever written by human confirmation** — never by a
 machine on its own. There are two paths to that confirmation:
 
-1. **Direct** — the user (or the agent on the user's say-so) runs `mem9 alias
+1. **Direct** — the user (or the agent on the user's say-so) runs `rmb alias
    set`, the same trust model as corrections.
 2. **Propose-and-confirm** — the **alias-suggest worker** proposes *candidates*
    into `alias_candidates`; a human/agent then confirms (which writes the live
@@ -180,7 +180,7 @@ flowchart LR
     Cand -->|"review CLI / HTTP / UI"| Human{"human / agent confirms?"}
     Human -->|yes| Aliases[("aliases (active)")]
     Human -->|no| Rejected["status=rejected, never re-proposed"]
-    Direct["mem9 alias set"] -->|direct write| Aliases
+    Direct["rmb alias set"] -->|direct write| Aliases
 ```
 
 ### The alias-suggest worker
@@ -204,7 +204,7 @@ global advisory lock as T3:
 Cost is self-bounding: every judged pair leaves a row, so a pair is judged at
 most once ever, and a rejected pair is never re-proposed.
 
-Config (`[alias_suggest]` / `MEM9_ALIAS_SUGGEST_*`):
+Config (`[alias_suggest]` / `RMB_ALIAS_SUGGEST_*`):
 
 | Key | Default | Meaning |
 |-----|---------|---------|
@@ -217,9 +217,9 @@ Config (`[alias_suggest]` / `MEM9_ALIAS_SUGGEST_*`):
 ### Reviewing candidates
 
 ```
-mem9 alias candidates [--status=pending]   # list (pending|confirmed|rejected|all)
-mem9 alias confirm <candidate-id>          # promote to a live alias
-mem9 alias reject  <candidate-id>          # reject; never re-proposed
+rmb alias candidates [--status=pending]   # list (pending|confirmed|rejected|all)
+rmb alias confirm <candidate-id>          # promote to a live alias
+rmb alias reject  <candidate-id>          # reject; never re-proposed
 ```
 
 `confirm` runs the exact same post-write side-effects as `alias set` (wake T3,
@@ -230,14 +230,14 @@ pending. The web UI exposes the same review under Aliases → Suggestions.
 ## CLI surface
 
 ```
-mem9 alias set <alias-uri> <canonical-uri> ["note"]
-mem9 alias rm  <mem9://aliases/...>     # retract a specific alias
-mem9 alias ls  [<uri>]                    # list active aliases (either side)
-mem9 meta <uri>                           # also shows alias_of / aliases
+rmb alias set <alias-uri> <canonical-uri> ["note"]
+rmb alias rm  <rmb://aliases/...>     # retract a specific alias
+rmb alias ls  [<uri>]                    # list active aliases (either side)
+rmb meta <uri>                           # also shows alias_of / aliases
 ```
 
 Writing an alias is a privileged op, so (like corrections) the CLI is a pure API
-client and the write path requires auth (`MEM9_URL` + credentials).
+client and the write path requires auth (`RMB_URL` + credentials).
 
 ## HTTP API
 
@@ -276,7 +276,7 @@ T3.
 
 - `aliases` + `alias_candidates` tables + migration (`00011`), with flat-star +
   same-category invariants.
-- New `mem9://aliases/<uuid>` URI scope.
+- New `rmb://aliases/<uuid>` URI scope.
 - Write path: service + HTTP handler + CLI + client (`set`/`rm`/`ls`).
 - Read-time resolution wired into `search` (fold + dedup) as the safety net.
 - **T3 merge**: alias-aware bucket routing, write-time wake, and retirement of the
@@ -297,7 +297,7 @@ T3.
 
 | Doc | Use when |
 |-----|----------|
-| This file | "How do I tell mem9 two slugs are the same entity?" |
+| This file | "How do I tell rmb two slugs are the same entity?" |
 | [`corrections.md`](./corrections.md) | The sibling human-authority layer (content patches) |
 | [`entity-model.md`](./entity-model.md) | Table relationships and the T0–T3 pyramid |
 | [`project-review.md`](./project-review.md) | Slug-drift context that motivated this |

@@ -3,7 +3,7 @@ package inspect
 import (
 	"testing"
 
-	"github.com/colinleefish/mem9/internal/uri"
+	"github.com/colinleefish/rmb/internal/uri"
 )
 
 func TestClassifySessionPath(t *testing.T) {

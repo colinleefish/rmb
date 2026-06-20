@@ -1,6 +1,6 @@
 import { CorrectionsTable } from "@/components/corrections/corrections-table";
 
-export const metadata = { title: "Corrections — Mem9 Observer" };
+export const metadata = { title: "Corrections — RMB Observer" };
 
 export default function CorrectionsPage() {
   return (

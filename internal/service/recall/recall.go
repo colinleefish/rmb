@@ -1,5 +1,5 @@
 // Package recall provides retrieval over the memory pyramid: lexical (full-text)
-// and vector (cosine), plus rank fusion. It backs `mem9 search`.
+// and vector (cosine), plus rank fusion. It backs `rmb search`.
 package recall
 
 import (
@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/colinleefish/mem9/internal/db/pgarray"
-	"github.com/colinleefish/mem9/internal/service/alias"
-	"github.com/colinleefish/mem9/internal/service/correction"
+	"github.com/colinleefish/rmb/internal/db/pgarray"
+	"github.com/colinleefish/rmb/internal/service/alias"
+	"github.com/colinleefish/rmb/internal/service/correction"
 	"gorm.io/gorm"
 )
 
@@ -309,7 +309,7 @@ func FTSTurns(ctx context.Context, db *gorm.DB, query string, k int) ([]Match, e
 	}
 	var out []Match
 	if err := db.WithContext(ctx).Raw(`
-		SELECT 'mem9://sessions/' || session_id::text AS uri,
+		SELECT 'rmb://sessions/' || session_id::text AS uri,
 		       'turns' AS tier,
 		       ts_rank(
 		         to_tsvector('english', messages_jsonl),

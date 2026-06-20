@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colinleefish/mem9/internal/config"
+	"github.com/colinleefish/rmb/internal/config"
 )
 
 // EmbeddingClient calls an OpenAI-compatible /embeddings endpoint. It is kept

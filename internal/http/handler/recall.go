@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/colinleefish/mem9/internal/db/pgarray"
-	"github.com/colinleefish/mem9/internal/service/recall"
+	"github.com/colinleefish/rmb/internal/db/pgarray"
+	"github.com/colinleefish/rmb/internal/service/recall"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

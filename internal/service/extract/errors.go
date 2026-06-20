@@ -4,8 +4,8 @@ import (
 	"context"
 	"log"
 
-	"github.com/colinleefish/mem9/internal/llm"
-	"github.com/colinleefish/mem9/internal/model"
+	"github.com/colinleefish/rmb/internal/llm"
+	"github.com/colinleefish/rmb/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

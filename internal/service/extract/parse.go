@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/colinleefish/mem9/internal/model"
+	"github.com/colinleefish/rmb/internal/model"
 )
 
 type llmAtom struct {

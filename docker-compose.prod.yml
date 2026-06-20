@@ -1,22 +1,22 @@
-# Production: mem9 + Caddy (host network).
-# - mem9 → PostgreSQL 18 on host :5432 (set MEM9_DB_URL in .env)
+# Production: rmb + Caddy (host network).
+# - rmb → PostgreSQL 18 on host :5432 (set RMB_DB_URL in .env)
 # - caddy → :80 / :443 → reverse_proxy 127.0.0.1:8080
 
 services:
-  mem9:
-    image: registry.cn-beijing.aliyuncs.com/colinleefish/mem9:8ec194c
-    container_name: mem9-app
+  rmb:
+    image: registry.cn-beijing.aliyuncs.com/colinleefish/rmb:8ec194c
+    container_name: rmb-app
     command: ["serve"]
     network_mode: host
     env_file: .env
     environment:
-      MEM9_ADDR: ":8080"
+      RMB_ADDR: ":8080"
       GIN_MODE: release
     restart: unless-stopped
 
   caddy:
     image: caddy:2-alpine
-    container_name: mem9-caddy
+    container_name: rmb-caddy
     network_mode: host
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
@@ -24,7 +24,7 @@ services:
       - caddy_config:/config
     restart: unless-stopped
     depends_on:
-      - mem9
+      - rmb
 
 volumes:
   caddy_data:

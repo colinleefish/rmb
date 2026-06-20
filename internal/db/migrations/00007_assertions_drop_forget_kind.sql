@@ -1,5 +1,5 @@
 -- +goose Up
--- Drop the 'forget' kind: deliberate forgetting is not a human action mem9
+-- Drop the 'forget' kind: deliberate forgetting is not a human action rmb
 -- supports. A wrong fact is a negative 'correct'; disuse is handled by passive
 -- decay (docs/ebbinghaus-recall.md). See docs/forget-rationale.md.
 -- No rows use 'forget' (the service only ever wrote correct/forget, and no

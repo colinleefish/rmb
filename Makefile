@@ -1,5 +1,5 @@
-APP := mem9
-CMD := ./cmd/mem9
+APP := rmb
+CMD := ./cmd/rmb
 BIN := ./bin/$(APP)
 
 .PHONY: build run ci deploy

@@ -1,6 +1,6 @@
 import { AtomsTable } from "@/components/atoms/atoms-table";
 
-export const metadata = { title: "Atoms — Mem9 Observer" };
+export const metadata = { title: "Atoms — RMB Observer" };
 
 export default function AtomsPage() {
   return (

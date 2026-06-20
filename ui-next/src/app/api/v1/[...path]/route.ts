@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Server-side proxy for /api/v1/* → the mem9 Go API.
+// Server-side proxy for /api/v1/* → the rmb Go API.
 //
 // Why a route handler instead of next.config rewrites: the upstream may require
 // Basic auth, and rewrites cannot add request headers. This keeps credentials on
 // the server (never shipped to the browser) and avoids CORS, since the browser
 // only ever talks to this same-origin endpoint.
-const API_BASE = process.env.MEM9_API_URL ?? "http://localhost:8080";
-const API_USER = process.env.MEM9_API_USER ?? "";
-const API_PASS = process.env.MEM9_API_PASS ?? "";
+const API_BASE = process.env.RMB_API_URL ?? "http://localhost:8080";
+const API_USER = process.env.RMB_API_USER ?? "";
+const API_PASS = process.env.RMB_API_PASS ?? "";
 
 function authHeader(): Record<string, string> {
   if (!API_USER || !API_PASS) return {};
@@ -47,7 +47,7 @@ async function forward(
     });
   } catch (err) {
     return NextResponse.json(
-      { error: `cannot reach mem9 API at ${API_BASE}: ${(err as Error).message}` },
+      { error: `cannot reach rmb API at ${API_BASE}: ${(err as Error).message}` },
       { status: 502 },
     );
   }

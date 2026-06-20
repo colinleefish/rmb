@@ -8,23 +8,23 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/colinleefish/mem9/internal/cli"
-	"github.com/colinleefish/mem9/internal/config"
-	"github.com/colinleefish/mem9/internal/db"
-	"github.com/colinleefish/mem9/internal/http/handler"
-	"github.com/colinleefish/mem9/internal/http/router"
-	"github.com/colinleefish/mem9/internal/llm"
-	"github.com/colinleefish/mem9/internal/server"
-	"github.com/colinleefish/mem9/internal/service/alias"
-	"github.com/colinleefish/mem9/internal/service/browse"
-	"github.com/colinleefish/mem9/internal/service/correction"
-	"github.com/colinleefish/mem9/internal/service/health"
-	"github.com/colinleefish/mem9/internal/service/embed"
-	"github.com/colinleefish/mem9/internal/service/extract"
-	"github.com/colinleefish/mem9/internal/service/inspect"
-	"github.com/colinleefish/mem9/internal/service/memory"
-	"github.com/colinleefish/mem9/internal/service/scene"
-	"github.com/colinleefish/mem9/internal/service/session"
+	"github.com/colinleefish/rmb/internal/cli"
+	"github.com/colinleefish/rmb/internal/config"
+	"github.com/colinleefish/rmb/internal/db"
+	"github.com/colinleefish/rmb/internal/http/handler"
+	"github.com/colinleefish/rmb/internal/http/router"
+	"github.com/colinleefish/rmb/internal/llm"
+	"github.com/colinleefish/rmb/internal/server"
+	"github.com/colinleefish/rmb/internal/service/alias"
+	"github.com/colinleefish/rmb/internal/service/browse"
+	"github.com/colinleefish/rmb/internal/service/correction"
+	"github.com/colinleefish/rmb/internal/service/health"
+	"github.com/colinleefish/rmb/internal/service/embed"
+	"github.com/colinleefish/rmb/internal/service/extract"
+	"github.com/colinleefish/rmb/internal/service/inspect"
+	"github.com/colinleefish/rmb/internal/service/memory"
+	"github.com/colinleefish/rmb/internal/service/scene"
+	"github.com/colinleefish/rmb/internal/service/session"
 )
 
 func main() {
@@ -144,7 +144,7 @@ func main() {
 					recallHandler = handler.NewRecallHandler(database, recallEmbed)
 				}
 			} else {
-				log.Printf("recall endpoints unavailable; MEM9_EMBED_API_KEY not set")
+				log.Printf("recall endpoints unavailable; RMB_EMBED_API_KEY not set")
 			}
 
 			inspectHandler := handler.NewInspectHandler(inspect.NewService(database))

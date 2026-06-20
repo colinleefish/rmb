@@ -8,15 +8,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colinleefish/mem9/internal/config"
-	"github.com/colinleefish/mem9/internal/db"
-	"github.com/colinleefish/mem9/internal/llm"
-	"github.com/colinleefish/mem9/internal/model"
+	"github.com/colinleefish/rmb/internal/config"
+	"github.com/colinleefish/rmb/internal/db"
+	"github.com/colinleefish/rmb/internal/llm"
+	"github.com/colinleefish/rmb/internal/model"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-const suggestLockKey = "mem9-alias-suggest"
+const suggestLockKey = "rmb-alias-suggest"
 
 // AliasJudge decides whether two memory entries are the same entity. The chat
 // LLM client satisfies it; tests supply a mock so candidate generation can be

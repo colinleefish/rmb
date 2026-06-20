@@ -8,15 +8,15 @@ import (
 
 func TestNormalizeTargets_dedupAndCanonicalize(t *testing.T) {
 	got, err := normalizeTargets([]string{
-		"mem9://entities/jenkins",
-		" mem9://entities/jenkins ", // whitespace + duplicate
-		"mem9://profile",
+		"rmb://entities/jenkins",
+		" rmb://entities/jenkins ", // whitespace + duplicate
+		"rmb://profile",
 		"",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	want := []string{"mem9://entities/jenkins", "mem9://profile"}
+	want := []string{"rmb://entities/jenkins", "rmb://profile"}
 	if len(got) != len(want) {
 		t.Fatalf("got %v want %v", got, want)
 	}
@@ -46,7 +46,7 @@ func TestCreate_requiresTarget(t *testing.T) {
 func TestCreate_requiresStatement(t *testing.T) {
 	s := &Service{}
 	_, err := s.Create(context.Background(), CreateInput{
-		TargetURIs: []string{"mem9://entities/jenkins"},
+		TargetURIs: []string{"rmb://entities/jenkins"},
 	})
 	if !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("expected ErrInvalidInput, got %v", err)

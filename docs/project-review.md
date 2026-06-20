@@ -1,16 +1,16 @@
-# Project review: mem9 vs TDAI and OpenViking
+# Project review: rmb vs TDAI and OpenViking
 
-> Status: review note (2026-06). An end-to-end assessment of mem9 and a
+> Status: review note (2026-06). An end-to-end assessment of rmb and a
 > comparison with the two reference systems it drew from: TencentDB Agent Memory
 > (TDAI) and OpenViking.
 >
 > **Caveat:** the reference projects are not checked into this repo (`tmp/` is
-> local-only), so the TDAI/OpenViking columns draw on mem9's own design-doc
+> local-only), so the TDAI/OpenViking columns draw on rmb's own design-doc
 > characterization (`design-l0-l4.md` §3, §13) plus general knowledge, not their
-> source. Anything inferred is marked as such. The mem9 assessment is grounded
+> source. Anything inferred is marked as such. The rmb assessment is grounded
 > in the current code.
 
-## What mem9 is
+## What rmb is
 
 A personal, cross-session memory layer for AI-agent conversations. Tool-agnostic
 capture (Cursor / Claude Code hooks) feeds a four-tier distillation pyramid in
@@ -40,36 +40,36 @@ usage-decay (planned, not built — see `ebbinghaus-recall.md`).
 
 ## Architecture comparison
 
-| Dimension | mem9 | TDAI (Tencent) | OpenViking |
+| Dimension | rmb | TDAI (Tencent) | OpenViking |
 |-----------|--------|----------------|------------|
 | Tiers | T0→T3 (4) | L0→L3 layering (origin of the pyramid) | per-node L0/L1/L2 facets + dir tree |
 | Capture | Tool-agnostic hooks, no SDK in agent | In-runtime / SDK-coupled (inferred) | Session API / SDK |
 | Storage | Single Go binary + Postgres (pgvector) | TS service (inferred) | TS service + tree store |
-| Extraction | 4-category atoms, in-call scene segmentation (from TDAI) | L1 atom extraction (the model mem9 copied) | 8-category user model |
+| Extraction | 4-category atoms, in-call scene segmentation (from TDAI) | L1 atom extraction (the model rmb copied) | 8-category user model |
 | Facets | 2 (abstract / body) — dropped the middle "overview" | — | 3 (abstract / overview / detail) |
-| Addressing | `mem9://` URI scheme (from OpenViking) | — | `viking://` URIs + directory tree |
-| Retrieval | vector + FTS + RRF fusion (hierarchical score-prop deferred) | persona / timer driven | hierarchical descent with score propagation (mem9's design goal) |
+| Addressing | `rmb://` URI scheme (from OpenViking) | — | `viking://` URIs + directory tree |
+| Retrieval | vector + FTS + RRF fusion (hierarchical score-prop deferred) | persona / timer driven | hierarchical descent with score propagation (rmb's design goal) |
 | Consolidation | append-first, versioned, drift-aware (arXiv:2605.12978) | continuous persona regen | upsert-style |
 | Scheduling | per-session debounce + warmup (from TDAI) | three-timer pipeline | two-phase commit (from OpenViking) |
 
-## Where mem9 is genuinely stronger
+## Where rmb is genuinely stronger
 
 1. **Tool-agnostic, zero-SDK capture.** Anything that can fire a hook and POST
    JSON works. The references are SDK / runtime-coupled (per the design doc's
-   framing). This is mem9's clearest differentiator.
+   framing). This is rmb's clearest differentiator.
 2. **Operational simplicity.** One Go binary + one Postgres. No tree filesystem
    to babysit, no separate vector DB. The dual-mode CLI (same binary = server,
    local tool, and remote client) is a nice touch neither reference emphasizes.
-3. **Consolidation discipline.** mem9 is explicitly built around the
+3. **Consolidation discipline.** rmb is explicitly built around the
    "continuous LLM consolidation is unreliable" paper: T0 append-only, events
    insert-only, T3 versioned (never in-place), drift-detecting eval. This is a
    more principled stance than "regenerate the persona each time."
 4. **Inspectability.** Every artifact is a URI, dumpable via `cat` / `tree` /
    `meta`. Nothing hides in an opaque format.
 
-## Where mem9 is behind / weaker
+## Where rmb is behind / weaker
 
-1. **Retrieval is the least-finished tier.** mem9 borrowed OpenViking's idea
+1. **Retrieval is the least-finished tier.** rmb borrowed OpenViking's idea
    of hierarchical descent with score propagation but deferred it — current
    `search` is RRF over a flat candidate set. OpenViking's tree-structured
    descent is more sophisticated for deep corpora. Biggest capability gap.
@@ -80,7 +80,7 @@ usage-decay (planned, not built — see `ebbinghaus-recall.md`).
    empty — a real quality gap. (Fix shipped for new data; existing data still
    needs a re-extraction backfill.)
 4. **No usage / forgetting signal yet.** TDAI's persona model implicitly
-   re-weights; mem9 keeps everything forever (the Ebbinghaus plan addresses
+   re-weights; rmb keeps everything forever (the Ebbinghaus plan addresses
    this but isn't built).
 5. **Single-namespace, single-tenant.** No scope-keying (work / personal /
    project), no multi-tenant isolation — deliberately parked, but the references
@@ -88,7 +88,7 @@ usage-decay (planned, not built — see `ebbinghaus-recall.md`).
 
 ## Overall assessment
 
-mem9 is the most operationally disciplined and capture-flexible of the three,
+rmb is the most operationally disciplined and capture-flexible of the three,
 and the only one explicitly engineered against consolidation drift. It
 deliberately traded retrieval sophistication and generality for simplicity and
 correctness — a sound bet for a personal memory store, which is its actual scope.

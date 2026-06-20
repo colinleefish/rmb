@@ -1,4 +1,4 @@
-module github.com/colinleefish/mem9
+module github.com/colinleefish/rmb
 
 go 1.26.1
 

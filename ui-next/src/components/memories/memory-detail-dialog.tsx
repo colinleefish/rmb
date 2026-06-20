@@ -280,7 +280,7 @@ function MarkAsAliasForm({
       <MemoryUriInput
         value={canonicalURI}
         onChange={setCanonicalURI}
-        placeholder="mem9://entities/aliyun-rds"
+        placeholder="rmb://entities/aliyun-rds"
         excludeURIs={[memoryURI]}
       />
       <input

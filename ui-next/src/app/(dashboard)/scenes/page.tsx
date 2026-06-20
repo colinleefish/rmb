@@ -1,6 +1,6 @@
 import { ScenesTable } from "@/components/scenes/scenes-table";
 
-export const metadata = { title: "Scenes — Mem9 Observer" };
+export const metadata = { title: "Scenes — RMB Observer" };
 
 export default function ScenesPage() {
   return (

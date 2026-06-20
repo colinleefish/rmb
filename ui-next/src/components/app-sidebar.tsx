@@ -45,7 +45,7 @@ export function AppSidebar() {
             <Brain className="size-4" />
           </div>
           <div className="grid leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="text-sm font-semibold">Mem9</span>
+            <span className="text-sm font-semibold">RMB</span>
             <span className="text-muted-foreground text-xs">Observer</span>
           </div>
         </div>

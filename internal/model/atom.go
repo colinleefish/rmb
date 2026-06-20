@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"github.com/colinleefish/mem9/internal/db/pgarray"
+	"github.com/colinleefish/rmb/internal/db/pgarray"
 	"github.com/google/uuid"
 )
 

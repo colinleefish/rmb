@@ -3,7 +3,7 @@ package handler
 import (
 	"net/http"
 
-	"github.com/colinleefish/mem9/internal/service/health"
+	"github.com/colinleefish/rmb/internal/service/health"
 	"github.com/gin-gonic/gin"
 )
 

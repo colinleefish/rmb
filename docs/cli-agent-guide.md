@@ -1,11 +1,11 @@
-# mem9 — recall guide for AI agents
+# rmb — recall guide for AI agents
 
-`mem9` is the user's long-term memory across past AI conversations. Use it to
+`rmb` is the user's long-term memory across past AI conversations. Use it to
 recall facts, decisions, configs, and context the user established in earlier
 sessions, instead of asking them to repeat themselves.
 
-The `mem9` command is on the PATH. It talks to the user's remote memory server
-automatically (configured in `~/.mem9.conf`); you do not manage connections or
+The `rmb` command is on the PATH. It talks to the user's remote memory server
+automatically (configured in `~/.rmb.conf`); you do not manage connections or
 auth — just run the commands.
 
 ## When to use it
@@ -14,7 +14,7 @@ Before asking the user a question, or when a task references something that
 likely happened before (a server, project, credential location, past decision,
 preference), **search your memory first**:
 
-- The user mentions a host/project/tool by name → `mem9 find` or `search` it.
+- The user mentions a host/project/tool by name → `rmb find` or `search` it.
 - You need a path, port, config location, or prior decision → recall it.
 - The user says "like last time" / "the usual" / "where we left off" → recall it.
 
@@ -25,8 +25,8 @@ If recall returns nothing relevant, then ask the user.
 ### Search (use this most)
 
 ```
-mem9 search "<natural language query>"      # hybrid: meanings + keywords, across memories and scenes
-mem9 find "<natural language query>"         # vector-only: closest long-term memories
+rmb search "<natural language query>"      # hybrid: meanings + keywords, across memories and scenes
+rmb find "<natural language query>"         # vector-only: closest long-term memories
 ```
 
 - Prefer `search` for most questions — it blends semantic + keyword matching and
@@ -37,9 +37,9 @@ mem9 find "<natural language query>"         # vector-only: closest long-term me
 Output is a ranked list:
 
 ```
- 1. [memories] mem9://entities/tokyo-shadowsocks-config
+ 1. [memories] rmb://entities/tokyo-shadowsocks-config
       Shadowsocks config on tokyo-endpoint is at /etc/shadowsocks-rust/config.json ...
- 2. [scenes]   mem9://scenes/<uuid>
+ 2. [scenes]   rmb://scenes/<uuid>
       ...one-line abstract...
 ```
 
@@ -49,9 +49,9 @@ handle for drilling down.
 ### Drill down
 
 ```
-mem9 cat <uri>      # full body/content of a memory, scene, or turn
-mem9 meta <uri>     # metadata as JSON (category, slug, version, source links, timestamps)
-mem9 tree <uri>     # list child URIs under a prefix
+rmb cat <uri>      # full body/content of a memory, scene, or turn
+rmb meta <uri>     # metadata as JSON (category, slug, version, source links, timestamps)
+rmb tree <uri>     # list child URIs under a prefix
 ```
 
 Typical flow: `search` to find a relevant `uri`, then `cat <uri>` to read the
@@ -63,9 +63,9 @@ Memory is a pyramid; results carry a `tier` and a `uri`:
 
 | Tier | URI shape | What it is |
 |------|-----------|------------|
-| memories | `mem9://profile`, `mem9://preferences/<slug>`, `mem9://entities/<slug>`, `mem9://events/<slug>` | Long-term, cross-session distilled facts. Most useful. |
-| scenes | `mem9://scenes/<uuid>` | Per-conversation summaries ("what we were doing"). |
-| sessions/turns | `mem9://sessions/<id>`, `.../turns/<n>` | Raw conversation evidence (ground truth). |
+| memories | `rmb://profile`, `rmb://preferences/<slug>`, `rmb://entities/<slug>`, `rmb://events/<slug>` | Long-term, cross-session distilled facts. Most useful. |
+| scenes | `rmb://scenes/<uuid>` | Per-conversation summaries ("what we were doing"). |
+| sessions/turns | `rmb://sessions/<id>`, `.../turns/<n>` | Raw conversation evidence (ground truth). |
 
 Memory categories:
 
@@ -81,18 +81,18 @@ To trace a fact to its source: `meta <memory-uri>` shows `source_scene_uris`;
 
 ```
 # "What's the config for the tokyo endpoint?"
-mem9 search "tokyo endpoint shadowsocks config"
-mem9 cat mem9://entities/tokyo-shadowsocks-config
+rmb search "tokyo endpoint shadowsocks config"
+rmb cat rmb://entities/tokyo-shadowsocks-config
 
 # "Where does Jenkins store its data again?"
-mem9 search "jenkins home directory disk"
+rmb search "jenkins home directory disk"
 
 # "What did we decide about storage?"
-mem9 search "storage decision postgres"
+rmb search "storage decision postgres"
 
 # Browse what categories exist
-mem9 tree mem9://
-mem9 tree mem9://entities/
+rmb tree rmb://
+rmb tree rmb://entities/
 ```
 
 ## Rules

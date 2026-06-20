@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Agent-driven deploy to production (mem.colinleefish.com).
+# Agent-driven deploy to production (rmb.colinleefish.com).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -9,9 +9,9 @@ if [[ -f scripts/deploy.env ]]; then
   source scripts/deploy.env
 fi
 
-DEPLOY_HOST="${DEPLOY_HOST:-mem.colinleefish.com}"
+DEPLOY_HOST="${DEPLOY_HOST:-rmb.colinleefish.com}"
 DEPLOY_USER="${DEPLOY_USER:-root}"
-DEPLOY_PATH="${DEPLOY_PATH:-/opt/mem9}"
+DEPLOY_PATH="${DEPLOY_PATH:-/opt/rmb}"
 DEPLOY_PORT="${DEPLOY_PORT:-22}"
 DEPLOY_SSH_KEY_FILE="${DEPLOY_SSH_KEY_FILE:-$HOME/.ssh/colinleefish_ed25519}"
 GIT_REF="${GIT_REF:-main}"
@@ -51,4 +51,4 @@ echo "healthz failed after deploy" >&2
 exit 1
 EOF
 
-echo "Deploy OK: https://mem.colinleefish.com"
+echo "Deploy OK: https://rmb.colinleefish.com"

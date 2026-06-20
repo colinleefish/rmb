@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colinleefish/mem9/internal/uri"
+	"github.com/colinleefish/rmb/internal/uri"
 )
 
 func TestBuildSessionTurnURI(t *testing.T) {
 	got := uri.BuildSessionTurn("4f1916ce-2f6e-4b76-8249-4a5f4184fd8d", 0)
-	want := "mem9://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/0"
+	want := "rmb://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/0"
 	if got != want {
 		t.Fatalf("unexpected turn uri: %s", got)
 	}

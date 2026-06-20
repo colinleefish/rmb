@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/colinleefish/mem9/internal/model"
-	"github.com/colinleefish/mem9/internal/uri"
+	"github.com/colinleefish/rmb/internal/model"
+	"github.com/colinleefish/rmb/internal/uri"
 )
 
 // memoryBucket is one logical long-term memory target: a single profile, or a

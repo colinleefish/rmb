@@ -13,12 +13,12 @@ Runs `go test ./...` and a compile check.
 
 ## Deploy to production
 
-**Target:** `mem.colinleefish.com` — `/opt/mem9`, `docker compose -f docker-compose.prod.yml up -d --build`.
+**Target:** `rmb.colinleefish.com` — `/opt/rmb`, `docker compose -f docker-compose.prod.yml up -d --build`.
 
 **Prerequisites**
 
 - `main` pushed to GitHub (server pulls via deploy key).
-- SSH key with access to `root@mem.colinleefish.com` (default: `~/.ssh/colinleefish_ed25519`).
+- SSH key with access to `root@rmb.colinleefish.com` (default: `~/.ssh/colinleefish_ed25519`).
 - Optional overrides: copy `scripts/deploy.env.example` → `scripts/deploy.env`.
 - HTTP(S) proxy on port **1080** on both your machine and the server (GitHub is blocked from China).
 
@@ -46,12 +46,12 @@ When the user asks to **ship**, **deploy**, or **release** after code changes:
 1. Run `make ci` and fix failures.
 2. Commit and push to `main` with `ssproxy && git push` when needed (ask the user if unclear).
 3. Run `make deploy`.
-4. Report `healthz` result and link https://mem.colinleefish.com
+4. Report `healthz` result and link https://rmb.colinleefish.com
 
 For **test-only** or PR prep: stop after step 1.
 
 ## Server notes
 
-- Postgres runs on the host (`:5432`); app config in `/opt/mem9/.env`.
+- Postgres runs on the host (`:5432`); app config in `/opt/rmb/.env`.
 - Production compose: `docker-compose.prod.yml` + `deploy/Caddyfile`.
 - Do not commit secrets or `scripts/deploy.env`.

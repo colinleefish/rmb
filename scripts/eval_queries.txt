@@ -1,4 +1,4 @@
-# mem9 eval - fixed recall probes (one per line).
+# rmb eval - fixed recall probes (one per line).
 # Format: <query>\t<optional expected URI prefix>
 # v1 is lexical (FTS): compares memories recall vs raw-turn baseline.
 # See docs/design-l0-l4.md §12.3
@@ -6,11 +6,11 @@
 # Probes below are derived from real distilled memories. Keep phrasing keyword-ish
 # (FTS is English-stemmed). Update as the memory set evolves.
 
-Where is the Shadowsocks config on the tokyo endpoint?	mem9://entities/
-What is the total May billing amount?	mem9://entities/
-What is the UCloud monthly cost?	mem9://entities/
-What service actually runs on uc-starlink-hfrog-minio-registry?	mem9://entities/
-How is the tokyo-endpoint accessed?	mem9://entities/
-Where is the TortoiseSVN cleanup command located?	mem9://entities/
-What is the two-layer scene model?	mem9://entities/
-What bucket naming convention do toolhub and agentserver use?	mem9://entities/
+Where is the Shadowsocks config on the tokyo endpoint?	rmb://entities/
+What is the total May billing amount?	rmb://entities/
+What is the UCloud monthly cost?	rmb://entities/
+What service actually runs on uc-starlink-hfrog-minio-registry?	rmb://entities/
+How is the tokyo-endpoint accessed?	rmb://entities/
+Where is the TortoiseSVN cleanup command located?	rmb://entities/
+What is the two-layer scene model?	rmb://entities/
+What bucket naming convention do toolhub and agentserver use?	rmb://entities/

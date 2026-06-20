@@ -1,4 +1,4 @@
-# mem9
+# rmb
 
 Personal long-term memory store for AI-agent conversations. Captures every
 turn from supported agent tools into PostgreSQL, then summarizes them in the
@@ -9,23 +9,23 @@ background so they can be recalled across sessions.
 What works today:
 
 - HTTP API for uploading conversation turns (`POST /api/v1/sessions/:id/upload`).
-- `mem9 hook-submit --source=<cursor|cc>` for ingesting hook payloads from
+- `rmb hook-submit --source=<cursor|cc>` for ingesting hook payloads from
   Cursor and Claude Code, with race-free user/assistant pairing.
 - **T1 extraction worker** (Phase B): async atom extraction from turns into
-  `atoms` (append-only; `MEM9_EXTRACTION_ENABLED=true` by default).
+  `atoms` (append-only; `RMB_EXTRACTION_ENABLED=true` by default).
 - **T2 scene worker** (Phase C): groups atoms into `scenes` and writes
-  `sessions.abstract` (`MEM9_SCENE_ENABLED=true` by default).
+  `sessions.abstract` (`RMB_SCENE_ENABLED=true` by default).
 - **T3 memory worker** (Phase D): rolls atoms across sessions into versioned
-  long-term `memories` by category/slug (`MEM9_MEMORY_ENABLED=true` by default).
-- Legacy summarizer (`overview_text`) is off by default (`MEM9_SUMMARIZER_ENABLED=false`).
+  long-term `memories` by category/slug (`RMB_MEMORY_ENABLED=true` by default).
+- Legacy summarizer (`overview_text`) is off by default (`RMB_SUMMARIZER_ENABLED=false`).
 
-Inspection CLI: `mem9 cat`, `mem9 tree`, `mem9 meta` (Phase A).
+Inspection CLI: `rmb cat`, `rmb tree`, `rmb meta` (Phase A).
 
 Web observer UI at `/ui/` when the server is running (browse sessions, turns, atoms,
 scenes, memories, pipeline state, and tasks).
 
-Production (`mem.colinleefish.com`): Caddy in Docker terminates TLS and proxies to
-`mem9` on `:8080` — see `deploy/Caddyfile` and `docker-compose.prod.yml`.
+Production (`rmb.colinleefish.com`): Caddy in Docker terminates TLS and proxies to
+`rmb` on `:8080` — see `deploy/Caddyfile` and `docker-compose.prod.yml`.
 
 **Roadmap:** [`docs/plan.md`](docs/plan.md) (Phase A–E, current status, next steps).
 
@@ -37,14 +37,14 @@ embedding worker, hybrid recall, MCP wrapper.
 ```txt
 agent (Cursor / Claude Code)
    │
-   │ stdin JSON  ── hooks ──► mem9 hook-submit --source=…
+   │ stdin JSON  ── hooks ──► rmb hook-submit --source=…
    │                                │
    │                                ▼
    │                     POST /api/v1/sessions/:id/upload
    │                                │
    ▼                                ▼
                               ┌──────────────┐
-                              │   mem9     │
+                              │   rmb     │
                               │   (Gin HTTP) │
                               └──────┬───────┘
                                      │
@@ -68,10 +68,10 @@ Data model (PostgreSQL, [goose](https://github.com/pressly/goose) migrations on 
 ## Layout
 
 ```
-cmd/mem9/            entry point (serve / hook-submit)
+cmd/rmb/            entry point (serve / hook-submit)
 internal/
   cli/                 argv parsing
-  config/              .env + ~/.config/mem9/config.toml + env overrides
+  config/              .env + ~/.config/rmb/config.toml + env overrides
   db/                  gorm connection + auto-migrate
   hook/                hook payload → upload adapter
     hook.go            Submit() + routing + HTTP post
@@ -99,10 +99,10 @@ scripts/               ci.sh, deploy.sh, SQL utilities
 ### Local
 
 ```
-cp .env.example .env       # edit MEM9_DB_URL, MEM9_LLM_API_KEY, …
-make run                    # go run ./cmd/mem9 serve
+cp .env.example .env       # edit RMB_DB_URL, RMB_LLM_API_KEY, …
+make run                    # go run ./cmd/rmb serve
 # or
-make build && ./bin/mem9 serve
+make build && ./bin/rmb serve
 ```
 
 ### Docker
@@ -129,7 +129,7 @@ and before deploy. For test-only or PR prep, stop here.
 
 ### Deploy
 
-**Production:** https://mem.colinleefish.com — app at `/opt/mem9`, Caddy + Docker
+**Production:** https://rmb.colinleefish.com — app at `/opt/rmb`, Caddy + Docker
 (`docker-compose.prod.yml`).
 
 ```bash
@@ -141,7 +141,7 @@ Runs CI, then SSHs to the server, `git reset --hard` to `main`, `docker compose 
 **Prerequisites**
 
 - Latest `main` pushed to GitHub (server pulls via deploy key).
-- SSH access to `root@mem.colinleefish.com` (default key: `~/.ssh/colinleefish_ed25519`).
+- SSH access to `root@rmb.colinleefish.com` (default key: `~/.ssh/colinleefish_ed25519`).
 - Optional overrides: `scripts/deploy.env` (copy from `scripts/deploy.env.example`; gitignored).
 - HTTP(S) proxy on port **1080** (local machine and production server) for GitHub access from China.
 
@@ -163,7 +163,7 @@ ssproxy && git push origin main
 1. `make ci` — fix any failures.
 2. Commit and push to `main` with `ssproxy && git push` when GitHub is unreachable directly (ask first if unclear).
 3. `make deploy`.
-4. Report whether `/healthz` passed and link https://mem.colinleefish.com
+4. Report whether `/healthz` passed and link https://rmb.colinleefish.com
 
 More detail: [`docs/deploy.md`](docs/deploy.md).
 
@@ -172,7 +172,7 @@ More detail: [`docs/deploy.md`](docs/deploy.md).
 Resolution order (later wins):
 
 1. Defaults baked into `internal/config`.
-2. `~/.config/mem9/config.toml` (path overridable via `MEM9_CONFIG`).
+2. `~/.config/rmb/config.toml` (path overridable via `RMB_CONFIG`).
 3. `.env` in the working directory.
 4. Process environment.
 
@@ -180,15 +180,15 @@ Key variables (see `.env.example` for the full list):
 
 | Var                                   | Default                                                            |
 |---------------------------------------|--------------------------------------------------------------------|
-| `MEM9_DB_URL`                       | `postgres://admin@127.0.0.1:5432/mem9_db?sslmode=disable`       |
-| `MEM9_ADDR`                         | `:8080`                                                            |
-| `MEM9_LLM_API_BASE` / `_API_KEY` / `_MODEL` | OpenAI-compatible endpoint used by the summarizer            |
-| `MEM9_SUMMARIZER_ENABLED`           | `true`                                                             |
-| `MEM9_SUMMARIZER_POLL_INTERVAL`     | `15s`                                                              |
-| `MEM9_SUMMARIZER_MAX_TURNS_PER_MERGE` | `4`                                                              |
+| `RMB_DB_URL`                       | `postgres://admin@127.0.0.1:5432/rmb_db?sslmode=disable`       |
+| `RMB_ADDR`                         | `:8080`                                                            |
+| `RMB_LLM_API_BASE` / `_API_KEY` / `_MODEL` | OpenAI-compatible endpoint used by the summarizer            |
+| `RMB_SUMMARIZER_ENABLED`           | `true`                                                             |
+| `RMB_SUMMARIZER_POLL_INTERVAL`     | `15s`                                                              |
+| `RMB_SUMMARIZER_MAX_TURNS_PER_MERGE` | `4`                                                              |
 
-For `hook-submit`, the target API URL is read from `MEM9_URL` or
-`~/.mem9.conf` (key `MEM9_URL=`), defaulting to `http://127.0.0.1:8080`.
+For `hook-submit`, the target API URL is read from `RMB_URL` or
+`~/.rmb.conf` (key `RMB_URL=`), defaulting to `http://127.0.0.1:8080`.
 To mirror turns to **local + production**, register **two hook entries** — see [`docs/hooks-dual.md`](docs/hooks-dual.md).
 
 ## Hook Integration
@@ -203,7 +203,7 @@ payloads exit non-zero.
   "hooks": {
     "afterAgentResponse": [
       {
-        "command": "/path/to/mem9/bin/mem9 hook-submit --source=cursor",
+        "command": "/path/to/rmb/bin/rmb hook-submit --source=cursor",
         "timeout": 5
       }
     ]
@@ -220,7 +220,7 @@ payloads exit non-zero.
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "/path/to/mem9/bin/mem9 hook-submit --source=cc" }
+          { "type": "command", "command": "/path/to/rmb/bin/rmb hook-submit --source=cc" }
         ]
       }
     ]
@@ -250,7 +250,7 @@ pairing on Claude Code) live in `internal/hook/cursor.go` and
 
 `session_id` must be a UUID. Each request appends one `session_turns` row
 to the session (creating the session row on first upload). Response includes
-the `mem9://sessions/<id>/turns/<n>` URI for the new turn.
+the `rmb://sessions/<id>/turns/<n>` URI for the new turn.
 
 `GET /healthz` — DB ping + `pg_extension` lookup for `vector`.
 
@@ -262,7 +262,7 @@ the `mem9://sessions/<id>/turns/<n>` URI for the new turn.
 memories and scenes, fused with reciprocal rank fusion.
 
 Both return `{ "items": [ { "uri", "tier", "rank", "snippet" } ] }` and require
-the server to have an embedding client configured (`MEM9_EMBED_API_KEY`).
+the server to have an embedding client configured (`RMB_EMBED_API_KEY`).
 
 `GET /api/v1/inspect/{cat,tree,meta}?uri=<uri>` — text output of the inspection
 commands (used by the CLI's remote mode).
@@ -270,18 +270,18 @@ commands (used by the CLI's remote mode).
 ## CLI: local vs remote
 
 Operational CLI commands (`t1/t2/t3 backfill`, `embed status`, `eval`) talk
-**directly to the database** (`MEM9_DB_URL`) — run them on the server or
+**directly to the database** (`RMB_DB_URL`) — run them on the server or
 against a local dev DB.
 
 `find`, `search`, `cat`, `tree`, and `meta` are **dual-mode**:
 
-- **Remote (client):** if `MEM9_URL` is set (env or `~/.mem9.conf`), they
+- **Remote (client):** if `RMB_URL` is set (env or `~/.rmb.conf`), they
   call the server's recall API over HTTP with basic auth — run them from your
   laptop against production.
 - **Local:** otherwise they query the database directly and embed the query
-  locally via `MEM9_EMBED_*`.
+  locally via `RMB_EMBED_*`.
 
-`hook-submit` is always an HTTP client (posts to `MEM9_URL`).
+`hook-submit` is always an HTTP client (posts to `RMB_URL`).
 
 ## Testing
 

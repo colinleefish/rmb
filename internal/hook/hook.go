@@ -1,5 +1,5 @@
 // Package hook is the adapter layer that translates agent transcript hook
-// payloads (Cursor afterAgentResponse, Claude Code Stop, etc.) into mem9
+// payloads (Cursor afterAgentResponse, Claude Code Stop, etc.) into rmb
 // session upload API calls. Source-specific payload parsing lives in
 // cursor.go (Cursor) and claude.go (Claude Code).
 package hook
@@ -34,11 +34,11 @@ type uploadRequest struct {
 	Messages []uploadMessage `json:"messages"`
 }
 
-const defaultMem9URL = "http://127.0.0.1:8080"
+const defaultRMBURL = "http://127.0.0.1:8080"
 
 // Submit is the single entry point for all hook invocations.
 // It routes to source-specific parsing based on --source, then POSTs to the
-// mem9 upload API.
+// rmb upload API.
 //
 // Routing:
 //   - source=cursor    → must pass isCursorPayload; use cursor extraction
@@ -55,10 +55,10 @@ func Submit(ctx context.Context, in SubmitInput) error {
 		return fmt.Errorf("hook-submit: source is required")
 	}
 
-	targetURL := resolveMem9URL()
+	targetURL := resolveRMBURL()
 
 	logf := func(action, reason string, extra ...any) error {
-		msg := fmt.Sprintf("mem9 hook-submit source=%s action=%s reason=%s target=%s", source, action, reason, targetURL)
+		msg := fmt.Sprintf("rmb hook-submit source=%s action=%s reason=%s target=%s", source, action, reason, targetURL)
 		for i := 0; i+1 < len(extra); i += 2 {
 			msg += fmt.Sprintf(" %s=%v", extra[i], extra[i+1])
 		}
@@ -133,7 +133,7 @@ func postUpload(
 		return 0, fmt.Errorf("build upload request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if user, pass := resolveMem9Auth(); user != "" {
+	if user, pass := resolveRMBAuth(); user != "" {
 		req.SetBasicAuth(user, pass)
 	}
 
@@ -154,27 +154,27 @@ func postUpload(
 	return resp.StatusCode, nil
 }
 
-func resolveMem9URL() string {
-	if v := strings.TrimSpace(os.Getenv("MEM9_URL")); v != "" {
+func resolveRMBURL() string {
+	if v := strings.TrimSpace(os.Getenv("RMB_URL")); v != "" {
 		return v
 	}
-	confPath := strings.TrimSpace(os.Getenv("MEM9_CONF"))
+	confPath := strings.TrimSpace(os.Getenv("RMB_CONF"))
 	if confPath == "" {
 		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-			confPath = filepath.Join(home, ".mem9.conf")
+			confPath = filepath.Join(home, ".rmb.conf")
 		}
 	}
 	if confPath != "" {
-		if v := readEnvValueFromFile(confPath, "MEM9_URL"); v != "" {
+		if v := readEnvValueFromFile(confPath, "RMB_URL"); v != "" {
 			return v
 		}
 	}
-	return defaultMem9URL
+	return defaultRMBURL
 }
 
-func resolveMem9Auth() (string, string) {
-	user := strings.TrimSpace(os.Getenv("MEM9_USERNAME"))
-	pass := strings.TrimSpace(os.Getenv("MEM9_PASSWORD"))
+func resolveRMBAuth() (string, string) {
+	user := strings.TrimSpace(os.Getenv("RMB_USERNAME"))
+	pass := strings.TrimSpace(os.Getenv("RMB_PASSWORD"))
 	if user == "" {
 		user = strings.TrimSpace(os.Getenv("USERNAME"))
 	}
@@ -182,19 +182,19 @@ func resolveMem9Auth() (string, string) {
 		pass = strings.TrimSpace(os.Getenv("PASSWORD"))
 	}
 
-	confPath := strings.TrimSpace(os.Getenv("MEM9_CONF"))
+	confPath := strings.TrimSpace(os.Getenv("RMB_CONF"))
 	if confPath == "" {
 		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-			confPath = filepath.Join(home, ".mem9.conf")
+			confPath = filepath.Join(home, ".rmb.conf")
 		}
 	}
 	if confPath != "" {
-		if v := readEnvValueFromFile(confPath, "MEM9_USERNAME"); v != "" {
+		if v := readEnvValueFromFile(confPath, "RMB_USERNAME"); v != "" {
 			user = v
 		} else if v := readEnvValueFromFile(confPath, "USERNAME"); v != "" {
 			user = v
 		}
-		if v := readEnvValueFromFile(confPath, "MEM9_PASSWORD"); v != "" {
+		if v := readEnvValueFromFile(confPath, "RMB_PASSWORD"); v != "" {
 			pass = v
 		} else if v := readEnvValueFromFile(confPath, "PASSWORD"); v != "" {
 			pass = v

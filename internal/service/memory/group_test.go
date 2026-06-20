@@ -3,8 +3,8 @@ package memory
 import (
 	"testing"
 
-	"github.com/colinleefish/mem9/internal/db/pgarray"
-	"github.com/colinleefish/mem9/internal/model"
+	"github.com/colinleefish/rmb/internal/db/pgarray"
+	"github.com/colinleefish/rmb/internal/model"
 )
 
 func strPtr(s string) *string { return &s }
@@ -30,18 +30,18 @@ func TestGroupAtomsIntoBuckets(t *testing.T) {
 		byURI[b.URI] = b
 	}
 
-	profile, ok := byURI["mem9://profile"]
+	profile, ok := byURI["rmb://profile"]
 	if !ok || len(profile.Atoms) != 2 {
 		t.Fatalf("profile bucket wrong: %+v", profile)
 	}
-	pref, ok := byURI["mem9://preferences/ai-tone"]
+	pref, ok := byURI["rmb://preferences/ai-tone"]
 	if !ok || len(pref.Atoms) != 2 {
 		t.Fatalf("preferences/ai-tone bucket wrong: %+v", pref)
 	}
-	if _, ok := byURI["mem9://entities/tesla"]; !ok {
+	if _, ok := byURI["rmb://entities/tesla"]; !ok {
 		t.Fatal("missing entities/tesla bucket")
 	}
-	if _, ok := byURI["mem9://events/2026-05-17-postgres"]; !ok {
+	if _, ok := byURI["rmb://events/2026-05-17-postgres"]; !ok {
 		t.Fatal("missing events bucket")
 	}
 }
@@ -52,7 +52,7 @@ func TestGroupAtomsIntoBuckets_noProfileWhenEmpty(t *testing.T) {
 	}
 	buckets, _ := groupAtomsIntoBuckets(atoms, nil)
 	for _, b := range buckets {
-		if b.URI == "mem9://profile" {
+		if b.URI == "rmb://profile" {
 			t.Fatal("should not create an empty profile bucket")
 		}
 	}
@@ -64,7 +64,7 @@ func TestGroupAtomsIntoBuckets_aliasFold(t *testing.T) {
 		{URI: "a2", Category: model.AtomCategoryEntities, Slug: strPtr("aliyun-rds"), Content: "prod billing DB"},
 	}
 	aliasMap := map[string]string{
-		"mem9://entities/aliyun-rds-instance": "mem9://entities/aliyun-rds",
+		"rmb://entities/aliyun-rds-instance": "rmb://entities/aliyun-rds",
 	}
 
 	buckets, skipped := groupAtomsIntoBuckets(atoms, aliasMap)
@@ -75,7 +75,7 @@ func TestGroupAtomsIntoBuckets_aliasFold(t *testing.T) {
 		t.Fatalf("expected the alias to fold into a single canonical bucket, got %d: %+v", len(buckets), buckets)
 	}
 	b := buckets[0]
-	if b.URI != "mem9://entities/aliyun-rds" {
+	if b.URI != "rmb://entities/aliyun-rds" {
 		t.Fatalf("folded bucket should be the canonical, got %s", b.URI)
 	}
 	if len(b.Atoms) != 2 {
@@ -118,14 +118,14 @@ func TestEqualStringSets(t *testing.T) {
 
 func TestBuildAtomSceneIndexAndProvenance(t *testing.T) {
 	scenes := []model.Scene{
-		{URI: "mem9://scenes/s1", SourceAtomURIs: pgarray.TextArray{"a1", "a2"}},
-		{URI: "mem9://scenes/s2", SourceAtomURIs: pgarray.TextArray{"a2", "a3"}},
+		{URI: "rmb://scenes/s1", SourceAtomURIs: pgarray.TextArray{"a1", "a2"}},
+		{URI: "rmb://scenes/s2", SourceAtomURIs: pgarray.TextArray{"a2", "a3"}},
 	}
 	index := buildAtomSceneIndex(scenes)
 
 	bucket := memoryBucket{Atoms: []model.Atom{{URI: "a2"}, {URI: "a3"}}}
 	got := sourceSceneURIsFor(bucket, index)
-	if len(got) != 2 || got[0] != "mem9://scenes/s1" || got[1] != "mem9://scenes/s2" {
+	if len(got) != 2 || got[0] != "rmb://scenes/s1" || got[1] != "rmb://scenes/s2" {
 		t.Fatalf("unexpected source scenes: %+v", got)
 	}
 }

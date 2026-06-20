@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/colinleefish/mem9/internal/http/static"
+	"github.com/colinleefish/rmb/internal/http/static"
 	"github.com/gin-gonic/gin"
 )
 

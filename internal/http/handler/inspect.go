@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/colinleefish/mem9/internal/service/inspect"
+	"github.com/colinleefish/rmb/internal/service/inspect"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

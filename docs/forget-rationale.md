@@ -1,8 +1,8 @@
-# Why `mem9` has no `forget` assertion
+# Why `rmb` has no `forget` assertion
 
 > Decision: **dropped.** The human authority layer is a single thing — a
 > **correction** (a content overlay). Deliberate forgetting is not a human action
-> mem9 supports; forgetting is the job of passive, usage-based decay (see
+> rmb supports; forgetting is the job of passive, usage-based decay (see
 > `docs/ebbinghaus-recall.md`). This doc records the reasoning so we don't
 > re-litigate it.
 >
@@ -38,7 +38,7 @@ different mechanism (a recall-time suppression filter), not the distiller.
 
 ### 3. But suppression can't actually "forget" anything
 
-mem9 is **evidence-driven**: a memory is a *view* re-derived from append-only
+rmb is **evidence-driven**: a memory is a *view* re-derived from append-only
 atoms/scenes. As long as the evidence exists, T3 keeps re-deriving the memory at
 its stable slug URI. So a suppression flag on the URI does not erase anything —
 it only hides the view, while the entity keeps silently accumulating new

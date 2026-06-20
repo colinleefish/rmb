@@ -7,11 +7,11 @@ func TestParseAndString(t *testing.T) {
 		in   string
 		want string
 	}{
-		{"mem9://", "mem9://"},
+		{"rmb://", "rmb://"},
 		{"/sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/0",
-			"mem9://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/0"},
-		{"mem9://profile", "mem9://profile"},
-		{"mem9://preferences/coffee", "mem9://preferences/coffee"},
+			"rmb://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/0"},
+		{"rmb://profile", "rmb://profile"},
+		{"rmb://preferences/coffee", "rmb://preferences/coffee"},
 	}
 
 	for _, tc := range tests {
@@ -27,7 +27,7 @@ func TestParseAndString(t *testing.T) {
 
 func TestBuildSessionTurn(t *testing.T) {
 	got := BuildSessionTurn("4F1916CE-2F6E-4B76-8249-4A5F4184FD8D", 3)
-	want := "mem9://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/3"
+	want := "rmb://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/3"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
@@ -73,7 +73,7 @@ func TestParseRejectsReservedSlug(t *testing.T) {
 }
 
 func TestContainerTrailingSlash(t *testing.T) {
-	u, err := Parse("mem9://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/")
+	u, err := Parse("rmb://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/")
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
@@ -86,10 +86,10 @@ func TestContainerTrailingSlash(t *testing.T) {
 // list everything under a category. treeRoot advertises these exact URIs.
 func TestParseScopeContainers(t *testing.T) {
 	cases := []string{
-		"mem9://entities/",
-		"mem9://preferences/",
-		"mem9://events/",
-		"mem9://scenes/",
+		"rmb://entities/",
+		"rmb://preferences/",
+		"rmb://events/",
+		"rmb://scenes/",
 	}
 	for _, in := range cases {
 		u, err := Parse(in)

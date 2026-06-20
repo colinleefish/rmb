@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colinleefish/mem9/internal/model"
+	"github.com/colinleefish/rmb/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

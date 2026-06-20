@@ -9,6 +9,6 @@ echo "==> go test"
 go test ./...
 
 echo "==> go build"
-go build -o /dev/null ./cmd/mem9
+go build -o /dev/null ./cmd/rmb
 
 echo "CI OK"

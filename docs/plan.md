@@ -1,4 +1,4 @@
-# mem9 — implementation plan
+# rmb — implementation plan
 
 > Roadmap for the T0→T3 memory pipeline. Phases are **shipping milestones**, not calendar quarters.
 > Each phase should be deployable on its own; the upload API (`POST /api/v1/sessions/:id/upload`) stays stable throughout.
@@ -28,15 +28,15 @@ Workers move data **up** the pyramid on a schedule (not every hook). T0 is never
 | **Phase A** — schema + observe                 | ✅ Done         | Migrations `00001`–`00002`, CLI, `/ui/`       |
 | **Design lock** — append-first, versioning     | ✅ Done         | §6.1 in design doc; review doc updated        |
 | **Phase B+** — `memories` versioning migration | ✅ Done (early) | `00003` applied on prod before T3 code exists |
-| **Phase B** — T1 worker                        | ✅ Done         | `MEM9_EXTRACTION_*`; `mem9 t1 backfill`   |
-| **Phase C** — T2 worker                        | ✅ Done         | `MEM9_SCENE_*`; `mem9 t2 backfill`        |
-| **Phase D** — T3 worker                        | ✅ Done         | `MEM9_MEMORY_*`; `mem9 t3 backfill`       |
-| **Phase D** — `mem9 eval`                    | 🔲 Planned      | Drift detection after rollup                  |
+| **Phase B** — T1 worker                        | ✅ Done         | `RMB_EXTRACTION_*`; `rmb t1 backfill`   |
+| **Phase C** — T2 worker                        | ✅ Done         | `RMB_SCENE_*`; `rmb t2 backfill`        |
+| **Phase D** — T3 worker                        | ✅ Done         | `RMB_MEMORY_*`; `rmb t3 backfill`       |
+| **Phase D** — `rmb eval`                    | 🔲 Planned      | Drift detection after rollup                  |
 | **Phase E** — retire legacy summarizer         | 🔲 Planned      | Drop `overview_text` path                     |
 | **Retrieval** — `find` / `search`              | 🔲 Later        | Design §10                                    |
 | **MCP wrapper**                                | 🔲 Later        | After CLI/recall stable                       |
 
-Production: <https://mem.colinleefish.com>
+Production: <https://rmb.colinleefish.com>
 
 ---
 
@@ -48,7 +48,7 @@ Production: <https://mem.colinleefish.com>
 
 - Postgres: `atoms`, `scenes`, `memories`, `pipeline_state`, `tasks`; `sessions.abstract`, `sessions.embedding`
 - Goose migrations `00001_baseline.sql`, `00002_phase_a.sql`
-- CLI: `mem9 cat`, `mem9 tree`, `mem9 meta`
+- CLI: `rmb cat`, `rmb tree`, `rmb meta`
 - Web UI: `/ui/` browse all tables
 - Hooks + `POST …/upload` unchanged
 
@@ -56,7 +56,7 @@ Production: <https://mem.colinleefish.com>
 
 - `make ci`
 - `/ui/` shows empty atoms/scenes/memories until workers run
-- `mem9 tree mem9://sessions/<id>` lists turns
+- `rmb tree rmb://sessions/<id>` lists turns
 
 ---
 
@@ -73,11 +73,11 @@ Production: <https://mem.colinleefish.com>
    - **Default:** `INSERT` new `atoms` rows.
    - Near-duplicates: tag / downweight only (e.g. `near_duplicate_uri` metadata)—**no** worker merge.
    - `events` category: always insert; never dedup-merge.
-   - Optional later: `mem9 atom merge <a> <b>` for explicit human/agent merge.
+   - Optional later: `rmb atom merge <a> <b>` for explicit human/agent merge.
 3. **Config** — `extraction.every_n`, `extraction.idle_seconds`, `extraction.warmup`, LLM + embedding client (1024-dim).
 4. **Tasks API** (minimal) — upload returns `202 { task_id, turn_uri }` when ready; poll task status (design §8).
-5. **CLI** — `mem9 t1 backfill [--session=…]` for historical turns.
-6. **Production hygiene** — set `MEM9_SUMMARIZER_ENABLED=false` so legacy `overview_text` does not compete with the new pipeline.
+5. **CLI** — `rmb t1 backfill [--session=…]` for historical turns.
+6. **Production hygiene** — set `RMB_SUMMARIZER_ENABLED=false` so legacy `overview_text` does not compete with the new pipeline.
 
 **Do not**
 
@@ -86,7 +86,7 @@ Production: <https://mem.colinleefish.com>
 **Verify**
 
 - Hook a real Cursor/CC session → `/ui/` shows new `atoms` with `source_turn_ids`.
-- `mem9 cat mem9://sessions/<sid>/atoms/<uuid>`
+- `rmb cat rmb://sessions/<sid>/atoms/<uuid>`
 - `pipeline_state.t1_status` advances; `t2_status` becomes `pending` after T1.
 
 **Suggested slice for first PR**
@@ -125,8 +125,8 @@ Production: <https://mem.colinleefish.com>
 **Verify**
 
 - `/ui/` shows `scenes` linked via `source_atom_uris`.
-- `mem9 cat mem9://scenes/<uuid>`
-- `mem9 cat mem9://sessions/<sid>` prints session `abstract`.
+- `rmb cat rmb://scenes/<uuid>`
+- `rmb cat rmb://sessions/<sid>` prints session `abstract`.
 
 ---
 
@@ -137,19 +137,19 @@ Production: <https://mem.colinleefish.com>
 **Build**
 
 1. **T3 worker** — global mutex; trigger on `t3_status=pending` or periodic rollup.
-2. Route by category → logical URI (`mem9://profile`, `mem9://preferences/<slug>`, …).
+2. Route by category → logical URI (`rmb://profile`, `rmb://preferences/<slug>`, …).
 3. **INSERT** new `memories` row + supersede previous active row (§7.1).
 4. `events`: insert-only at T3 as well.
-5. **`mem9 eval`** — implement design §12.3; default queries in [`scripts/eval_queries.txt`](../scripts/eval_queries.txt):
+5. **`rmb eval`** — implement design §12.3; default queries in [`scripts/eval_queries.txt`](../scripts/eval_queries.txt):
    - Baseline: T0 + FTS only
    - Full stack: T0–T3 vectors + FTS
    - Non-zero exit if full stack regresses vs baseline after rollup
-6. CLI: `mem9 cat <uri> --version=N` / `--all-versions` for audit (optional in same phase).
+6. CLI: `rmb cat <uri> --version=N` / `--all-versions` for audit (optional in same phase).
 
 **Verify**
 
-- `mem9://profile` and slug URIs populate in `/ui/`.
-- `mem9 eval` runs clean on prod after a rollup.
+- `rmb://profile` and slug URIs populate in `/ui/`.
+- `rmb eval` runs clean on prod after a rollup.
 - Provenance chain: memory → scenes → atoms → turns.
 
 ---
@@ -177,8 +177,8 @@ Production: <https://mem.colinleefish.com>
 | Item                                | Purpose                                           | Depends on                   |
 | ----------------------------------- | ------------------------------------------------- | ---------------------------- |
 | **Embed worker**                    | Fill `embedding IS NULL` on atoms/scenes/memories | Phase B–D producing rows     |
-| **`mem9 find` / `mem9 search`** | Hybrid recall (vector + FTS, score propagation)   | Design §10; stable T3 data   |
-| **`mem9 eval` in deploy**         | Auto-run after T3 rollup; alert on regression     | Phase D                      |
+| **`rmb find` / `rmb search`** | Hybrid recall (vector + FTS, score propagation)   | Design §10; stable T3 data   |
+| **`rmb eval` in deploy**         | Auto-run after T3 rollup; alert on regression     | Phase D                      |
 | **MCP wrapper**                     | Expose recall to agents                           | Stable find/search           |
 | **OpenViking URI migration**        | One-off import script                             | Optional; see root `TODO.md` |
 
@@ -190,7 +190,7 @@ Production: <https://mem.colinleefish.com>
 make ci
 ssproxy && git push origin main    # from China
 make deploy
-curl -fsS https://mem.colinleefish.com/healthz
+curl -fsS https://rmb.colinleefish.com/healthz
 ```
 
 Proxy notes: [`deploy.md`](./deploy.md) and README § CI / Deploy.

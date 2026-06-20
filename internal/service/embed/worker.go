@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/colinleefish/mem9/internal/config"
-	"github.com/colinleefish/mem9/internal/db/pgarray"
-	"github.com/colinleefish/mem9/internal/llm"
+	"github.com/colinleefish/rmb/internal/config"
+	"github.com/colinleefish/rmb/internal/db/pgarray"
+	"github.com/colinleefish/rmb/internal/llm"
 	"gorm.io/gorm"
 )
 

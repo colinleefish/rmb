@@ -4,10 +4,10 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/colinleefish/mem9/internal/config"
-	"github.com/colinleefish/mem9/internal/http/handler"
-	"github.com/colinleefish/mem9/internal/http/middleware"
-	"github.com/colinleefish/mem9/internal/http/static"
+	"github.com/colinleefish/rmb/internal/config"
+	"github.com/colinleefish/rmb/internal/http/handler"
+	"github.com/colinleefish/rmb/internal/http/middleware"
+	"github.com/colinleefish/rmb/internal/http/static"
 	"github.com/gin-gonic/gin"
 )
 
