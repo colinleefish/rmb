@@ -4,7 +4,7 @@
 
 services:
   mem9:
-    image: registry.cn-beijing.aliyuncs.com/colinleefish/mem9:6f00842
+    image: registry.cn-beijing.aliyuncs.com/colinleefish/mem9:8ec194c
     container_name: mem9-app
     command: ["serve"]
     network_mode: host
