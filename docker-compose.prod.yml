@@ -4,7 +4,7 @@
 
 services:
   mypast:
-    image: registry.cn-beijing.aliyuncs.com/colinleefish/mypast:f990e22
+    image: registry.cn-beijing.aliyuncs.com/colinleefish/mypast:2cf320c
     container_name: mypast-app
     command: ["serve"]
     network_mode: host
