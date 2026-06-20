@@ -19,6 +19,7 @@ func New(
 	recallHandler *handler.RecallHandler,
 	inspectHandler *handler.InspectHandler,
 	correctionHandler *handler.CorrectionHandler,
+	aliasHandler *handler.AliasHandler,
 	backfillHandler *handler.BackfillHandler,
 	embedHandler *handler.EmbedHandler,
 ) (*gin.Engine, error) {
@@ -79,6 +80,12 @@ func New(
 		protected.GET("/api/v1/corrections", correctionHandler.List)
 		protected.POST("/api/v1/corrections", correctionHandler.Create)
 		protected.DELETE("/api/v1/corrections", correctionHandler.Retract)
+	}
+
+	if aliasHandler != nil {
+		protected.GET("/api/v1/aliases", aliasHandler.List)
+		protected.POST("/api/v1/aliases", aliasHandler.Create)
+		protected.DELETE("/api/v1/aliases", aliasHandler.Retract)
 	}
 
 	if backfillHandler != nil {

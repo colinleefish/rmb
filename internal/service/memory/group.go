@@ -29,7 +29,12 @@ type atomLLMInput struct {
 // groupAtomsIntoBuckets routes atoms into rollup buckets. profile atoms collapse
 // into the singleton bucket; preferences/entities/events group by sanitized slug.
 // Atoms in slug categories without a usable slug are skipped (returned count) in v1.
-func groupAtomsIntoBuckets(atoms []model.Atom) ([]memoryBucket, int) {
+//
+// aliasMap (alias_uri → canonical_uri, from alias.ActiveMap) folds an aliased
+// slug's atoms into the canonical bucket so the distiller sees the union and
+// regenerates one complete memory. A nil/empty map disables folding. See
+// docs/aliases.md.
+func groupAtomsIntoBuckets(atoms []model.Atom, aliasMap map[string]string) ([]memoryBucket, int) {
 	profile := make([]model.Atom, 0)
 	type key struct{ category, slug string }
 	slugged := make(map[key]*memoryBucket)
@@ -54,13 +59,23 @@ func groupAtomsIntoBuckets(atoms []model.Atom) ([]memoryBucket, int) {
 				skipped++
 				continue
 			}
-			k := key{atom.Category, slug}
+			// Alias fold: if this atom's routed URI is an active alias, retarget
+			// it to the canonical's (category, slug). Same-category is enforced at
+			// alias-write time, so the category is unchanged in practice.
+			category := atom.Category
+			if canonical, ok := aliasMap[uri.BuildMemory(category, slug)]; ok {
+				if cu, perr := uri.Parse(canonical); perr == nil && len(cu.Segments) == 1 {
+					category = cu.Scope
+					slug = cu.Segments[0]
+				}
+			}
+			k := key{category, slug}
 			b, ok := slugged[k]
 			if !ok {
 				b = &memoryBucket{
-					Category: atom.Category,
+					Category: category,
 					Slug:     slug,
-					URI:      uri.BuildMemory(atom.Category, slug),
+					URI:      uri.BuildMemory(category, slug),
 				}
 				slugged[k] = b
 				order = append(order, k)

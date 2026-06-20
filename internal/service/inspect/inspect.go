@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/colinleefish/mypast/internal/model"
+	"github.com/colinleefish/mypast/internal/service/alias"
 	"github.com/colinleefish/mypast/internal/service/correction"
 	"github.com/colinleefish/mypast/internal/uri"
 	"gorm.io/gorm"
@@ -317,6 +318,16 @@ func (s *Service) treeScope(ctx context.Context, u uri.URI, w io.Writer) error {
 }
 
 func (s *Service) catMemoryByURI(ctx context.Context, target string, w io.Writer) error {
+	// If target is an active alias, redirect to the canonical: the alias slug's
+	// own memory row is retired once folded, so we show the canonical instead of
+	// erroring on the missing active row. See docs/aliases.md.
+	if canonical, isAlias, err := alias.CanonicalFor(ctx, s.db, target); err != nil {
+		return err
+	} else if isAlias {
+		fmt.Fprintf(w, "This entity is an alias of %s.\n\n\u2192 ALIAS OF: %s\n(showing canonical below)\n\n", canonical, canonical)
+		target = canonical
+	}
+
 	var row model.Memory
 	if err := s.db.WithContext(ctx).
 		Where("uri = ? AND superseded_at IS NULL", target).
@@ -331,11 +342,46 @@ func (s *Service) catMemoryByURI(ctx context.Context, target string, w io.Writer
 	if err != nil {
 		return err
 	}
+	aliasOverlay, err := s.aliasBlock(ctx, target)
+	if err != nil {
+		return err
+	}
 	if _, err := io.WriteString(w, text); err != nil {
 		return err
 	}
-	_, err = io.WriteString(w, overlay)
+	if _, err := io.WriteString(w, overlay); err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, aliasOverlay)
 	return err
+}
+
+// aliasBlock renders active alias relationships for a memory URI as a trailing
+// annotation: an "ALIAS OF" line when target is itself an alias, and/or an
+// "aliases (point here)" list when target is a canonical. Returns "" if neither.
+func (s *Service) aliasBlock(ctx context.Context, target string) (string, error) {
+	aliasOf, aliasesOf, err := alias.ForTargets(ctx, s.db, []string{target})
+	if err != nil {
+		return "", err
+	}
+	out, isAlias := aliasOf[target]
+	pointers := aliasesOf[target]
+	if !isAlias && len(pointers) == 0 {
+		return "", nil
+	}
+	var b strings.Builder
+	b.WriteString("\n\n--- aliases ---\n")
+	if isAlias {
+		fmt.Fprintf(&b, "\u2192 ALIAS OF: %s\n", out.CanonicalURI)
+	}
+	for _, p := range pointers {
+		line := fmt.Sprintf("\u2190 %s", p.AliasURI)
+		if p.Note != "" {
+			line += " (" + p.Note + ")"
+		}
+		b.WriteString(line + "\n")
+	}
+	return b.String(), nil
 }
 
 // correctionsBlock renders active human corrections for a target URI as a
@@ -373,6 +419,16 @@ func (s *Service) catScene(ctx context.Context, sceneID string, w io.Writer) err
 }
 
 func (s *Service) metaMemory(ctx context.Context, target string) (map[string]any, error) {
+	// Redirect an active alias to its canonical (its own row is retired once
+	// folded); record the redirect as alias_of below.
+	aliasRedirect := ""
+	if canonical, isAlias, err := alias.CanonicalFor(ctx, s.db, target); err != nil {
+		return nil, err
+	} else if isAlias {
+		aliasRedirect = canonical
+		target = canonical
+	}
+
 	var row model.Memory
 	if err := s.db.WithContext(ctx).
 		Where("uri = ? AND superseded_at IS NULL", target).
@@ -395,6 +451,20 @@ func (s *Service) metaMemory(ctx context.Context, target string) (map[string]any
 	}
 	if sums := byTarget[target]; len(sums) > 0 {
 		meta["corrections"] = sums
+	}
+	_, aliasesOf, err := alias.ForTargets(ctx, s.db, []string{target})
+	if err != nil {
+		return nil, err
+	}
+	if aliasRedirect != "" {
+		meta["alias_of"] = aliasRedirect
+	}
+	if ptrs := aliasesOf[target]; len(ptrs) > 0 {
+		uris := make([]string, 0, len(ptrs))
+		for _, p := range ptrs {
+			uris = append(uris, p.AliasURI)
+		}
+		meta["aliases"] = uris
 	}
 	return meta, nil
 }

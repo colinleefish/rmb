@@ -8,6 +8,7 @@ import (
 	"sort"
 
 	"github.com/colinleefish/mypast/internal/db/pgarray"
+	"github.com/colinleefish/mypast/internal/service/alias"
 	"github.com/colinleefish/mypast/internal/service/correction"
 	"gorm.io/gorm"
 )
@@ -205,11 +206,59 @@ func Search(ctx context.Context, db *gorm.DB, embed QueryEmbedder, query string,
 		lists = append(lists, vecScene, ftsScene)
 	}
 
-	fused := FuseRRF(lists, 60, k)
-	if err := AttachCorrections(ctx, db, fused); err != nil {
+	// Fuse with extra headroom so that folding alias hits into their canonical
+	// (which can drop the result count below k) still leaves a full page.
+	fused := FuseRRF(lists, 60, perList)
+	resolved, err := ResolveAliases(ctx, db, fused)
+	if err != nil {
 		return nil, err
 	}
-	return fused, nil
+	if k > 0 && len(resolved) > k {
+		resolved = resolved[:k]
+	}
+	if err := AttachCorrections(ctx, db, resolved); err != nil {
+		return nil, err
+	}
+	return resolved, nil
+}
+
+// ResolveAliases rewrites each match URI to its active canonical (single hop)
+// and merges duplicates that collapse onto the same canonical, keeping the
+// higher rank. Order is preserved by descending rank. This is the read-time
+// half of the alias mechanism (see docs/aliases.md): an aliased memory never
+// surfaces under its redundant URI, and two slugs for one entity fold into one
+// result.
+func ResolveAliases(ctx context.Context, db *gorm.DB, matches []Match) ([]Match, error) {
+	if len(matches) == 0 {
+		return matches, nil
+	}
+	uris := make([]string, 0, len(matches))
+	for _, m := range matches {
+		uris = append(uris, m.URI)
+	}
+	canonical, err := alias.Resolve(ctx, db, uris)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]Match, 0, len(matches))
+	seen := make(map[string]int, len(matches)) // canonical URI → index in out
+	for _, m := range matches {
+		target := m.URI
+		if c, ok := canonical[m.URI]; ok && c != "" {
+			target = c
+		}
+		if idx, dup := seen[target]; dup {
+			if m.Rank > out[idx].Rank {
+				out[idx].Rank = m.Rank
+			}
+			continue
+		}
+		m.URI = target
+		seen[target] = len(out)
+		out = append(out, m)
+	}
+	return out, nil
 }
 
 // FuseRRF combines ranked result lists using Reciprocal Rank Fusion. The fused

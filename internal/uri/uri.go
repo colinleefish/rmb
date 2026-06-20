@@ -19,6 +19,7 @@ const (
 	ScopeEntities    = "entities"
 	ScopeEvents      = "events"
 	ScopeCorrections = "corrections"
+	ScopeAliases     = "aliases"
 )
 
 var (
@@ -34,6 +35,7 @@ var (
 		ScopeEntities:    {},
 		ScopeEvents:      {},
 		ScopeCorrections: {},
+		ScopeAliases:     {},
 	}
 )
 
@@ -168,6 +170,10 @@ func BuildCorrection(id string) string {
 	return Scheme + "://" + ScopeCorrections + "/" + strings.ToLower(id)
 }
 
+func BuildAlias(id string) string {
+	return Scheme + "://" + ScopeAliases + "/" + strings.ToLower(id)
+}
+
 // SanitizeSlug normalizes a label into a strict URI slug: lowercase ASCII,
 // hyphen-separated words, CJK preserved. Underscores, spaces, and dots become hyphens.
 func SanitizeSlug(raw string) (string, error) {
@@ -239,7 +245,7 @@ func splitSegments(path string) []string {
 
 func validateScope(scope string) error {
 	switch scope {
-	case ScopeSessions, ScopeScenes, ScopeProfile, ScopePrefs, ScopeEntities, ScopeEvents, ScopeCorrections:
+	case ScopeSessions, ScopeScenes, ScopeProfile, ScopePrefs, ScopeEntities, ScopeEvents, ScopeCorrections, ScopeAliases:
 		return nil
 	default:
 		return fmt.Errorf("%w: unknown scope %q", ErrInvalidURI, scope)
@@ -303,6 +309,13 @@ func validateShape(scope string, segments []string) error {
 		}
 		if !uuidSegment.MatchString(segments[0]) {
 			return fmt.Errorf("%w: correction id must be uuid", ErrInvalidURI)
+		}
+	case ScopeAliases:
+		if len(segments) != 1 {
+			return fmt.Errorf("%w: aliases require one id segment", ErrInvalidURI)
+		}
+		if !uuidSegment.MatchString(segments[0]) {
+			return fmt.Errorf("%w: alias id must be uuid", ErrInvalidURI)
 		}
 	case ScopePrefs, ScopeEntities, ScopeEvents:
 		// Zero segments is the category container (e.g. mypast://entities/),

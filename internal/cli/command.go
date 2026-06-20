@@ -50,6 +50,8 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 		return r.runSearch(ctx, args[1:])
 	case "correction":
 		return r.runCorrection(ctx, args[1:])
+	case "alias":
+		return r.runAlias(ctx, args[1:])
 	case "store", "read", "list", "delete", "load-context":
 		return fmt.Errorf("%q command is planned but not implemented yet", args[0])
 	default:
@@ -278,6 +280,101 @@ func (r Runner) runCorrectionRm(ctx context.Context, args []string) error {
 	return nil
 }
 
+// runAlias dispatches the entity-alias subcommands:
+//
+//	mypast alias set <alias-uri> <canonical-uri> ["note"]
+//	mypast alias rm  <alias-record-uri>
+//	mypast alias ls  [<uri>]
+func (r Runner) runAlias(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: mypast alias <set|rm|ls> ...")
+	}
+	switch args[0] {
+	case "set":
+		return r.runAliasSet(ctx, args[1:])
+	case "rm":
+		return r.runAliasRm(ctx, args[1:])
+	case "ls":
+		return r.runAliasList(ctx, args[1:])
+	default:
+		return fmt.Errorf("unknown alias action %q (use set|rm|ls)", args[0])
+	}
+}
+
+func (r Runner) runAliasSet(ctx context.Context, args []string) error {
+	pos := positionalArgs(args)
+
+	var uris, words []string
+	for _, a := range pos {
+		if strings.HasPrefix(a, uri.Scheme+"://") {
+			uris = append(uris, a)
+		} else {
+			words = append(words, a)
+		}
+	}
+	if len(uris) != 2 {
+		return fmt.Errorf("usage: mypast alias set <alias-uri> <canonical-uri> [\"note\"]")
+	}
+	note := strings.TrimSpace(strings.Join(words, " "))
+
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("alias set requires MYPAST_URL (the server owns the database)")
+	}
+	createdURI, err := cl.CreateAlias(ctx, uris[0], uris[1], note)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(r.stdout(), "added alias: %s -> %s (%s)\n", uris[0], uris[1], createdURI)
+	return nil
+}
+
+func (r Runner) runAliasList(ctx context.Context, args []string) error {
+	pos := positionalArgs(args)
+	filter := ""
+	if len(pos) > 0 {
+		filter = pos[0]
+	}
+
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("alias ls requires MYPAST_URL (the server owns the database)")
+	}
+	items, err := cl.ListAliases(ctx, filter)
+	if err != nil {
+		return err
+	}
+	out := r.stdout()
+	if len(items) == 0 {
+		fmt.Fprintln(out, "no aliases")
+		return nil
+	}
+	for _, it := range items {
+		fmt.Fprintln(out, it.URI)
+		fmt.Fprintf(out, "   %s -> %s\n", it.AliasURI, it.CanonicalURI)
+		if it.Note != "" {
+			fmt.Fprintf(out, "   %s\n", it.Note)
+		}
+	}
+	return nil
+}
+
+func (r Runner) runAliasRm(ctx context.Context, args []string) error {
+	pos := positionalArgs(args)
+	if len(pos) != 1 {
+		return fmt.Errorf("usage: mypast alias rm <mypast://aliases/...>")
+	}
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("alias rm requires MYPAST_URL (the server owns the database)")
+	}
+	if err := cl.RetractAlias(ctx, pos[0]); err != nil {
+		return err
+	}
+	fmt.Fprintf(r.stdout(), "retracted: %s\n", pos[0])
+	return nil
+}
+
 func printMatches(out io.Writer, matches []recall.Match) {
 	if len(matches) == 0 {
 		fmt.Fprintln(out, "no matches")
@@ -409,6 +506,11 @@ Usage:
                               Retire a specific correction (URI from meta/ls output)
   mypast correction ls [<target-uri>]
                               List active corrections (optionally for one target)
+  mypast alias set <alias-uri> <canonical-uri> ["note"]
+                              Declare alias-uri to be the same entity as canonical-uri
+  mypast alias rm <alias-record-uri>
+                              Retract a specific alias (URI from meta/ls output)
+  mypast alias ls [<uri>]     List active aliases (optionally for one URI, either side)
   mypast store <uri>          Planned
   mypast read <uri>           Planned
   mypast list <prefix>        Planned

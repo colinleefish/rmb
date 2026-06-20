@@ -15,6 +15,7 @@ import (
 	"github.com/colinleefish/mypast/internal/http/router"
 	"github.com/colinleefish/mypast/internal/llm"
 	"github.com/colinleefish/mypast/internal/server"
+	"github.com/colinleefish/mypast/internal/service/alias"
 	"github.com/colinleefish/mypast/internal/service/browse"
 	"github.com/colinleefish/mypast/internal/service/correction"
 	"github.com/colinleefish/mypast/internal/service/health"
@@ -137,10 +138,11 @@ func main() {
 
 			inspectHandler := handler.NewInspectHandler(inspect.NewService(database))
 			correctionHandler := handler.NewCorrectionHandler(correction.NewService(database), database)
+			aliasHandler := handler.NewAliasHandler(alias.NewService(database), database)
 			backfillHandler := handler.NewBackfillHandler(database)
 			embedHandler := handler.NewEmbedHandler(database)
 
-			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler, inspectHandler, correctionHandler, backfillHandler, embedHandler)
+			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler, inspectHandler, correctionHandler, aliasHandler, backfillHandler, embedHandler)
 			if err != nil {
 				return fmt.Errorf("build router: %w", err)
 			}

@@ -185,6 +185,121 @@ func (c *Client) CreateCorrection(ctx context.Context, targets []string, stateme
 	return out.URI, nil
 }
 
+// CreateAlias posts an entity alias and returns the new alias record URI.
+func (c *Client) CreateAlias(ctx context.Context, aliasURI, canonicalURI, note string) (string, error) {
+	reqBody, err := json.Marshal(map[string]any{
+		"alias_uri":     aliasURI,
+		"canonical_uri": canonicalURI,
+		"note":          note,
+	})
+	if err != nil {
+		return "", fmt.Errorf("encode request: %w", err)
+	}
+	endpoint := c.baseURL + "/api/v1/aliases"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return "", fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("call aliases: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &e) == nil && e.Error != "" {
+			return "", fmt.Errorf("remote aliases: %s", e.Error)
+		}
+		return "", fmt.Errorf("remote aliases returned %d", resp.StatusCode)
+	}
+	var out struct {
+		URI string `json:"uri"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return "", fmt.Errorf("decode response: %w", err)
+	}
+	return out.URI, nil
+}
+
+// AliasItem is a listed alias from the remote server.
+type AliasItem struct {
+	URI          string `json:"uri"`
+	AliasURI     string `json:"alias_uri"`
+	CanonicalURI string `json:"canonical_uri"`
+	Note         string `json:"note"`
+}
+
+// ListAliases returns active aliases; when uriFilter is non-empty, only those
+// where it appears on either side (alias or canonical).
+func (c *Client) ListAliases(ctx context.Context, uriFilter string) ([]AliasItem, error) {
+	endpoint := c.baseURL + "/api/v1/aliases"
+	if f := strings.TrimSpace(uriFilter); f != "" {
+		q := url.Values{}
+		q.Set("uri", f)
+		endpoint += "?" + q.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call aliases list: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("remote aliases list returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var out struct {
+		Items []AliasItem `json:"items"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return out.Items, nil
+}
+
+// RetractAlias retires an alias by its record URI on the remote server.
+func (c *Client) RetractAlias(ctx context.Context, aliasRecordURI string) error {
+	q := url.Values{}
+	q.Set("uri", aliasRecordURI)
+	endpoint := c.baseURL + "/api/v1/aliases?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("call aliases delete: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &e) == nil && e.Error != "" {
+			return fmt.Errorf("remote alias retract: %s", e.Error)
+		}
+		return fmt.Errorf("remote alias retract returned %d", resp.StatusCode)
+	}
+	return nil
+}
+
 // Inspect calls cat/tree/meta on the remote server and returns the textual
 // output verbatim (identical to local CLI output). kind is "cat", "tree", or "meta".
 func (c *Client) Inspect(ctx context.Context, kind, uri string) (string, error) {
