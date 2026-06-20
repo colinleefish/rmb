@@ -56,7 +56,7 @@ func main() {
 			healthSvc := health.NewService(database)
 			sessionUploadSvc := session.NewUploadService(database)
 
-			if cfg.Extraction.Enabled || cfg.Scene.Enabled || cfg.Memory.Enabled {
+			if cfg.Extraction.Enabled || cfg.Scene.Enabled || cfg.Memory.Enabled || cfg.AliasSuggest.Enabled {
 				llmClient, err := llm.NewOpenAICompatibleClient(llm.OpenAICompatibleConfig{
 					Provider:        cfg.LLM.Provider,
 					APIBase:         cfg.LLM.APIBase,
@@ -96,6 +96,17 @@ func main() {
 						go func() {
 							if err := t3Worker.Run(ctx); err != nil {
 								log.Printf("t3 memory worker exited with error: %v", err)
+							}
+						}()
+					}
+
+					// Alias-suggest reads existing memory embeddings and uses the
+					// chat client only as a same-entity judge (no embedding calls).
+					if cfg.AliasSuggest.Enabled {
+						suggestWorker := alias.NewSuggestWorker(database, llmClient, cfg.AliasSuggest)
+						go func() {
+							if err := suggestWorker.Run(ctx); err != nil {
+								log.Printf("alias-suggest worker exited with error: %v", err)
 							}
 						}()
 					}

@@ -98,6 +98,77 @@ func (h *AliasHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"items": items})
 }
 
+// ListCandidates returns alias candidates proposed by the suggest worker,
+// filtered by status (default pending).
+func (h *AliasHandler) ListCandidates(c *gin.Context) {
+	items, err := h.service.ListCandidates(c.Request.Context(), c.Query("status"))
+	if err != nil {
+		if errors.Is(err, alias.ErrInvalidInput) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": items})
+}
+
+type candidateActionRequest struct {
+	ID string `json:"id"`
+}
+
+// ConfirmCandidate promotes a pending candidate into a live alias and runs the
+// same post-write side-effects as a manual alias set (wake T3, supersede the
+// alias slug's standalone memory).
+func (h *AliasHandler) ConfirmCandidate(c *gin.Context) {
+	var req candidateActionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	row, err := h.service.ConfirmCandidate(c.Request.Context(), req.ID)
+	switch {
+	case err == nil:
+		h.wakeT3(c, []string{row.AliasURI, row.CanonicalURI})
+		if err := memory.SupersedeActiveMemory(c.Request.Context(), h.db, row.AliasURI, time.Now().UTC()); err != nil {
+			log.Printf("alias confirm supersede %s failed (read-time fold still applies): %v", row.AliasURI, err)
+		}
+		c.JSON(http.StatusCreated, gin.H{
+			"uri":           row.URI,
+			"alias_uri":     row.AliasURI,
+			"canonical_uri": row.CanonicalURI,
+		})
+	case errors.Is(err, alias.ErrInvalidInput):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, alias.ErrNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	case errors.Is(err, alias.ErrConflict):
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+}
+
+// RejectCandidate marks a pending candidate rejected so it is never re-proposed.
+func (h *AliasHandler) RejectCandidate(c *gin.Context) {
+	var req candidateActionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err := h.service.RejectCandidate(c.Request.Context(), req.ID)
+	switch {
+	case err == nil:
+		c.JSON(http.StatusOK, gin.H{"id": req.ID, "rejected": true})
+	case errors.Is(err, alias.ErrInvalidInput):
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	case errors.Is(err, alias.ErrNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
+}
+
 func (h *AliasHandler) Retract(c *gin.Context) {
 	target := c.Query("uri")
 	if target == "" {

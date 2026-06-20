@@ -285,9 +285,12 @@ func (r Runner) runCorrectionRm(ctx context.Context, args []string) error {
 //	mypast alias set <alias-uri> <canonical-uri> ["note"]
 //	mypast alias rm  <alias-record-uri>
 //	mypast alias ls  [<uri>]
+//	mypast alias candidates [--status=pending]
+//	mypast alias confirm <candidate-id>
+//	mypast alias reject  <candidate-id>
 func (r Runner) runAlias(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: mypast alias <set|rm|ls> ...")
+		return fmt.Errorf("usage: mypast alias <set|rm|ls|candidates|confirm|reject> ...")
 	}
 	switch args[0] {
 	case "set":
@@ -296,9 +299,72 @@ func (r Runner) runAlias(ctx context.Context, args []string) error {
 		return r.runAliasRm(ctx, args[1:])
 	case "ls":
 		return r.runAliasList(ctx, args[1:])
+	case "candidates":
+		return r.runAliasCandidates(ctx, args[1:])
+	case "confirm":
+		return r.runAliasConfirm(ctx, args[1:])
+	case "reject":
+		return r.runAliasReject(ctx, args[1:])
 	default:
-		return fmt.Errorf("unknown alias action %q (use set|rm|ls)", args[0])
+		return fmt.Errorf("unknown alias action %q (use set|rm|ls|candidates|confirm|reject)", args[0])
 	}
+}
+
+func (r Runner) runAliasCandidates(ctx context.Context, args []string) error {
+	status := strings.TrimSpace(parseFlagValue(args, "--status"))
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("alias candidates requires MYPAST_URL (the server owns the database)")
+	}
+	items, err := cl.ListAliasCandidates(ctx, status)
+	if err != nil {
+		return err
+	}
+	out := r.stdout()
+	if len(items) == 0 {
+		fmt.Fprintln(out, "no alias candidates")
+		return nil
+	}
+	for _, it := range items {
+		fmt.Fprintf(out, "%s  [%s]\n", it.ID, it.Status)
+		fmt.Fprintf(out, "   %s -> %s  (similarity %.3f)\n", it.AliasURI, it.CanonicalURI, it.Similarity)
+		if it.Rationale != "" {
+			fmt.Fprintf(out, "   %s\n", it.Rationale)
+		}
+	}
+	return nil
+}
+
+func (r Runner) runAliasConfirm(ctx context.Context, args []string) error {
+	pos := positionalArgs(args)
+	if len(pos) != 1 {
+		return fmt.Errorf("usage: mypast alias confirm <candidate-id>")
+	}
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("alias confirm requires MYPAST_URL (the server owns the database)")
+	}
+	if err := cl.ConfirmAliasCandidate(ctx, pos[0]); err != nil {
+		return err
+	}
+	fmt.Fprintf(r.stdout(), "confirmed candidate: %s\n", pos[0])
+	return nil
+}
+
+func (r Runner) runAliasReject(ctx context.Context, args []string) error {
+	pos := positionalArgs(args)
+	if len(pos) != 1 {
+		return fmt.Errorf("usage: mypast alias reject <candidate-id>")
+	}
+	cl, ok := client.Resolve()
+	if !ok {
+		return fmt.Errorf("alias reject requires MYPAST_URL (the server owns the database)")
+	}
+	if err := cl.RejectAliasCandidate(ctx, pos[0]); err != nil {
+		return err
+	}
+	fmt.Fprintf(r.stdout(), "rejected candidate: %s\n", pos[0])
+	return nil
 }
 
 func (r Runner) runAliasSet(ctx context.Context, args []string) error {
@@ -511,6 +577,12 @@ Usage:
   mypast alias rm <alias-record-uri>
                               Retract a specific alias (URI from meta/ls output)
   mypast alias ls [<uri>]     List active aliases (optionally for one URI, either side)
+  mypast alias candidates [--status=pending]
+                              List machine-proposed alias candidates (pending|confirmed|rejected|all)
+  mypast alias confirm <candidate-id>
+                              Promote a candidate into a live alias
+  mypast alias reject <candidate-id>
+                              Reject a candidate so it is never re-proposed
   mypast store <uri>          Planned
   mypast read <uri>           Planned
   mypast list <prefix>        Planned

@@ -103,6 +103,19 @@ export interface AliasModel {
   created_at: string;
 }
 
+// A machine-proposed alias awaiting confirmation (see handler/alias.go,
+// alias.CandidateSummary).
+export interface AliasCandidateModel {
+  id: string;
+  alias_uri: string;
+  canonical_uri: string;
+  similarity: number;
+  verdict: string;
+  rationale: string;
+  status: string;
+  created_at: string;
+}
+
 export interface PipelineStateModel {
   T1Status?: string;
   T2Status?: string;

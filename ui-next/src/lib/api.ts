@@ -1,5 +1,6 @@
 import type {
   AliasModel,
+  AliasCandidateModel,
   CorrectionModel,
   AtomModel,
   MemoryModel,
@@ -161,4 +162,25 @@ export function retractAlias(
   uri: string,
 ): Promise<{ uri: string; retracted: boolean }> {
   return apiSend("DELETE", `/aliases?uri=${encodeURIComponent(uri)}`);
+}
+
+// Alias candidates: machine-proposed pairs from the suggest worker, awaiting
+// human confirmation. `status` filters by pending|confirmed|rejected|all.
+export const listAliasCandidates = (status?: string) =>
+  listItems<AliasCandidateModel>(
+    status
+      ? `/alias-candidates?status=${encodeURIComponent(status)}`
+      : "/alias-candidates",
+  );
+
+export function confirmAliasCandidate(
+  id: string,
+): Promise<{ uri: string; alias_uri: string; canonical_uri: string }> {
+  return apiSend("POST", "/alias-candidates/confirm", { id });
+}
+
+export function rejectAliasCandidate(
+  id: string,
+): Promise<{ id: string; rejected: boolean }> {
+  return apiSend("POST", "/alias-candidates/reject", { id });
 }

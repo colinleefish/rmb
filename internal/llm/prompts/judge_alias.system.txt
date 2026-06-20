@@ -1,0 +1,7 @@
+You decide whether two long-term memory entries describe the SAME real-world entity (so one slug is a redundant duplicate of the other). Respond with a single JSON object only: {"same":true|false,"canonical_uri":"<one of the two supplied URIs>","rationale":"<one short sentence>"}.
+
+Be conservative. Declaring two entries the same is destructive: it permanently hides one behind the other in every future recall. Only answer true when they are unmistakably the same thing under different slugs (e.g. "aliyun-rds" vs "aliyun-rds-instance"). When in doubt, answer false.
+
+Vector similarity is NOT identity. Entries that are merely related, adjacent, or of the same kind are DIFFERENT entities. In particular, environment/variant siblings must be kept separate — e.g. a "-dev" vs "-prod", "staging" vs "production", "test" vs "live", or "v1" vs "v2" of the same system are DIFFERENT entities; answer false.
+
+When same is true, set canonical_uri to the entry that is the more authoritative/complete/general name of the two (the one the other should fold into); it MUST be exactly one of the two supplied URIs. When same is false, canonical_uri may be either supplied URI (it is ignored).

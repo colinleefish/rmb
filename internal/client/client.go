@@ -270,6 +270,95 @@ func (c *Client) ListAliases(ctx context.Context, uriFilter string) ([]AliasItem
 	return out.Items, nil
 }
 
+// AliasCandidateItem is a machine-proposed alias awaiting confirmation.
+type AliasCandidateItem struct {
+	ID           string  `json:"id"`
+	AliasURI     string  `json:"alias_uri"`
+	CanonicalURI string  `json:"canonical_uri"`
+	Similarity   float64 `json:"similarity"`
+	Verdict      string  `json:"verdict"`
+	Rationale    string  `json:"rationale"`
+	Status       string  `json:"status"`
+}
+
+// ListAliasCandidates returns proposed alias candidates filtered by status
+// (default pending when empty).
+func (c *Client) ListAliasCandidates(ctx context.Context, status string) ([]AliasCandidateItem, error) {
+	endpoint := c.baseURL + "/api/v1/alias-candidates"
+	if s := strings.TrimSpace(status); s != "" {
+		q := url.Values{}
+		q.Set("status", s)
+		endpoint += "?" + q.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call alias-candidates list: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("remote alias-candidates list returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var out struct {
+		Items []AliasCandidateItem `json:"items"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return out.Items, nil
+}
+
+// candidateAction posts {id} to an alias-candidate action endpoint
+// ("confirm"|"reject").
+func (c *Client) candidateAction(ctx context.Context, action, id string) error {
+	reqBody, err := json.Marshal(map[string]any{"id": id})
+	if err != nil {
+		return fmt.Errorf("encode request: %w", err)
+	}
+	endpoint := c.baseURL + "/api/v1/alias-candidates/" + action
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("call alias-candidates/%s: %w", action, err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(body, &e) == nil && e.Error != "" {
+			return fmt.Errorf("remote alias-candidates/%s: %s", action, e.Error)
+		}
+		return fmt.Errorf("remote alias-candidates/%s returned %d", action, resp.StatusCode)
+	}
+	return nil
+}
+
+// ConfirmAliasCandidate promotes a candidate into a live alias.
+func (c *Client) ConfirmAliasCandidate(ctx context.Context, id string) error {
+	return c.candidateAction(ctx, "confirm", id)
+}
+
+// RejectAliasCandidate rejects a candidate so it is never re-proposed.
+func (c *Client) RejectAliasCandidate(ctx context.Context, id string) error {
+	return c.candidateAction(ctx, "reject", id)
+}
+
 // RetractAlias retires an alias by its record URI on the remote server.
 func (c *Client) RetractAlias(ctx context.Context, aliasRecordURI string) error {
 	q := url.Values{}

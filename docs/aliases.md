@@ -1,9 +1,10 @@
 # Aliases — declaring two memory slugs are the same entity
 
-> Status: implemented (milestone 1, human-authored). A durable, hand-authored
-> statement that one memory URI is the same real-world entity as another, so the
-> redundant slug folds into the canonical one at recall time and never shows up
-> as a separate result again.
+> Status: implemented (human-authored writes + machine propose-and-confirm). A
+> durable statement that one memory URI is the same real-world entity as
+> another, so the redundant slug folds into the canonical one at recall time and
+> never shows up as a separate result again. Live aliases are always
+> human-confirmed; the alias-suggest worker only proposes candidates.
 >
 > Sibling mechanism to [`corrections.md`](./corrections.md): same append-first,
 > outside-the-pyramid discipline, different job. Corrections patch *content*;
@@ -157,34 +158,74 @@ Because the alias slug's row is retired once folded, `cat`/`meta` on an alias UR
 - `meta <alias-uri>` includes `"alias_of": "<canonical>"`.
 - `meta <canonical-uri>` includes `"aliases": ["<alias>", ...]`.
 
-## Generation: human now, suggest-worker later
+## Generation: human-authored or machine-proposed (both human-confirmed)
 
-Milestone 1 is **human-authored only** — created by the user via `mypast alias
-set`, or by the agent in-conversation on the user's confirmation. Same trust
-model as corrections: a machine never collapses two entities on its own.
+A live alias is **only ever written by human confirmation** — never by a
+machine on its own. There are two paths to that confirmation:
 
-This matters because a wrong alias is **destructive at read time** — it hides a
-real entity behind another in every future search. And vector-similar is not
-the same as same-entity: `aliyun-rds-dev` and `aliyun-rds-prod` sit close in
-embedding space but must never be merged.
+1. **Direct** — the user (or the agent on the user's say-so) runs `mypast alias
+   set`, the same trust model as corrections.
+2. **Propose-and-confirm** — the **alias-suggest worker** proposes *candidates*
+   into `alias_candidates`; a human/agent then confirms (which writes the live
+   alias) or rejects.
 
-A future "propose-and-confirm" worker is scaffolded but not built: the
-`alias_candidates` table exists (empty) so the worker is a purely additive
-change with no migration.
+This gate matters because a wrong alias is **destructive at read time** — it
+hides a real entity behind another in every future search. Vector-similar is
+not the same as same-entity: `aliyun-rds-dev` and `aliyun-rds-prod` sit close in
+embedding space but must never be merged, so the machine only ever *suggests*.
 
 ```mermaid
 flowchart LR
-    Worker["alias-suggest worker (later)"] -.->|"vector neighbors + LLM judge"| Cand[("alias_candidates")]
-    Cand -.->|"review CLI (later)"| Human{"human / agent confirms?"}
-    Human -.->|yes| Aliases[("aliases (active)")]
-    Human -.->|no| Rejected["status=rejected, never re-proposed"]
-    Direct["mypast alias set (now)"] -->|direct write| Aliases
+    Worker["alias-suggest worker"] -->|"vector neighbors + LLM judge"| Cand[("alias_candidates")]
+    Cand -->|"review CLI / HTTP / UI"| Human{"human / agent confirms?"}
+    Human -->|yes| Aliases[("aliases (active)")]
+    Human -->|no| Rejected["status=rejected, never re-proposed"]
+    Direct["mypast alias set"] -->|direct write| Aliases
 ```
 
-The worker would embed entity memories, find near neighbors, ask an LLM "same
-entity?", and write a *candidate* — never a live alias. A unique index on
-`(alias_uri, canonical_uri)` gives rejection memory so a rejected pair is never
-re-proposed.
+### The alias-suggest worker
+
+[`internal/service/alias/suggest.go`](../internal/service/alias/suggest.go).
+Off by default (it makes recurring LLM judge calls). Each cycle, under the same
+global advisory lock as T3:
+
+1. Loads a bounded batch of active, **already-embedded** entity/preference
+   memories (it reads the embeddings the embed worker wrote — it makes no
+   embedding calls of its own).
+2. For each, finds nearest same-category neighbors by cosine similarity above
+   `min_similarity` (pgvector ANN, excluding self).
+3. Dedups to unordered pairs and **skips** any pair that was already judged
+   (present in `alias_candidates` in either direction) or whose either side is
+   already in an active alias.
+4. Asks the LLM judge ("same entity? which is canonical?") and records the
+   verdict: `pending` when same (in the judge's chosen direction), `rejected`
+   when different (sorted direction). Insert is `ON CONFLICT DO NOTHING`.
+
+Cost is self-bounding: every judged pair leaves a row, so a pair is judged at
+most once ever, and a rejected pair is never re-proposed.
+
+Config (`[alias_suggest]` / `MYPAST_ALIAS_SUGGEST_*`):
+
+| Key | Default | Meaning |
+|-----|---------|---------|
+| `enabled` | `false` | turn the worker on |
+| `poll_interval` | `30m` | cycle cadence |
+| `batch_memories` | `50` | seed memories scanned per cycle |
+| `neighbors` | `5` | nearest neighbors considered per seed |
+| `min_similarity` | `0.82` | cosine floor to surface a pair |
+
+### Reviewing candidates
+
+```
+mypast alias candidates [--status=pending]   # list (pending|confirmed|rejected|all)
+mypast alias confirm <candidate-id>          # promote to a live alias
+mypast alias reject  <candidate-id>          # reject; never re-proposed
+```
+
+`confirm` runs the exact same post-write side-effects as `alias set` (wake T3,
+supersede the alias slug's standalone row). It surfaces a conflict if the live
+invariants fail (e.g. the canonical is itself an alias), leaving the candidate
+pending. The web UI exposes the same review under Aliases → Suggestions.
 
 ## CLI surface
 
@@ -204,10 +245,14 @@ client and the write path requires auth (`MYPAST_URL` + credentials).
 POST   /api/v1/aliases            { alias_uri, canonical_uri, note? }  -> 201 | 400 | 409
 DELETE /api/v1/aliases?uri=...    retract by alias record URI          -> 200 | 400 | 404
 GET    /api/v1/aliases?uri=...    list (filter by either side)         -> 200
+
+GET    /api/v1/alias-candidates?status=   list candidates (default pending)   -> 200 | 400
+POST   /api/v1/alias-candidates/confirm   { id }  promote to a live alias     -> 201 | 400 | 404 | 409
+POST   /api/v1/alias-candidates/reject    { id }  reject; never re-proposed   -> 200 | 400 | 404
 ```
 
 `409 Conflict` is returned when an invariant is violated (alias already aliased,
-or canonical is itself an alias).
+or canonical is itself an alias) — on both the direct write and on confirm.
 
 ## Known limitation — slug collision (deferred topic)
 
@@ -229,19 +274,20 @@ T3.
 
 ## Scope (delivered)
 
-- `aliases` table + migration (`00011`), with flat-star + same-category invariants.
-- `alias_candidates` table scaffolded (no worker).
+- `aliases` + `alias_candidates` tables + migration (`00011`), with flat-star +
+  same-category invariants.
 - New `mypast://aliases/<uuid>` URI scope.
 - Write path: service + HTTP handler + CLI + client (`set`/`rm`/`ls`).
 - Read-time resolution wired into `search` (fold + dedup) as the safety net.
 - **T3 merge**: alias-aware bucket routing, write-time wake, and retirement of the
   folded slug's row.
 - Inspect `cat`/`meta` redirect for alias URIs; alias annotations on the canonical.
+- **Alias-suggest worker** (vector-neighbor + LLM judge → candidates) plus the
+  review/confirm surface across CLI (`candidates`/`confirm`/`reject`), HTTP
+  (`/api/v1/alias-candidates`), and the web UI (Aliases → Suggestions).
 
 ## Deferred
 
-- Alias-suggest worker (vector-neighbor + LLM judge → candidates) and the
-  review/confirm CLI surface.
 - Slug-collision hardening / stronger entity identity than `(category, slug)`
   (see Known limitation).
 - Chained/transitive aliases (deliberately excluded — see Topology).

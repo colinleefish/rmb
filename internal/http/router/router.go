@@ -86,6 +86,9 @@ func New(
 		protected.GET("/api/v1/aliases", aliasHandler.List)
 		protected.POST("/api/v1/aliases", aliasHandler.Create)
 		protected.DELETE("/api/v1/aliases", aliasHandler.Retract)
+		protected.GET("/api/v1/alias-candidates", aliasHandler.ListCandidates)
+		protected.POST("/api/v1/alias-candidates/confirm", aliasHandler.ConfirmCandidate)
+		protected.POST("/api/v1/alias-candidates/reject", aliasHandler.RejectCandidate)
 	}
 
 	if backfillHandler != nil {

@@ -18,14 +18,15 @@ const (
 )
 
 type Config struct {
-	DB         DBConfig
-	Server     ServerConfig
-	Auth       AuthConfig
-	LLM        LLMConfig
-	Extraction ExtractionConfig
-	Scene      SceneConfig
-	Memory     MemoryConfig
-	Embed      EmbedConfig
+	DB           DBConfig
+	Server       ServerConfig
+	Auth         AuthConfig
+	LLM          LLMConfig
+	Extraction   ExtractionConfig
+	Scene        SceneConfig
+	Memory       MemoryConfig
+	Embed        EmbedConfig
+	AliasSuggest AliasSuggestConfig
 }
 
 type AuthConfig struct {
@@ -93,6 +94,17 @@ type EmbedConfig struct {
 	Timeout      time.Duration
 }
 
+// AliasSuggestConfig controls the propose-and-confirm alias worker. It is off by
+// default: it makes recurring LLM judge calls and writes candidate rows (never
+// live aliases). It reads existing memory embeddings; no embedding calls.
+type AliasSuggestConfig struct {
+	Enabled       bool
+	PollInterval  time.Duration
+	BatchMemories int
+	Neighbors     int
+	MinSimilarity float64
+}
+
 type fileConfig struct {
 	DB struct {
 		URL string `toml:"url"`
@@ -147,6 +159,13 @@ type fileConfig struct {
 		BatchSize    *int   `toml:"batch_size"`
 		Timeout      string `toml:"timeout"`
 	} `toml:"embed"`
+	AliasSuggest struct {
+		Enabled       *bool    `toml:"enabled"`
+		PollInterval  string   `toml:"poll_interval"`
+		BatchMemories *int     `toml:"batch_memories"`
+		Neighbors     *int     `toml:"neighbors"`
+		MinSimilarity *float64 `toml:"min_similarity"`
+	} `toml:"alias_suggest"`
 }
 
 func Load() (Config, error) {
@@ -199,6 +218,13 @@ func Load() (Config, error) {
 			PollInterval: 30 * time.Second,
 			BatchSize:    32,
 			Timeout:      60 * time.Second,
+		},
+		AliasSuggest: AliasSuggestConfig{
+			Enabled:       false,
+			PollInterval:  30 * time.Minute,
+			BatchMemories: 50,
+			Neighbors:     5,
+			MinSimilarity: 0.82,
 		},
 	}
 
@@ -477,6 +503,25 @@ func loadFileConfig(cfg *Config, path string, explicitPath bool) error {
 		}
 		cfg.Embed.Timeout = v
 	}
+	if fc.AliasSuggest.Enabled != nil {
+		cfg.AliasSuggest.Enabled = *fc.AliasSuggest.Enabled
+	}
+	if fc.AliasSuggest.PollInterval != "" {
+		v, err := time.ParseDuration(fc.AliasSuggest.PollInterval)
+		if err != nil {
+			return fmt.Errorf("parse alias_suggest.poll_interval in %q: %w", path, err)
+		}
+		cfg.AliasSuggest.PollInterval = v
+	}
+	if fc.AliasSuggest.BatchMemories != nil {
+		cfg.AliasSuggest.BatchMemories = *fc.AliasSuggest.BatchMemories
+	}
+	if fc.AliasSuggest.Neighbors != nil {
+		cfg.AliasSuggest.Neighbors = *fc.AliasSuggest.Neighbors
+	}
+	if fc.AliasSuggest.MinSimilarity != nil {
+		cfg.AliasSuggest.MinSimilarity = *fc.AliasSuggest.MinSimilarity
+	}
 
 	return nil
 }
@@ -707,6 +752,44 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("parse MYPAST_EMBED_TIMEOUT: %w", err)
 		}
 		cfg.Embed.Timeout = d
+	}
+	if v := os.Getenv("MYPAST_ALIAS_SUGGEST_ENABLED"); v != "" {
+		switch strings.ToLower(strings.TrimSpace(v)) {
+		case "1", "true", "yes", "on":
+			cfg.AliasSuggest.Enabled = true
+		case "0", "false", "no", "off":
+			cfg.AliasSuggest.Enabled = false
+		default:
+			return fmt.Errorf("parse MYPAST_ALIAS_SUGGEST_ENABLED: invalid boolean %q", v)
+		}
+	}
+	if v := os.Getenv("MYPAST_ALIAS_SUGGEST_POLL_INTERVAL"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_ALIAS_SUGGEST_POLL_INTERVAL: %w", err)
+		}
+		cfg.AliasSuggest.PollInterval = d
+	}
+	if v := os.Getenv("MYPAST_ALIAS_SUGGEST_BATCH_MEMORIES"); v != "" {
+		parsed, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_ALIAS_SUGGEST_BATCH_MEMORIES: %w", err)
+		}
+		cfg.AliasSuggest.BatchMemories = parsed
+	}
+	if v := os.Getenv("MYPAST_ALIAS_SUGGEST_NEIGHBORS"); v != "" {
+		parsed, err := strconv.Atoi(strings.TrimSpace(v))
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_ALIAS_SUGGEST_NEIGHBORS: %w", err)
+		}
+		cfg.AliasSuggest.Neighbors = parsed
+	}
+	if v := os.Getenv("MYPAST_ALIAS_SUGGEST_MIN_SIMILARITY"); v != "" {
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+		if err != nil {
+			return fmt.Errorf("parse MYPAST_ALIAS_SUGGEST_MIN_SIMILARITY: %w", err)
+		}
+		cfg.AliasSuggest.MinSimilarity = parsed
 	}
 	return nil
 }
