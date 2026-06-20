@@ -94,6 +94,15 @@ export interface CorrectionModel {
   created_at: string;
 }
 
+// The aliases API returns explicit snake_case JSON (see handler/alias.go).
+export interface AliasModel {
+  uri: string;
+  alias_uri: string;
+  canonical_uri: string;
+  note: string;
+  created_at: string;
+}
+
 export interface PipelineStateModel {
   T1Status?: string;
   T2Status?: string;

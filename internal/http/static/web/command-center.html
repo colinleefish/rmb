@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mypast -- Neural Memory Observatory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   CSS CUSTOM PROPERTIES
+   ============================================================ */
+:root {
+  --void: #05060a;
+  --surface-0: #0a0c14;
+  --surface-1: #0f1220;
+  --surface-2: #161a2e;
+  --surface-3: #1c2240;
+  --border-dim: rgba(255, 255, 255, 0.04);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-glow: rgba(0, 224, 255, 0.15);
+  --text-primary: #e8ecf4;
+  --text-secondary: #7a8299;
+  --text-muted: #4a5168;
+  --cyan: #00e0ff;
+  --cyan-dim: rgba(0, 224, 255, 0.15);
+  --cyan-glow: rgba(0, 224, 255, 0.4);
+  --amber: #ffaa2e;
+  --amber-dim: rgba(255, 170, 46, 0.12);
+  --amber-glow: rgba(255, 170, 46, 0.35);
+  --violet: #a855f7;
+  --violet-dim: rgba(168, 85, 247, 0.12);
+  --emerald: #34d399;
+  --emerald-dim: rgba(52, 211, 153, 0.12);
+  --rose: #fb7185;
+  --rose-dim: rgba(251, 113, 133, 0.12);
+  --glass-bg: rgba(12, 15, 28, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-blur: 20px;
+  --font-display: 'Outfit', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --radius: 16px;
+  --radius-sm: 10px;
+  --radius-xs: 6px;
+}
+
+/* ============================================================
+   RESET + BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-display);
+  background: var(--void);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* ============================================================
+   BACKGROUND LAYERS
+   ============================================================ */
+#bg-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(0, 224, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 224, 255, 0.018) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, black 20%, transparent 70%);
+}
+
+.radial-glow {
+  position: fixed;
+  top: -20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 140vw;
+  height: 80vh;
+  background: radial-gradient(ellipse at center, rgba(0, 224, 255, 0.04) 0%, transparent 60%);
+  z-index: 0;
+  pointer-events: none;
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.app {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================================
+   TOPBAR
+   ============================================================ */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  height: 56px;
+  background: rgba(5, 6, 10, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--border-dim);
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.logo-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--cyan), var(--violet));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--void);
+  box-shadow: 0 0 20px var(--cyan-dim), 0 0 40px rgba(168, 85, 247, 0.1);
+}
+
+.logo-text {
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--text-primary), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.logo-sub {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px;
+  border-radius: 20px;
+  background: rgba(52, 211, 153, 0.08);
+  border: 1px solid rgba(52, 211, 153, 0.15);
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--emerald);
+  letter-spacing: 0.04em;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--emerald);
+  box-shadow: 0 0 8px var(--emerald);
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px var(--emerald); }
+  50% { opacity: 0.5; box-shadow: 0 0 16px var(--emerald); }
+}
+
+.clock {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  min-width: 58px;
+  text-align: right;
+}
+
+/* ============================================================
+   MAIN CONTENT
+   ============================================================ */
+.main {
+  flex: 1;
+  padding: 28px 32px 48px;
+  max-width: 1440px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+/* ============================================================
+   HERO: PIPELINE VISUALIZATION
+   ============================================================ */
+.hero {
+  position: relative;
+  display: flex;
+  gap: 24px;
+  align-items: stretch;
+  min-height: 340px;
+}
+
+.hero-pyramid {
+  flex: 1;
+  position: relative;
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.hero-pyramid::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  padding: 1px;
+  background: linear-gradient(160deg, rgba(0, 224, 255, 0.12), transparent 40%, transparent 60%, rgba(168, 85, 247, 0.08));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.pyramid-header {
+  padding: 20px 24px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.pyramid-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.pyramid-subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.pipeline-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#pyramid-canvas {
+  flex: 1;
+  width: 100%;
+  cursor: default;
+}
+
+/* Right side: live metrics */
+.hero-metrics {
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.metric-card {
+  flex: 1;
+  position: relative;
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  cursor: default;
+}
+
+.metric-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  padding: 1px;
+  background: linear-gradient(160deg, var(--card-accent, rgba(0, 224, 255, 0.1)), transparent 50%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.metric-card:hover {
+  border-color: var(--card-accent, var(--border-glow));
+  box-shadow: 0 0 30px var(--card-glow, var(--cyan-dim)), inset 0 0 30px var(--card-glow-inner, rgba(0, 224, 255, 0.02));
+}
+
+.metric-label {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.metric-value {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--metric-color, var(--cyan)), var(--text-primary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.metric-unit {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-top: 4px;
+}
+
+.metric-sparkline {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 40px;
+  opacity: 0.25;
+}
+
+/* ============================================================
+   TIER CARDS ROW
+   ============================================================ */
+.tier-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.tier-card {
+  position: relative;
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  padding: 20px;
+  overflow: hidden;
+  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: default;
+}
+
+.tier-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--tier-color, var(--cyan)), transparent);
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.tier-card:hover {
+  border-color: var(--tier-border, var(--border-glow));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px var(--tier-glow, var(--cyan-dim));
+}
+
+.tier-card:hover::before {
+  opacity: 1;
+}
+
+.tier-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  margin-bottom: 14px;
+  background: var(--tier-bg, var(--cyan-dim));
+  border: 1px solid var(--tier-border-inner, rgba(0, 224, 255, 0.1));
+}
+
+.tier-name {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.tier-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 2px;
+}
+
+.tier-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.tier-count {
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  color: var(--tier-color, var(--cyan));
+  font-family: var(--font-display);
+}
+
+.tier-count-label {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   BOTTOM GRID: SESSIONS + CATEGORIES + PIPELINE
+   ============================================================ */
+.bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+}
+
+.glass-panel {
+  position: relative;
+  border-radius: var(--radius);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  overflow: hidden;
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  padding: 1px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.04), transparent 40%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.panel-header {
+  padding: 18px 20px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.panel-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--cyan-dim);
+  color: var(--cyan);
+  letter-spacing: 0.04em;
+}
+
+.panel-body {
+  padding: 16px 20px 20px;
+}
+
+/* Session list */
+.session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--surface-3) transparent;
+}
+
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-dim);
+  transition: all 0.25s ease;
+  cursor: default;
+}
+
+.session-item:hover {
+  background: rgba(0, 224, 255, 0.03);
+  border-color: var(--border-glow);
+}
+
+.session-agent {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.session-agent.cursor { background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.2); }
+.session-agent.claude { background: rgba(255, 170, 46, 0.12); border: 1px solid rgba(255, 170, 46, 0.2); }
+
+.session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-title {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-meta {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.session-turns {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-dim);
+  white-space: nowrap;
+}
+
+/* Category breakdown */
+.category-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.category-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.category-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.category-name {
+  font-size: 12px;
+  font-weight: 500;
+  flex: 1;
+}
+
+.category-bar-wrap {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+
+.category-bar {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.category-count {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  min-width: 32px;
+  text-align: right;
+}
+
+/* Pipeline status */
+.pipeline-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.pipeline-session {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-dim);
+}
+
+.pipeline-key {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pipeline-stages {
+  display: flex;
+  gap: 4px;
+}
+
+.pipeline-stage {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.pipeline-stage.idle { background: rgba(255, 255, 255, 0.03); color: var(--text-muted); }
+.pipeline-stage.pending { background: var(--amber-dim); color: var(--amber); }
+.pipeline-stage.running { background: var(--cyan-dim); color: var(--cyan); animation: stage-pulse 1.5s ease-in-out infinite; }
+.pipeline-stage.done { background: var(--emerald-dim); color: var(--emerald); }
+
+@keyframes stage-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+/* ============================================================
+   URI SCHEME PANEL
+   ============================================================ */
+.uri-panel {
+  grid-column: 1 / -1;
+}
+
+.uri-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.uri-item {
+  padding: 12px 14px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.015);
+  border: 1px solid var(--border-dim);
+  transition: all 0.25s ease;
+}
+
+.uri-item:hover {
+  background: rgba(0, 224, 255, 0.025);
+  border-color: var(--border-glow);
+}
+
+.uri-scheme {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--cyan);
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+
+.uri-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ============================================================
+   ANIMATIONS: ENTRANCE
+   ============================================================ */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.delay-1 { animation-delay: 0.08s; }
+.delay-2 { animation-delay: 0.16s; }
+.delay-3 { animation-delay: 0.24s; }
+.delay-4 { animation-delay: 0.32s; }
+.delay-5 { animation-delay: 0.4s; }
+.delay-6 { animation-delay: 0.48s; }
+
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ============================================================
+   COUNTER ANIMATION
+   ============================================================ */
+@keyframes count-glow {
+  0% { text-shadow: 0 0 20px var(--cyan-glow); }
+  100% { text-shadow: none; }
+}
+
+.count-reveal {
+  animation: count-glow 1s ease-out;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 1100px) {
+  .hero { flex-direction: column; }
+  .hero-metrics { width: 100%; flex-direction: row; }
+  .bottom-grid { grid-template-columns: 1fr; }
+  .uri-grid { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 700px) {
+  .main { padding: 16px; }
+  .topbar { padding: 0 16px; }
+  .tier-row { grid-template-columns: 1fr 1fr; }
+  .hero-metrics { flex-direction: column; }
+  .uri-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Background layers -->
+<canvas id="bg-canvas"></canvas>
+<div class="grid-overlay"></div>
+<div class="radial-glow"></div>
+
+<div class="app">
+  <!-- ====== TOPBAR ====== -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo-mark">m</div>
+      <div>
+        <div class="logo-text">mypast</div>
+        <div class="logo-sub">Neural Memory Observatory</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="status-pill">
+        <div class="status-dot"></div>
+        <span>PIPELINE ACTIVE</span>
+      </div>
+      <div class="clock" id="clock">--:--:--</div>
+    </div>
+  </header>
+
+  <!-- ====== MAIN ====== -->
+  <main class="main">
+
+    <!-- HERO: Pyramid canvas + metrics -->
+    <section class="hero animate-in">
+      <div class="hero-pyramid">
+        <div class="pyramid-header">
+          <div>
+            <div class="pyramid-title">Distillation Pyramid</div>
+            <div class="pyramid-subtitle">T0 &rarr; T1 &rarr; T2 &rarr; T3 &mdash; raw turns to long-term memory</div>
+          </div>
+          <div class="pipeline-badge" style="background: var(--cyan-dim); color: var(--cyan);">LIVE</div>
+        </div>
+        <canvas id="pyramid-canvas"></canvas>
+      </div>
+
+      <div class="hero-metrics">
+        <div class="metric-card animate-in delay-1" style="--card-accent: rgba(0, 224, 255, 0.15); --card-glow: rgba(0, 224, 255, 0.08); --metric-color: var(--cyan);">
+          <div>
+            <div class="metric-label">Sessions</div>
+            <div class="metric-value" data-count="sessions">--</div>
+          </div>
+          <div class="metric-unit">agent conversations captured</div>
+        </div>
+        <div class="metric-card animate-in delay-2" style="--card-accent: rgba(255, 170, 46, 0.15); --card-glow: rgba(255, 170, 46, 0.08); --metric-color: var(--amber);">
+          <div>
+            <div class="metric-label">Atoms Extracted</div>
+            <div class="metric-value" data-count="atoms">--</div>
+          </div>
+          <div class="metric-unit">typed facts from T1 worker</div>
+        </div>
+        <div class="metric-card animate-in delay-3" style="--card-accent: rgba(168, 85, 247, 0.15); --card-glow: rgba(168, 85, 247, 0.08); --metric-color: var(--violet);">
+          <div>
+            <div class="metric-label">Long-term Memories</div>
+            <div class="metric-value" data-count="memories">--</div>
+          </div>
+          <div class="metric-unit">distilled across sessions</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TIER CARDS -->
+    <section class="tier-row">
+      <div class="tier-card animate-in delay-1" style="--tier-color: var(--cyan); --tier-bg: var(--cyan-dim); --tier-border: rgba(0, 224, 255, 0.15); --tier-border-inner: rgba(0, 224, 255, 0.15); --tier-glow: var(--cyan-dim);">
+        <div class="tier-icon" style="color: var(--cyan);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div class="tier-name">T0 &middot; Turns</div>
+        <div class="tier-title">Raw Conversations</div>
+        <div class="tier-desc">Append-only evidence. One user + assistant pair per turn.</div>
+        <div class="tier-count" data-count="turns">--</div>
+        <div class="tier-count-label">turns captured</div>
+      </div>
+
+      <div class="tier-card animate-in delay-2" style="--tier-color: var(--amber); --tier-bg: var(--amber-dim); --tier-border: rgba(255, 170, 46, 0.15); --tier-border-inner: rgba(255, 170, 46, 0.15); --tier-glow: var(--amber-dim);">
+        <div class="tier-icon" style="color: var(--amber);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><path d="M20.2 20.2c2.04-2.03.02-7.36-4.5-11.9-4.54-4.52-9.87-6.54-11.9-4.5-2.04 2.03-.02 7.36 4.5 11.9 4.54 4.52 9.87 6.54 11.9 4.5Z"/><path d="M15.7 15.7c4.52-4.54 6.54-9.87 4.5-11.9-2.03-2.04-7.36-.02-11.9 4.5-4.52 4.54-6.54 9.87-4.5 11.9 2.03 2.04 7.36.02 11.9-4.5Z"/></svg>
+        </div>
+        <div class="tier-name">T1 &middot; Atoms</div>
+        <div class="tier-title">Typed Facts</div>
+        <div class="tier-desc">Structured facts extracted by LLM. 4-category taxonomy.</div>
+        <div class="tier-count" data-count="atoms">--</div>
+        <div class="tier-count-label">atoms extracted</div>
+      </div>
+
+      <div class="tier-card animate-in delay-3" style="--tier-color: var(--violet); --tier-bg: var(--violet-dim); --tier-border: rgba(168, 85, 247, 0.15); --tier-border-inner: rgba(168, 85, 247, 0.15); --tier-glow: var(--violet-dim);">
+        <div class="tier-icon" style="color: var(--violet);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </div>
+        <div class="tier-name">T2 &middot; Scenes</div>
+        <div class="tier-title">Coherent Segments</div>
+        <div class="tier-desc">"What we were doing" grouped from atoms within a session.</div>
+        <div class="tier-count" data-count="scenes">--</div>
+        <div class="tier-count-label">scenes formed</div>
+      </div>
+
+      <div class="tier-card animate-in delay-4" style="--tier-color: var(--emerald); --tier-bg: var(--emerald-dim); --tier-border: rgba(52, 211, 153, 0.15); --tier-border-inner: rgba(52, 211, 153, 0.15); --tier-glow: var(--emerald-dim);">
+        <div class="tier-icon" style="color: var(--emerald);">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
+        </div>
+        <div class="tier-name">T3 &middot; Memories</div>
+        <div class="tier-title">Long-term Knowledge</div>
+        <div class="tier-desc">Cross-session distillation. Versioned. Profile, preferences, entities, events.</div>
+        <div class="tier-count" data-count="memories">--</div>
+        <div class="tier-count-label">memories distilled</div>
+      </div>
+    </section>
+
+    <!-- BOTTOM: Sessions + Sidebar -->
+    <section class="bottom-grid">
+      <!-- Sessions panel -->
+      <div class="glass-panel animate-in delay-4">
+        <div class="panel-header">
+          <div class="panel-title">Recent Sessions</div>
+          <div class="panel-badge" id="session-count-badge">--</div>
+        </div>
+        <div class="panel-body">
+          <div class="session-list" id="session-list">
+            <!-- filled by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Right column: categories + pipeline -->
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+        <div class="glass-panel animate-in delay-5">
+          <div class="panel-header">
+            <div class="panel-title">Memory Categories</div>
+          </div>
+          <div class="panel-body">
+            <div class="category-list" id="category-list">
+              <!-- filled by JS -->
+            </div>
+          </div>
+        </div>
+
+        <div class="glass-panel animate-in delay-6">
+          <div class="panel-header">
+            <div class="panel-title">Pipeline State</div>
+            <div class="panel-badge" id="pipeline-count-badge">--</div>
+          </div>
+          <div class="panel-body">
+            <div class="pipeline-grid" id="pipeline-grid">
+              <!-- filled by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- URI scheme -->
+    <section class="glass-panel uri-panel animate-in delay-6">
+      <div class="panel-header">
+        <div class="panel-title">URI Addressing Scheme</div>
+        <div class="panel-badge" style="background: var(--violet-dim); color: var(--violet);">6 scopes</div>
+      </div>
+      <div class="panel-body">
+        <div class="uri-grid">
+          <div class="uri-item">
+            <div class="uri-scheme">mypast://sessions/&lt;uuid&gt;</div>
+            <div class="uri-desc">Session container -- turns, atoms, scenes within one conversation</div>
+          </div>
+          <div class="uri-item">
+            <div class="uri-scheme">mypast://scenes/&lt;uuid&gt;</div>
+            <div class="uri-desc">Coherent segment with abstract + body facets</div>
+          </div>
+          <div class="uri-item">
+            <div class="uri-scheme">mypast://profile</div>
+            <div class="uri-desc">Singleton -- stable identity facts about the user</div>
+          </div>
+          <div class="uri-item">
+            <div class="uri-scheme">mypast://preferences/&lt;slug&gt;</div>
+            <div class="uri-desc">Recurring preferences including AI-behavior rules</div>
+          </div>
+          <div class="uri-item">
+            <div class="uri-scheme">mypast://entities/&lt;slug&gt;</div>
+            <div class="uri-desc">People, projects, companies, tools</div>
+          </div>
+          <div class="uri-item">
+            <div class="uri-scheme">mypast://events/&lt;date-slug&gt;</div>
+            <div class="uri-desc">Dated decisions and milestones -- immutable, append-only</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// ================================================================
+// BACKGROUND PARTICLE CANVAS
+// ================================================================
+(function initBgCanvas() {
+  const canvas = document.getElementById('bg-canvas');
+  const ctx = canvas.getContext('2d');
+  let w, h, particles = [];
+
+  function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  class Particle {
+    constructor() { this.reset(); }
+    reset() {
+      this.x = Math.random() * w;
+      this.y = Math.random() * h;
+      this.vx = (Math.random() - 0.5) * 0.15;
+      this.vy = (Math.random() - 0.5) * 0.15;
+      this.r = Math.random() * 1.2 + 0.3;
+      this.alpha = Math.random() * 0.3 + 0.05;
+      this.hue = Math.random() > 0.7 ? 180 : (Math.random() > 0.5 ? 270 : 35);
+    }
+    update() {
+      this.x += this.vx;
+      this.y += this.vy;
+      if (this.x < -10 || this.x > w + 10 || this.y < -10 || this.y > h + 10) this.reset();
+    }
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${this.hue}, 80%, 65%, ${this.alpha})`;
+      ctx.fill();
+    }
+  }
+
+  const COUNT = 80;
+  for (let i = 0; i < COUNT; i++) particles.push(new Particle());
+
+  function loop() {
+    ctx.clearRect(0, 0, w, h);
+    particles.forEach(p => { p.update(); p.draw(); });
+
+    // Draw faint connection lines between nearby particles
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx = particles[i].x - particles[j].x;
+        const dy = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 120) {
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(0, 224, 255, ${0.03 * (1 - dist / 120)})`;
+          ctx.lineWidth = 0.5;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(loop);
+  }
+  loop();
+})();
+
+// ================================================================
+// PYRAMID CANVAS VISUALIZATION
+// ================================================================
+(function initPyramid() {
+  const canvas = document.getElementById('pyramid-canvas');
+  const ctx = canvas.getContext('2d');
+  let w, h, t = 0;
+  let dataFlows = [];
+
+  function resize() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    w = canvas.width = rect.width;
+    h = canvas.height = rect.height - 60; // account for header
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const tiers = [
+    { label: 'T0', name: 'Turns', color: '#00e0ff', yRatio: 0.82, widthRatio: 0.9 },
+    { label: 'T1', name: 'Atoms', color: '#ffaa2e', yRatio: 0.58, widthRatio: 0.65 },
+    { label: 'T2', name: 'Scenes', color: '#a855f7', yRatio: 0.34, widthRatio: 0.42 },
+    { label: 'T3', name: 'Memories', color: '#34d399', yRatio: 0.10, widthRatio: 0.22 },
+  ];
+
+  // Data flow particles
+  class DataFlow {
+    constructor() { this.reset(); }
+    reset() {
+      this.fromTier = Math.floor(Math.random() * 3);
+      this.toTier = this.fromTier + 1;
+      this.progress = 0;
+      this.speed = 0.003 + Math.random() * 0.004;
+      this.size = 2 + Math.random() * 2;
+      this.side = Math.random() > 0.5 ? 1 : -1;
+    }
+    update() {
+      this.progress += this.speed;
+      if (this.progress >= 1) this.reset();
+    }
+    draw() {
+      const from = tiers[this.fromTier];
+      const to = tiers[this.toTier];
+      const cx = w / 2;
+      const fromX = cx + this.side * (from.widthRatio * w * 0.35) * (1 - this.progress);
+      const toX = cx + this.side * (to.widthRatio * w * 0.35) * this.progress * 0.3;
+      const fromY = from.yRatio * h + 20;
+      const toY = to.yRatio * h + 20;
+      const x = fromX + (toX - fromX) * this.progress;
+      const y = fromY + (toY - fromY) * this.progress;
+      const alpha = Math.sin(this.progress * Math.PI) * 0.7;
+
+      ctx.beginPath();
+      ctx.arc(x, y, this.size, 0, Math.PI * 2);
+      ctx.fillStyle = from.color.replace(')', `, ${alpha})`).replace('rgb', 'rgba').replace('#', '');
+      // Convert hex to rgba
+      const r = parseInt(from.color.slice(1,3), 16);
+      const g = parseInt(from.color.slice(3,5), 16);
+      const b = parseInt(from.color.slice(5,7), 16);
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      ctx.fill();
+
+      // Glow
+      ctx.beginPath();
+      ctx.arc(x, y, this.size * 3, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha * 0.15})`;
+      ctx.fill();
+    }
+  }
+
+  for (let i = 0; i < 25; i++) {
+    const df = new DataFlow();
+    df.progress = Math.random();
+    dataFlows.push(df);
+  }
+
+  function drawTier(tier, index) {
+    const cx = w / 2;
+    const y = tier.yRatio * h + 20;
+    const tierW = tier.widthRatio * w;
+    const tierH = 42;
+    const x = cx - tierW / 2;
+
+    // Parse color
+    const r = parseInt(tier.color.slice(1,3), 16);
+    const g = parseInt(tier.color.slice(3,5), 16);
+    const b = parseInt(tier.color.slice(5,7), 16);
+
+    // Glow behind
+    ctx.save();
+    ctx.shadowColor = `rgba(${r}, ${g}, ${b}, 0.3)`;
+    ctx.shadowBlur = 30;
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.03)`;
+    roundRect(ctx, x, y, tierW, tierH, 8);
+    ctx.fill();
+    ctx.restore();
+
+    // Background
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.04)`;
+    roundRect(ctx, x, y, tierW, tierH, 8);
+    ctx.fill();
+
+    // Border
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.2)`;
+    ctx.lineWidth = 1;
+    roundRect(ctx, x, y, tierW, tierH, 8);
+    ctx.stroke();
+
+    // Animated top line
+    const lineAlpha = 0.3 + 0.2 * Math.sin(t * 0.02 + index * 1.5);
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${lineAlpha})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x + 8, y);
+    ctx.lineTo(x + tierW - 8, y);
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.6)`;
+    ctx.font = `500 10px 'JetBrains Mono', monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText(tier.label, x + 14, y + 17);
+
+    // Name
+    ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.9)`;
+    ctx.font = `600 14px 'Outfit', sans-serif`;
+    ctx.fillText(tier.name, x + 42, y + 18);
+
+    // Decorative dots
+    for (let i = 0; i < 3; i++) {
+      const dotX = x + tierW - 40 + i * 10;
+      const dotAlpha = 0.15 + 0.1 * Math.sin(t * 0.03 + i + index);
+      ctx.beginPath();
+      ctx.arc(dotX, y + tierH / 2, 2, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${dotAlpha})`;
+      ctx.fill();
+    }
+  }
+
+  function drawConnectors() {
+    for (let i = 0; i < tiers.length - 1; i++) {
+      const from = tiers[i];
+      const to = tiers[i + 1];
+      const cx = w / 2;
+      const fromY = from.yRatio * h + 20 + 42;
+      const toY = to.yRatio * h + 20;
+
+      const r = parseInt(from.color.slice(1,3), 16);
+      const g = parseInt(from.color.slice(3,5), 16);
+      const b = parseInt(from.color.slice(5,7), 16);
+
+      // Left connector
+      ctx.beginPath();
+      ctx.moveTo(cx - from.widthRatio * w / 2 + 20, fromY);
+      ctx.lineTo(cx - to.widthRatio * w / 2 + 20, toY);
+      ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 0.08)`;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Right connector
+      ctx.beginPath();
+      ctx.moveTo(cx + from.widthRatio * w / 2 - 20, fromY);
+      ctx.lineTo(cx + to.widthRatio * w / 2 - 20, toY);
+      ctx.stroke();
+    }
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function loop() {
+    t++;
+    ctx.clearRect(0, 0, w, h);
+
+    // Draw connectors first (behind tiers)
+    drawConnectors();
+
+    // Draw data flow particles
+    dataFlows.forEach(df => { df.update(); df.draw(); });
+
+    // Draw tiers on top
+    tiers.forEach((tier, i) => drawTier(tier, i));
+
+    requestAnimationFrame(loop);
+  }
+  loop();
+})();
+
+// ================================================================
+// DATA FETCHING + RENDERING
+// ================================================================
+const API = '/api/v1';
+
+async function apiGet(path) {
+  try {
+    const res = await fetch(`${API}${path}`, { headers: { Accept: 'application/json' } });
+    if (!res.ok) throw new Error(res.statusText);
+    return await res.json();
+  } catch (e) {
+    console.warn(`API ${path}:`, e.message);
+    return null;
+  }
+}
+
+// Animated counter
+function animateCount(el, target) {
+  const duration = 1200;
+  const start = performance.now();
+  const from = 0;
+  function tick(now) {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+    el.textContent = Math.floor(from + (target - from) * eased).toLocaleString();
+    if (progress < 1) requestAnimationFrame(tick);
+    else {
+      el.textContent = target.toLocaleString();
+      el.classList.add('count-reveal');
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+// Render overview counts
+async function loadOverview() {
+  const data = await apiGet('/browse/overview');
+  if (!data?.counts) return;
+  const c = data.counts;
+
+  document.querySelectorAll('[data-count]').forEach(el => {
+    const key = el.dataset.count;
+    if (c[key] !== undefined) {
+      animateCount(el, c[key]);
+    }
+  });
+}
+
+// Render sessions
+async function loadSessions() {
+  const data = await apiGet('/browse/sessions');
+  const items = data?.items ?? [];
+  const list = document.getElementById('session-list');
+  const badge = document.getElementById('session-count-badge');
+  badge.textContent = items.length;
+
+  list.innerHTML = items.slice(0, 12).map((s, i) => {
+    const isCursor = s.title?.toLowerCase().includes('cursor') || s.scope_key?.includes('cursor');
+    const agentClass = isCursor ? 'cursor' : 'claude';
+    const agentIcon = isCursor ? '&#9674;' : '&#9670;';
+    const time = s.created_at ? timeAgo(new Date(s.created_at)) : '';
+    const title = s.title || s.session_key?.slice(0, 8) || 'Untitled';
+    return `
+      <div class="session-item" style="animation: fade-up 0.4s ${i * 0.05}s both">
+        <div class="session-agent ${agentClass}">${agentIcon}</div>
+        <div class="session-info">
+          <div class="session-title">${escapeHtml(title)}</div>
+          <div class="session-meta">${time}</div>
+        </div>
+        <div class="session-turns">${s.turn_count ?? 0} turns</div>
+      </div>`;
+  }).join('');
+}
+
+// Render categories (derived from atoms)
+async function loadCategories() {
+  const data = await apiGet('/browse/atoms');
+  const items = data?.items ?? [];
+  const cats = { profile: 0, preferences: 0, entities: 0, events: 0 };
+  items.forEach(a => {
+    const cat = a.Category || a.category || '';
+    if (cats[cat] !== undefined) cats[cat]++;
+  });
+
+  const total = Object.values(cats).reduce((a, b) => a + b, 0) || 1;
+  const colors = {
+    profile: { color: '#00e0ff', bg: 'rgba(0, 224, 255, 0.2)' },
+    preferences: { color: '#ffaa2e', bg: 'rgba(255, 170, 46, 0.2)' },
+    entities: { color: '#a855f7', bg: 'rgba(168, 85, 247, 0.2)' },
+    events: { color: '#34d399', bg: 'rgba(52, 211, 153, 0.2)' },
+  };
+
+  const list = document.getElementById('category-list');
+  list.innerHTML = Object.entries(cats).map(([cat, count]) => {
+    const pct = (count / total) * 100;
+    const c = colors[cat];
+    return `
+      <div class="category-row">
+        <div class="category-dot" style="background: ${c.color}; box-shadow: 0 0 6px ${c.bg};"></div>
+        <div class="category-name">${cat}</div>
+        <div class="category-bar-wrap">
+          <div class="category-bar" style="width: 0%; background: linear-gradient(90deg, ${c.color}, ${c.color}88);" data-width="${pct}"></div>
+        </div>
+        <div class="category-count" style="color: ${c.color};">${count}</div>
+      </div>`;
+  }).join('');
+
+  // Animate bars
+  requestAnimationFrame(() => {
+    list.querySelectorAll('.category-bar').forEach(bar => {
+      bar.style.width = bar.dataset.width + '%';
+    });
+  });
+}
+
+// Render pipeline states
+async function loadPipeline() {
+  const data = await apiGet('/browse/pipeline-state');
+  const items = data?.items ?? [];
+  const badge = document.getElementById('pipeline-count-badge');
+  badge.textContent = items.length;
+
+  const grid = document.getElementById('pipeline-grid');
+  grid.innerHTML = items.slice(0, 6).map((p, i) => {
+    const key = p.session_key || p.SessionKey || '?';
+    const t1 = (p.T1Status || p.t1_status || 'idle').toLowerCase();
+    const t2 = (p.T2Status || p.t2_status || 'idle').toLowerCase();
+    const t3 = (p.T3Status || p.t3_status || 'idle').toLowerCase();
+    return `
+      <div class="pipeline-session" style="animation: fade-up 0.35s ${i * 0.06}s both">
+        <div class="pipeline-key">${escapeHtml(key.slice(0, 8))}</div>
+        <div class="pipeline-stages">
+          <div class="pipeline-stage ${stageClass(t1)}">T1:${t1}</div>
+          <div class="pipeline-stage ${stageClass(t2)}">T2:${t2}</div>
+          <div class="pipeline-stage ${stageClass(t3)}">T3:${t3}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function stageClass(status) {
+  if (status === 'pending' || status === 'running') return status;
+  if (status === 'done' || status === 'completed' || status === 'summarized') return 'done';
+  return 'idle';
+}
+
+// Clock
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toTimeString().slice(0, 8);
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// Helpers
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function timeAgo(date) {
+  const s = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  return Math.floor(s / 86400) + 'd ago';
+}
+
+// ================================================================
+// INIT
+// ================================================================
+(async function init() {
+  await Promise.all([
+    loadOverview(),
+    loadSessions(),
+    loadCategories(),
+    loadPipeline(),
+  ]);
+
+  // Refresh every 30s
+  setInterval(() => {
+    loadOverview();
+    loadSessions();
+    loadCategories();
+    loadPipeline();
+  }, 30000);
+})();
+</script>
+</body>
+</html>
