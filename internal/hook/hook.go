@@ -5,17 +5,16 @@
 package hook
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/colinleefish/rmb/internal/config"
 )
 
 // SubmitInput is the contract for a hook-submit invocation.
@@ -155,81 +154,29 @@ func postUpload(
 }
 
 func resolveRMBURL() string {
-	if v := strings.TrimSpace(os.Getenv("RMB_URL")); v != "" {
+	if v := config.EnvValue("RMB_URL"); v != "" {
 		return v
-	}
-	confPath := strings.TrimSpace(os.Getenv("RMB_CONF"))
-	if confPath == "" {
-		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-			confPath = filepath.Join(home, ".rmb.conf")
-		}
-	}
-	if confPath != "" {
-		if v := readEnvValueFromFile(confPath, "RMB_URL"); v != "" {
-			return v
-		}
 	}
 	return defaultRMBURL
 }
 
 func resolveRMBAuth() (string, string) {
-	user := strings.TrimSpace(os.Getenv("RMB_USERNAME"))
-	pass := strings.TrimSpace(os.Getenv("RMB_PASSWORD"))
-	if user == "" {
-		user = strings.TrimSpace(os.Getenv("USERNAME"))
-	}
-	if pass == "" {
-		pass = strings.TrimSpace(os.Getenv("PASSWORD"))
-	}
-
-	confPath := strings.TrimSpace(os.Getenv("RMB_CONF"))
-	if confPath == "" {
-		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-			confPath = filepath.Join(home, ".rmb.conf")
-		}
-	}
-	if confPath != "" {
-		if v := readEnvValueFromFile(confPath, "RMB_USERNAME"); v != "" {
-			user = v
-		} else if v := readEnvValueFromFile(confPath, "USERNAME"); v != "" {
-			user = v
-		}
-		if v := readEnvValueFromFile(confPath, "RMB_PASSWORD"); v != "" {
-			pass = v
-		} else if v := readEnvValueFromFile(confPath, "PASSWORD"); v != "" {
-			pass = v
-		}
-	}
+	user := firstNonEmpty(
+		config.EnvValue("RMB_USERNAME"),
+		config.EnvValue("USERNAME"),
+	)
+	pass := firstNonEmpty(
+		config.EnvValue("RMB_PASSWORD"),
+		config.EnvValue("PASSWORD"),
+	)
 	return user, pass
 }
 
-func readEnvValueFromFile(path string, key string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
 		}
-		if strings.HasPrefix(line, "export ") {
-			line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
-		}
-		k, v, ok := strings.Cut(line, "=")
-		if !ok || strings.TrimSpace(k) != key {
-			continue
-		}
-		v = strings.TrimSpace(v)
-		if len(v) >= 2 {
-			if (v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\'') {
-				v = v[1 : len(v)-1]
-			}
-		}
-		return strings.TrimSpace(v)
 	}
 	return ""
 }

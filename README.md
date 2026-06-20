@@ -71,7 +71,7 @@ Data model (PostgreSQL, [goose](https://github.com/pressly/goose) migrations on 
 cmd/rmb/            entry point (serve / hook-submit)
 internal/
   cli/                 argv parsing
-  config/              .env + ~/.config/rmb/config.toml + env overrides
+  config/              .env + ~/.rmb.conf or ~/.rmb/config.yaml + env overrides
   db/                  gorm connection + auto-migrate
   hook/                hook payload → upload adapter
     hook.go            Submit() + routing + HTTP post
@@ -172,7 +172,7 @@ More detail: [`docs/deploy.md`](docs/deploy.md).
 Resolution order (later wins):
 
 1. Defaults baked into `internal/config`.
-2. `~/.config/rmb/config.toml` (path overridable via `RMB_CONFIG`).
+2. `~/.rmb.conf` (flat `KEY=value`) or `~/.rmb/config.yaml` (structured; path overridable via `RMB_CONFIG`).
 3. `.env` in the working directory.
 4. Process environment.
 
@@ -188,7 +188,7 @@ Key variables (see `.env.example` for the full list):
 | `RMB_SUMMARIZER_MAX_TURNS_PER_MERGE` | `4`                                                              |
 
 For `hook-submit`, the target API URL is read from `RMB_URL` or
-`~/.rmb.conf` (key `RMB_URL=`), defaulting to `http://127.0.0.1:8080`.
+`~/.rmb.conf` or `~/.rmb/config.yaml` (`client.url` / `RMB_URL=`), defaulting to `http://127.0.0.1:8080`.
 To mirror turns to **local + production**, register **two hook entries** — see [`docs/hooks-dual.md`](docs/hooks-dual.md).
 
 ## Hook Integration
@@ -275,7 +275,7 @@ against a local dev DB.
 
 `find`, `search`, `cat`, `tree`, and `meta` are **dual-mode**:
 
-- **Remote (client):** if `RMB_URL` is set (env or `~/.rmb.conf`), they
+- **Remote (client):** if `RMB_URL` is set (env, `~/.rmb.conf`, or `~/.rmb/config.yaml`), they
   call the server's recall API over HTTP with basic auth — run them from your
   laptop against production.
 - **Local:** otherwise they query the database directly and embed the query

@@ -1,22 +1,20 @@
 // Package client is the CLI's HTTP client for talking to a remote rmb server.
-// It is selected automatically when RMB_URL is configured (env or
-// ~/.rmb.conf), so the CLI commands work against a remote service.
+// It is selected automatically when RMB_URL is configured (env,
+// ~/.rmb.conf, or ~/.rmb/config.yaml), so the CLI commands work against a remote service.
 package client
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/colinleefish/rmb/internal/config"
 	"github.com/colinleefish/rmb/internal/service/recall"
 )
 
@@ -33,12 +31,12 @@ type Client struct {
 // access. Unlike hook-submit, there is no localhost default: absence of a URL
 // means "use the local database".
 func Resolve() (*Client, bool) {
-	base := confValue("RMB_URL")
+	base := config.EnvValue("RMB_URL")
 	if base == "" {
 		return nil, false
 	}
-	user := firstNonEmpty(confValue("RMB_USERNAME"), confValue("USERNAME"))
-	pass := firstNonEmpty(confValue("RMB_PASSWORD"), confValue("PASSWORD"))
+	user := firstNonEmpty(config.EnvValue("RMB_USERNAME"), config.EnvValue("USERNAME"))
+	pass := firstNonEmpty(config.EnvValue("RMB_PASSWORD"), config.EnvValue("PASSWORD"))
 	return &Client{
 		baseURL:    strings.TrimRight(base, "/"),
 		username:   user,
@@ -541,53 +539,6 @@ func firstNonEmpty(vals ...string) string {
 		if strings.TrimSpace(v) != "" {
 			return strings.TrimSpace(v)
 		}
-	}
-	return ""
-}
-
-// confValue reads a key from the environment, falling back to ~/.rmb.conf
-// (path overridable via RMB_CONF).
-func confValue(key string) string {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-		return v
-	}
-	confPath := strings.TrimSpace(os.Getenv("RMB_CONF"))
-	if confPath == "" {
-		if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
-			confPath = filepath.Join(home, ".rmb.conf")
-		}
-	}
-	if confPath == "" {
-		return ""
-	}
-	return readConfValue(confPath, key)
-}
-
-func readConfValue(path, key string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		line = strings.TrimSpace(strings.TrimPrefix(line, "export "))
-		k, v, ok := strings.Cut(line, "=")
-		if !ok || strings.TrimSpace(k) != key {
-			continue
-		}
-		v = strings.TrimSpace(v)
-		if len(v) >= 2 {
-			if (v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\'') {
-				v = v[1 : len(v)-1]
-			}
-		}
-		return v
 	}
 	return ""
 }

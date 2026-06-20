@@ -4,12 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	toml "github.com/pelletier/go-toml/v2"
 )
 
 const (
@@ -166,6 +163,9 @@ type fileConfig struct {
 		Neighbors     *int     `toml:"neighbors"`
 		MinSimilarity *float64 `toml:"min_similarity"`
 	} `toml:"alias_suggest"`
+	Client struct {
+		URL string `toml:"url" yaml:"url"`
+	} `toml:"client" yaml:"client"`
 }
 
 func Load() (Config, error) {
@@ -230,7 +230,11 @@ func Load() (Config, error) {
 
 	configPath, explicitPath := resolveConfigPath()
 	if configPath != "" {
-		if err := loadFileConfig(&cfg, configPath, explicitPath); err != nil {
+		if isDotenvConfig(configPath) {
+			if err := loadDotEnv(configPath); err != nil {
+				return Config{}, err
+			}
+		} else if err := loadStructuredFileConfig(&cfg, configPath, explicitPath); err != nil {
 			return Config{}, err
 		}
 	}
@@ -325,33 +329,7 @@ func loadDotEnv(path string) error {
 	return nil
 }
 
-func resolveConfigPath() (string, bool) {
-	if v := os.Getenv("RMB_CONFIG"); v != "" {
-		return v, true
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", false
-	}
-
-	return filepath.Join(home, ".config", "rmb", "config.toml"), false
-}
-
-func loadFileConfig(cfg *Config, path string, explicitPath bool) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) && !explicitPath {
-			return nil
-		}
-		return fmt.Errorf("read config %q: %w", path, err)
-	}
-
-	var fc fileConfig
-	if err := toml.Unmarshal(data, &fc); err != nil {
-		return fmt.Errorf("decode config %q: %w", path, err)
-	}
-
+func applyFileConfig(cfg *Config, path string, fc fileConfig) error {
 	if fc.DB.URL != "" {
 		cfg.DB.URL = fc.DB.URL
 	}
@@ -521,6 +499,11 @@ func loadFileConfig(cfg *Config, path string, explicitPath bool) error {
 	}
 	if fc.AliasSuggest.MinSimilarity != nil {
 		cfg.AliasSuggest.MinSimilarity = *fc.AliasSuggest.MinSimilarity
+	}
+	if fc.Client.URL != "" {
+		if err := os.Setenv("RMB_URL", fc.Client.URL); err != nil {
+			return fmt.Errorf("set RMB_URL from %q: %w", path, err)
+		}
 	}
 
 	return nil
