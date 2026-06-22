@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
-import { ArrowLeftRight, ArrowRight, Check, X } from "lucide-react";
+import { ArrowRight, ArrowUpDown, Check, X } from "lucide-react";
 
 import { DataTable, SortButton, type RowDetail } from "@/components/data-table";
 import { DetailLead, DetailMeta } from "@/components/detail";
@@ -34,12 +34,26 @@ function CandidateDetail({
 
   return (
     <>
-      <div className="relative flex flex-col gap-3 pr-10">
+      <div className="flex flex-col gap-1">
         <div>
           <p className="text-muted-foreground mb-1 text-xs">canonical</p>
           <div className="bg-muted rounded-lg px-3 py-2 font-mono text-xs break-all">
             {canonicalUri}
           </div>
+        </div>
+        <div className="flex justify-end py-0.5">
+          <button
+            type="button"
+            title="Swap alias and canonical"
+            onClick={() => setSwapped((s) => !s)}
+            className={`rounded-full p-1.5 transition-colors ${
+              swapped
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <ArrowUpDown className="size-4" />
+          </button>
         </div>
         <div>
           <p className="text-muted-foreground mb-1 text-xs">alias</p>
@@ -47,18 +61,6 @@ function CandidateDetail({
             {aliasUri}
           </div>
         </div>
-        <button
-          type="button"
-          title="Swap alias and canonical"
-          onClick={() => setSwapped((s) => !s)}
-          className={`absolute right-0 top-1/2 -translate-y-1/2 rounded-full p-1.5 transition-colors ${
-            swapped
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
-          }`}
-        >
-          <ArrowLeftRight className="size-4" />
-        </button>
       </div>
       {c.rationale && <DetailLead>{c.rationale}</DetailLead>}
       {c.created_at && (
