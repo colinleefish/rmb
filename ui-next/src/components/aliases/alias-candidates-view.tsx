@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
-import { ArrowRight, Check, X } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, Check, X } from "lucide-react";
 
 import { DataTable, SortButton, type RowDetail } from "@/components/data-table";
 import { DetailLead, DetailMeta, DetailUri } from "@/components/detail";
@@ -39,11 +39,9 @@ function CandidateDetail({
           type="button"
           title="Swap alias and canonical"
           onClick={() => setSwapped((s) => !s)}
-          className="text-muted-foreground hover:text-foreground shrink-0 rounded transition-colors"
+          className={`shrink-0 rounded-full p-1 transition-colors ${swapped ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
         >
-          <ArrowRight
-            className={`size-3.5 transition-transform duration-200 ${swapped ? "rotate-180" : ""}`}
-          />
+          <ArrowLeftRight className="size-3.5" />
         </button>
         <DetailUri>{canonicalUri}</DetailUri>
       </div>
