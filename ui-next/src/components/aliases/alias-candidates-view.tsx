@@ -5,7 +5,7 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { ArrowLeftRight, ArrowRight, Check, X } from "lucide-react";
 
 import { DataTable, SortButton, type RowDetail } from "@/components/data-table";
-import { DetailLead, DetailMeta, DetailUri } from "@/components/detail";
+import { DetailLead, DetailMeta } from "@/components/detail";
 import { Button } from "@/components/ui/button";
 import {
   confirmAliasCandidate,
@@ -28,22 +28,36 @@ function CandidateDetail({
   busy: boolean;
 }) {
   const [swapped, setSwapped] = useState(false);
-  const aliasUri = swapped ? c.canonical_uri : c.alias_uri;
   const canonicalUri = swapped ? c.alias_uri : c.canonical_uri;
+  const aliasUri = swapped ? c.canonical_uri : c.alias_uri;
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
-        <DetailUri>{aliasUri}</DetailUri>
+      <div className="relative flex flex-col gap-3 pr-10">
+        <div>
+          <p className="text-muted-foreground mb-1 text-xs">canonical</p>
+          <div className="bg-muted rounded-lg px-3 py-2 font-mono text-xs break-all">
+            {canonicalUri}
+          </div>
+        </div>
+        <div>
+          <p className="text-muted-foreground mb-1 text-xs">alias</p>
+          <div className="bg-muted rounded-lg px-3 py-2 font-mono text-xs break-all">
+            {aliasUri}
+          </div>
+        </div>
         <button
           type="button"
           title="Swap alias and canonical"
           onClick={() => setSwapped((s) => !s)}
-          className={`shrink-0 rounded-full p-1 transition-colors ${swapped ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+          className={`absolute right-0 top-1/2 -translate-y-1/2 rounded-full p-1.5 transition-colors ${
+            swapped
+              ? "bg-primary text-primary-foreground"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          }`}
         >
-          <ArrowLeftRight className="size-3.5" />
+          <ArrowLeftRight className="size-4" />
         </button>
-        <DetailUri>{canonicalUri}</DetailUri>
       </div>
       {c.rationale && <DetailLead>{c.rationale}</DetailLead>}
       {c.created_at && (
