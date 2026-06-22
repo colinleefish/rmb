@@ -4,7 +4,7 @@
 
 services:
   rmb:
-    image: registry.cn-beijing.aliyuncs.com/colinleefish/rmb:4dfc64c
+    image: registry.cn-beijing.aliyuncs.com/colinleefish/rmb:60f0520
     container_name: rmb-app
     command: ["serve"]
     network_mode: host
