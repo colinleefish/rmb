@@ -228,7 +228,7 @@ function TableShell<T>({
                 <TableRow
                   key={row.id}
                   onClick={clickable ? () => handleClick(row.original) : undefined}
-                  className={clickable ? "cursor-pointer" : undefined}
+                  className={clickable ? "group/row cursor-pointer" : undefined}
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id} className="py-3 align-middle">

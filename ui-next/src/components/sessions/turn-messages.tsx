@@ -37,10 +37,10 @@ function TurnMessage({ message }: { message: ChatMessage }) {
       {body && (
         <div
           className={cn(
-            "rounded-md px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap",
-            isUser && "bg-muted/50 text-foreground",
+            "rounded-lg text-sm leading-relaxed whitespace-pre-wrap",
+            isUser && "bg-muted/60 text-foreground border-border/60 border px-3.5 py-2.5",
             normalizedRole === "assistant" && "text-foreground/90",
-            isSystem && "text-muted-foreground font-mono text-xs",
+            isSystem && "text-muted-foreground bg-muted/40 px-3 py-2 font-mono text-xs",
           )}
         >
           {body}
@@ -55,36 +55,44 @@ export function TurnsSection({ turns }: { turns: TurnRow[] }) {
     return <p className="text-muted-foreground text-sm">No turns yet.</p>;
 
   return (
-    <div className="divide-border/40 flex flex-col divide-y">
-      {turns.map((turn) => {
+    <ol className="flex flex-col">
+      {turns.map((turn, idx) => {
         const messages = parseJSONL(turn.messages_jsonl);
         const preview = turnMessagePreview(messages);
+        const isLast = idx === turns.length - 1;
 
         return (
-          <article key={turn.id} className="py-6">
-            <header className="mb-4 flex items-baseline gap-3 text-sm">
-              <span className="text-foreground font-mono text-xs tabular-nums">
-                #{turn.turn_index}
+          <li key={turn.id} className="flex gap-4">
+            {/* Timeline rail: numbered marker + connector line */}
+            <div className="flex flex-col items-center">
+              <span className="bg-background text-muted-foreground ring-border flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums ring-1">
+                {turn.turn_index}
               </span>
-              <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
-                {preview}
-              </span>
-              <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                {fmtDateTime(turn.created_at)}
-              </span>
-            </header>
-            <div className="flex flex-col gap-4">
-              {messages.length === 0 ? (
-                <p className="text-muted-foreground text-sm">No messages.</p>
-              ) : (
-                messages.map((message, i) => (
-                  <TurnMessage key={i} message={message} />
-                ))
-              )}
+              {!isLast && <span className="bg-border w-px flex-1" />}
             </div>
-          </article>
+
+            <article className={cn("min-w-0 flex-1", isLast ? "pb-1" : "pb-8")}>
+              <header className="mb-3 flex items-baseline justify-between gap-3">
+                <span className="text-muted-foreground min-w-0 flex-1 truncate text-sm">
+                  {preview}
+                </span>
+                <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                  {fmtDateTime(turn.created_at)}
+                </span>
+              </header>
+              <div className="flex flex-col gap-4">
+                {messages.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">No messages.</p>
+                ) : (
+                  messages.map((message, i) => (
+                    <TurnMessage key={i} message={message} />
+                  ))
+                )}
+              </div>
+            </article>
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
 }
