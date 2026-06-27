@@ -249,57 +249,6 @@ func (c *OpenAICompatibleClient) DistillMemory(
 	return out, nil
 }
 
-// AliasVerdict is the structured result of an alias judgment.
-type AliasVerdict struct {
-	Same         bool
-	CanonicalURI string
-	Rationale    string
-}
-
-// JudgeAlias asks the model whether two memory entries are the same real-world
-// entity. Temperature 0 keeps the decision stable for the same inputs. The
-// returned CanonicalURI is the model's choice of which side is authoritative
-// when Same is true (validated by the caller against the two supplied URIs).
-func (c *OpenAICompatibleClient) JudgeAlias(ctx context.Context, aURI, aBody, bURI, bBody string) (AliasVerdict, error) {
-	req := chatCompletionRequest{
-		Model:       c.model,
-		Temperature: 0,
-		Messages: []chatMessage{
-			{Role: "system", Content: judgeAliasSystemPrompt},
-			{Role: "user", Content: buildJudgeAliasPrompt(aURI, aBody, bURI, bBody)},
-		},
-	}
-	out, err := c.completeWithRetry(ctx, req)
-	if err != nil {
-		return AliasVerdict{}, fmt.Errorf("llm judge alias failed: %w", err)
-	}
-	return parseAliasVerdict(out)
-}
-
-// parseAliasVerdict extracts the JSON verdict from the model reply, tolerating
-// fenced code blocks or surrounding prose by scanning for the JSON object.
-func parseAliasVerdict(raw string) (AliasVerdict, error) {
-	s := strings.TrimSpace(raw)
-	start := strings.Index(s, "{")
-	end := strings.LastIndex(s, "}")
-	if start < 0 || end < start {
-		return AliasVerdict{}, fmt.Errorf("alias verdict: no JSON object in reply: %q", s)
-	}
-	var v struct {
-		Same         bool   `json:"same"`
-		CanonicalURI string `json:"canonical_uri"`
-		Rationale    string `json:"rationale"`
-	}
-	if err := json.Unmarshal([]byte(s[start:end+1]), &v); err != nil {
-		return AliasVerdict{}, fmt.Errorf("alias verdict: decode JSON: %w", err)
-	}
-	return AliasVerdict{
-		Same:         v.Same,
-		CanonicalURI: strings.TrimSpace(v.CanonicalURI),
-		Rationale:    strings.TrimSpace(v.Rationale),
-	}, nil
-}
-
 func (c *OpenAICompatibleClient) completeWithRetry(
 	ctx context.Context,
 	req chatCompletionRequest,

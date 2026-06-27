@@ -3,7 +3,6 @@ package memory
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/colinleefish/rmb/internal/db/pgarray"
 	"github.com/colinleefish/rmb/internal/model"
@@ -39,19 +38,6 @@ func EnqueueSessionsForMemoryTargets(ctx context.Context, gdb *gorm.DB, targetUR
 		}
 	}
 	return len(rows), nil
-}
-
-// SupersedeActiveMemory retires the active memory row at memoryURI (sets
-// superseded_at), if one exists. Used when an alias is created: the alias slug's
-// facts move into the canonical at the next rollup, so its standalone row must be
-// retired to avoid a stale duplicate. No-op when no active row exists. events are
-// never aliased (alias.Create restricts to preferences/entities) so immutability
-// of event rows is not affected.
-func SupersedeActiveMemory(ctx context.Context, gdb *gorm.DB, memoryURI string, now time.Time) error {
-	return gdb.WithContext(ctx).
-		Model(&model.Memory{}).
-		Where("uri = ? AND superseded_at IS NULL", memoryURI).
-		Update("superseded_at", now).Error
 }
 
 // EnqueueSession marks a session for T3 rollup (used by backfill CLI).

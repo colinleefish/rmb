@@ -89,11 +89,11 @@ there is no `forget`.*
 
 ## What we did NOT drop
 
-Entity resolution (`alias`, slug-drift fixes) is **deferred-but-intended**, not
-decided against. Unlike `forget`, the "she became a different entity under the
-same slug" edge case is real — it just lives in its own dedicated mechanism,
-outside the correction umbrella (see `docs/corrections.md`), rather than as a
-correction kind.
+Entity resolution (slug-drift fixes, equivalence between slugs) is
+**deferred-but-intended**, not decided against. Unlike `forget`, the "she became
+a different entity under the same slug" edge case is real — it will live in a
+dedicated mechanism outside the correction umbrella (see `docs/corrections.md`),
+rather than as a correction kind.
 
 ## Cleanup performed
 

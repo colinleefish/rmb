@@ -48,8 +48,7 @@ ordering.
 
 A correction is a pure content patch: one kind, one statement, one or more
 targets. (The earlier `kind`/`payload` columns and the `split`/`alias` kinds are
-gone — entity resolution, including `alias`, is its own dedicated mechanism
-outside the correction umbrella. See "Entity resolution lives elsewhere".)
+gone — entity resolution is deferred; see "Entity resolution lives elsewhere".)
 
 No embedding column: every correction targets something, so it is reached purely
 via the `target_uris` join (no vectors, no FTS over correction text). Corrections
@@ -155,9 +154,9 @@ human-authored memory), not here.
 
 The old `split`/`alias` kinds are **not** part of corrections. Entity resolution
 (slug drift, "these two slugs are the same", "this slug is really two things")
-is its own dedicated mechanism — `alias` will be its own thing, outside the
-correction umbrella. Keeping corrections to a single content-patch shape is the
-point of this unification.
+is deferred — a future T1 slug registry and equivalence mechanism are tracked
+separately. Keeping corrections to a single content-patch shape is the point of
+this unification.
 
 ## Precedence & the agent contract
 
@@ -219,8 +218,8 @@ the merged truth (orthogonal corrections are combined by the distiller).
 
 ## Deferred
 
-- Entity resolution: `alias` (and catalog-aware slugging / slug-drift fixes) as
-  its own dedicated mechanism, separate from corrections — see the drift
+- Entity resolution: T1 slug registry and catalog-aware slugging / slug-drift
+  fixes as a dedicated mechanism, separate from corrections — see the drift
   discussion in the project review.
 - Scope-keying (work / personal / project) for corrections.
 

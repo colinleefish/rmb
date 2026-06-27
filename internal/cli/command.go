@@ -50,8 +50,6 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 		return r.runSearch(ctx, args[1:])
 	case "correction":
 		return r.runCorrection(ctx, args[1:])
-	case "alias":
-		return r.runAlias(ctx, args[1:])
 	case "store", "read", "list", "delete", "load-context":
 		return fmt.Errorf("%q command is planned but not implemented yet", args[0])
 	default:
@@ -279,167 +277,6 @@ func (r Runner) runCorrectionRm(ctx context.Context, args []string) error {
 	return nil
 }
 
-// runAlias dispatches the entity-alias subcommands:
-//
-//	rmb alias set <alias-uri> <canonical-uri> ["note"]
-//	rmb alias rm  <alias-record-uri>
-//	rmb alias ls  [<uri>]
-//	rmb alias candidates [--status=pending]
-//	rmb alias confirm <candidate-id>
-//	rmb alias reject  <candidate-id>
-func (r Runner) runAlias(ctx context.Context, args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: rmb alias <set|rm|ls|candidates|confirm|reject> ...")
-	}
-	switch args[0] {
-	case "set":
-		return r.runAliasSet(ctx, args[1:])
-	case "rm":
-		return r.runAliasRm(ctx, args[1:])
-	case "ls":
-		return r.runAliasList(ctx, args[1:])
-	case "candidates":
-		return r.runAliasCandidates(ctx, args[1:])
-	case "confirm":
-		return r.runAliasConfirm(ctx, args[1:])
-	case "reject":
-		return r.runAliasReject(ctx, args[1:])
-	default:
-		return fmt.Errorf("unknown alias action %q (use set|rm|ls|candidates|confirm|reject)", args[0])
-	}
-}
-
-func (r Runner) runAliasCandidates(ctx context.Context, args []string) error {
-	status := strings.TrimSpace(parseFlagValue(args, "--status"))
-	cl, ok := client.Resolve()
-	if !ok {
-		return fmt.Errorf("alias candidates requires RMB_URL (the server owns the database)")
-	}
-	items, err := cl.ListAliasCandidates(ctx, status)
-	if err != nil {
-		return err
-	}
-	out := r.stdout()
-	if len(items) == 0 {
-		fmt.Fprintln(out, "no alias candidates")
-		return nil
-	}
-	for _, it := range items {
-		fmt.Fprintf(out, "%s  [%s]\n", it.ID, it.Status)
-		fmt.Fprintf(out, "   %s -> %s  (similarity %.3f)\n", it.AliasURI, it.CanonicalURI, it.Similarity)
-		if it.Rationale != "" {
-			fmt.Fprintf(out, "   %s\n", it.Rationale)
-		}
-	}
-	return nil
-}
-
-func (r Runner) runAliasConfirm(ctx context.Context, args []string) error {
-	pos := positionalArgs(args)
-	if len(pos) != 1 {
-		return fmt.Errorf("usage: rmb alias confirm <candidate-id>")
-	}
-	cl, ok := client.Resolve()
-	if !ok {
-		return fmt.Errorf("alias confirm requires RMB_URL (the server owns the database)")
-	}
-	if err := cl.ConfirmAliasCandidate(ctx, pos[0]); err != nil {
-		return err
-	}
-	fmt.Fprintf(r.stdout(), "confirmed candidate: %s\n", pos[0])
-	return nil
-}
-
-func (r Runner) runAliasReject(ctx context.Context, args []string) error {
-	pos := positionalArgs(args)
-	if len(pos) != 1 {
-		return fmt.Errorf("usage: rmb alias reject <candidate-id>")
-	}
-	cl, ok := client.Resolve()
-	if !ok {
-		return fmt.Errorf("alias reject requires RMB_URL (the server owns the database)")
-	}
-	if err := cl.RejectAliasCandidate(ctx, pos[0]); err != nil {
-		return err
-	}
-	fmt.Fprintf(r.stdout(), "rejected candidate: %s\n", pos[0])
-	return nil
-}
-
-func (r Runner) runAliasSet(ctx context.Context, args []string) error {
-	pos := positionalArgs(args)
-
-	var uris, words []string
-	for _, a := range pos {
-		if strings.HasPrefix(a, uri.Scheme+"://") {
-			uris = append(uris, a)
-		} else {
-			words = append(words, a)
-		}
-	}
-	if len(uris) != 2 {
-		return fmt.Errorf("usage: rmb alias set <alias-uri> <canonical-uri> [\"note\"]")
-	}
-	note := strings.TrimSpace(strings.Join(words, " "))
-
-	cl, ok := client.Resolve()
-	if !ok {
-		return fmt.Errorf("alias set requires RMB_URL (the server owns the database)")
-	}
-	createdURI, err := cl.CreateAlias(ctx, uris[0], uris[1], note)
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(r.stdout(), "added alias: %s -> %s (%s)\n", uris[0], uris[1], createdURI)
-	return nil
-}
-
-func (r Runner) runAliasList(ctx context.Context, args []string) error {
-	pos := positionalArgs(args)
-	filter := ""
-	if len(pos) > 0 {
-		filter = pos[0]
-	}
-
-	cl, ok := client.Resolve()
-	if !ok {
-		return fmt.Errorf("alias ls requires RMB_URL (the server owns the database)")
-	}
-	items, err := cl.ListAliases(ctx, filter)
-	if err != nil {
-		return err
-	}
-	out := r.stdout()
-	if len(items) == 0 {
-		fmt.Fprintln(out, "no aliases")
-		return nil
-	}
-	for _, it := range items {
-		fmt.Fprintln(out, it.URI)
-		fmt.Fprintf(out, "   %s -> %s\n", it.AliasURI, it.CanonicalURI)
-		if it.Note != "" {
-			fmt.Fprintf(out, "   %s\n", it.Note)
-		}
-	}
-	return nil
-}
-
-func (r Runner) runAliasRm(ctx context.Context, args []string) error {
-	pos := positionalArgs(args)
-	if len(pos) != 1 {
-		return fmt.Errorf("usage: rmb alias rm <rmb://aliases/...>")
-	}
-	cl, ok := client.Resolve()
-	if !ok {
-		return fmt.Errorf("alias rm requires RMB_URL (the server owns the database)")
-	}
-	if err := cl.RetractAlias(ctx, pos[0]); err != nil {
-		return err
-	}
-	fmt.Fprintf(r.stdout(), "retracted: %s\n", pos[0])
-	return nil
-}
-
 func printMatches(out io.Writer, matches []recall.Match) {
 	if len(matches) == 0 {
 		fmt.Fprintln(out, "no matches")
@@ -571,17 +408,6 @@ Usage:
                               Retire a specific correction (URI from meta/ls output)
   rmb correction ls [<target-uri>]
                               List active corrections (optionally for one target)
-  rmb alias set <alias-uri> <canonical-uri> ["note"]
-                              Declare alias-uri to be the same entity as canonical-uri
-  rmb alias rm <alias-record-uri>
-                              Retract a specific alias (URI from meta/ls output)
-  rmb alias ls [<uri>]     List active aliases (optionally for one URI, either side)
-  rmb alias candidates [--status=pending]
-                              List machine-proposed alias candidates (pending|confirmed|rejected|all)
-  rmb alias confirm <candidate-id>
-                              Promote a candidate into a live alias
-  rmb alias reject <candidate-id>
-                              Reject a candidate so it is never re-proposed
   rmb store <uri>          Planned
   rmb read <uri>           Planned
   rmb list <prefix>        Planned

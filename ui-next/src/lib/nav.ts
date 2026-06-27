@@ -2,7 +2,6 @@ import {
   Boxes,
   GitBranch,
   LayoutDashboard,
-  Link2,
   ListTodo,
   MessagesSquare,
   ShieldCheck,
@@ -29,7 +28,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "scenes", label: "Scenes", href: "/scenes", icon: Boxes, countKey: "scenes", enabled: true },
   { id: "memories", label: "Memories", href: "/memories", icon: Sparkles, countKey: "memories", enabled: true },
   { id: "corrections", label: "Corrections", href: "/corrections", icon: ShieldCheck, countKey: "corrections", enabled: true },
-  { id: "aliases", label: "Aliases", href: "/aliases", icon: Link2, countKey: "aliases", enabled: true },
   { id: "pipeline", label: "Pipeline", href: "/pipeline", icon: GitBranch, countKey: "pipeline_states", enabled: true },
   { id: "tasks", label: "Tasks", href: "/tasks", icon: ListTodo, countKey: "tasks", enabled: true },
 ];

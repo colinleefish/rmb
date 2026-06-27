@@ -1,6 +1,4 @@
 import type {
-  AliasModel,
-  AliasCandidateModel,
   CorrectionModel,
   AtomModel,
   MemoryModel,
@@ -137,52 +135,4 @@ export function retractCorrection(
   uri: string,
 ): Promise<{ uri: string; retracted: boolean }> {
   return apiSend("DELETE", `/corrections?uri=${encodeURIComponent(uri)}`);
-}
-
-// Aliases: declare one memory URI is the same entity as another (preferences/entities).
-// `uri` filters to aliases where it appears on either side (alias or canonical).
-export const listAliases = (uri?: string) =>
-  listItems<AliasModel>(
-    uri ? `/aliases?uri=${encodeURIComponent(uri)}` : "/aliases",
-  );
-
-export function createAlias(input: {
-  alias_uri: string;
-  canonical_uri: string;
-  note?: string;
-}): Promise<{ uri: string; alias_uri: string; canonical_uri: string }> {
-  return apiSend("POST", "/aliases", {
-    alias_uri: input.alias_uri,
-    canonical_uri: input.canonical_uri,
-    note: input.note ?? "",
-  });
-}
-
-export function retractAlias(
-  uri: string,
-): Promise<{ uri: string; retracted: boolean }> {
-  return apiSend("DELETE", `/aliases?uri=${encodeURIComponent(uri)}`);
-}
-
-// Alias candidates: machine-proposed pairs from the suggest worker, awaiting
-// human confirmation. `status` filters by pending|confirmed|rejected|all.
-export const listAliasCandidates = (status?: string) =>
-  listItems<AliasCandidateModel>(
-    status
-      ? `/alias-candidates?status=${encodeURIComponent(status)}`
-      : "/alias-candidates",
-  );
-
-export function confirmAliasCandidate(
-  id: string,
-  note?: string,
-): Promise<{ uri: string; alias_uri: string; canonical_uri: string }> {
-  return apiSend("POST", "/alias-candidates/confirm", { id, note: note ?? "" });
-}
-
-export function rejectAliasCandidate(
-  id: string,
-  note?: string,
-): Promise<{ id: string; rejected: boolean }> {
-  return apiSend("POST", "/alias-candidates/reject", { id, note: note ?? "" });
 }

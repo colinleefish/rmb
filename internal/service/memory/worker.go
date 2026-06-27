@@ -11,7 +11,6 @@ import (
 	"github.com/colinleefish/rmb/internal/db"
 	"github.com/colinleefish/rmb/internal/db/pgarray"
 	"github.com/colinleefish/rmb/internal/model"
-	"github.com/colinleefish/rmb/internal/service/alias"
 	"github.com/colinleefish/rmb/internal/service/correction"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -131,14 +130,7 @@ func (w *Worker) rollup(ctx context.Context) error {
 		return fmt.Errorf("load scenes: %w", err)
 	}
 
-	// Active aliases fold redundant slugs into their canonical bucket so the
-	// distiller produces one complete memory per entity. See docs/aliases.md.
-	aliasMap, err := alias.ActiveMap(ctx, w.db)
-	if err != nil {
-		return fmt.Errorf("load aliases: %w", err)
-	}
-
-	buckets, skipped := groupAtomsIntoBuckets(atoms, aliasMap)
+	buckets, skipped := groupAtomsIntoBuckets(atoms)
 	if skipped > 0 {
 		log.Printf("t3 worker skipped %d slug-less atoms in slug categories", skipped)
 	}

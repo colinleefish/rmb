@@ -14,7 +14,6 @@ export interface OverviewCounts {
   pipeline_states: number;
   tasks: number;
   corrections: number;
-  aliases: number;
 }
 
 export interface Overview {
@@ -92,28 +91,6 @@ export interface CorrectionModel {
   uri: string;
   statement: string;
   target_uris: string[];
-  created_at: string;
-}
-
-// The aliases API returns explicit snake_case JSON (see handler/alias.go).
-export interface AliasModel {
-  uri: string;
-  alias_uri: string;
-  canonical_uri: string;
-  note: string;
-  created_at: string;
-}
-
-// A machine-proposed alias awaiting confirmation (see handler/alias.go,
-// alias.CandidateSummary).
-export interface AliasCandidateModel {
-  id: string;
-  alias_uri: string;
-  canonical_uri: string;
-  similarity: number;
-  verdict: string;
-  rationale: string;
-  status: string;
   created_at: string;
 }
 

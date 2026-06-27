@@ -20,7 +20,7 @@ func TestGroupAtomsIntoBuckets(t *testing.T) {
 		{URI: "x1", Category: model.AtomCategoryPreferences, Content: "no slug here"},
 	}
 
-	buckets, skipped := groupAtomsIntoBuckets(atoms, nil)
+	buckets, skipped := groupAtomsIntoBuckets(atoms)
 	if skipped != 1 {
 		t.Fatalf("expected 1 slug-less atom skipped, got %d", skipped)
 	}
@@ -50,39 +50,13 @@ func TestGroupAtomsIntoBuckets_noProfileWhenEmpty(t *testing.T) {
 	atoms := []model.Atom{
 		{URI: "e1", Category: model.AtomCategoryEntities, Slug: strPtr("tesla"), Content: "x"},
 	}
-	buckets, _ := groupAtomsIntoBuckets(atoms, nil)
+	buckets, _ := groupAtomsIntoBuckets(atoms)
 	for _, b := range buckets {
 		if b.URI == "rmb://profile" {
 			t.Fatal("should not create an empty profile bucket")
 		}
 	}
 }
-
-func TestGroupAtomsIntoBuckets_aliasFold(t *testing.T) {
-	atoms := []model.Atom{
-		{URI: "a1", Category: model.AtomCategoryEntities, Slug: strPtr("aliyun-rds-instance"), Content: "100GB, MySQL 8.0"},
-		{URI: "a2", Category: model.AtomCategoryEntities, Slug: strPtr("aliyun-rds"), Content: "prod billing DB"},
-	}
-	aliasMap := map[string]string{
-		"rmb://entities/aliyun-rds-instance": "rmb://entities/aliyun-rds",
-	}
-
-	buckets, skipped := groupAtomsIntoBuckets(atoms, aliasMap)
-	if skipped != 0 {
-		t.Fatalf("expected 0 skipped, got %d", skipped)
-	}
-	if len(buckets) != 1 {
-		t.Fatalf("expected the alias to fold into a single canonical bucket, got %d: %+v", len(buckets), buckets)
-	}
-	b := buckets[0]
-	if b.URI != "rmb://entities/aliyun-rds" {
-		t.Fatalf("folded bucket should be the canonical, got %s", b.URI)
-	}
-	if len(b.Atoms) != 2 {
-		t.Fatalf("canonical bucket should hold both slugs' atoms, got %d", len(b.Atoms))
-	}
-}
-
 func TestChunkAtoms(t *testing.T) {
 	atoms := make([]model.Atom, 130)
 	chunks := chunkAtoms(atoms, 60)

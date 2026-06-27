@@ -37,12 +37,6 @@ var distillMemoryUserTmpl string
 //go:embed prompts/distill_memory.profile_filter.txt
 var distillMemoryProfileFilter string
 
-//go:embed prompts/judge_alias.system.txt
-var judgeAliasSystemPrompt string
-
-//go:embed prompts/judge_alias.user.txt
-var judgeAliasUserTmpl string
-
 func orEmptyMarker(s string) string {
 	if s = strings.TrimSpace(s); s != "" {
 		return s
@@ -83,15 +77,6 @@ func buildDistillMemoryPrompt(category, slug, atomsJSON string, corrections []st
 	out = strings.ReplaceAll(out, "{{FILTER}}", filter)
 	out = strings.ReplaceAll(out, "{{CORRECTIONS}}", buildCorrectionsBlock(corrections))
 	out = strings.ReplaceAll(out, "{{FACTS}}", orEmptyMarker(atomsJSON))
-	return strings.TrimSpace(out)
-}
-
-func buildJudgeAliasPrompt(aURI, aBody, bURI, bBody string) string {
-	out := judgeAliasUserTmpl
-	out = strings.ReplaceAll(out, "{{A_URI}}", aURI)
-	out = strings.ReplaceAll(out, "{{A_BODY}}", orEmptyMarker(aBody))
-	out = strings.ReplaceAll(out, "{{B_URI}}", bURI)
-	out = strings.ReplaceAll(out, "{{B_BODY}}", orEmptyMarker(bBody))
 	return strings.TrimSpace(out)
 }
 

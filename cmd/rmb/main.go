@@ -15,7 +15,6 @@ import (
 	"github.com/colinleefish/rmb/internal/http/router"
 	"github.com/colinleefish/rmb/internal/llm"
 	"github.com/colinleefish/rmb/internal/server"
-	"github.com/colinleefish/rmb/internal/service/alias"
 	"github.com/colinleefish/rmb/internal/service/browse"
 	"github.com/colinleefish/rmb/internal/service/correction"
 	"github.com/colinleefish/rmb/internal/service/health"
@@ -56,7 +55,7 @@ func main() {
 			healthSvc := health.NewService(database)
 			sessionUploadSvc := session.NewUploadService(database)
 
-			if cfg.Extraction.Enabled || cfg.Scene.Enabled || cfg.Memory.Enabled || cfg.AliasSuggest.Enabled {
+			if cfg.Extraction.Enabled || cfg.Scene.Enabled || cfg.Memory.Enabled {
 				llmClient, err := llm.NewOpenAICompatibleClient(llm.OpenAICompatibleConfig{
 					Provider:        cfg.LLM.Provider,
 					APIBase:         cfg.LLM.APIBase,
@@ -99,17 +98,6 @@ func main() {
 							}
 						}()
 					}
-
-					// Alias-suggest reads existing memory embeddings and uses the
-					// chat client only as a same-entity judge (no embedding calls).
-					if cfg.AliasSuggest.Enabled {
-						suggestWorker := alias.NewSuggestWorker(database, llmClient, cfg.AliasSuggest)
-						go func() {
-							if err := suggestWorker.Run(ctx); err != nil {
-								log.Printf("alias-suggest worker exited with error: %v", err)
-							}
-						}()
-					}
 				}
 			}
 
@@ -149,11 +137,10 @@ func main() {
 
 			inspectHandler := handler.NewInspectHandler(inspect.NewService(database))
 			correctionHandler := handler.NewCorrectionHandler(correction.NewService(database), database)
-			aliasHandler := handler.NewAliasHandler(alias.NewService(database), database)
 			backfillHandler := handler.NewBackfillHandler(database)
 			embedHandler := handler.NewEmbedHandler(database)
 
-			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler, inspectHandler, correctionHandler, aliasHandler, backfillHandler, embedHandler)
+			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler, inspectHandler, correctionHandler, backfillHandler, embedHandler)
 			if err != nil {
 				return fmt.Errorf("build router: %w", err)
 			}
