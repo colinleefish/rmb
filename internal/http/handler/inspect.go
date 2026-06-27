@@ -3,13 +3,12 @@ package handler
 import (
 	"bytes"
 	"context"
-	"errors"
 	"io"
 	"net/http"
 
+	"github.com/colinleefish/rmb/internal/http/httperr"
 	"github.com/colinleefish/rmb/internal/service/inspect"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // InspectHandler exposes cat/tree/meta over HTTP, reusing the inspect service so
@@ -40,16 +39,12 @@ func (h *InspectHandler) run(
 ) {
 	uri := c.Query("uri")
 	if uri == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "uri is required"})
+		httperr.JSON(c, http.StatusBadRequest, "uri is required")
 		return
 	}
 	var buf bytes.Buffer
 	if err := fn(c.Request.Context(), uri, &buf); err != nil {
-		status := http.StatusInternalServerError
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			status = http.StatusNotFound
-		}
-		c.JSON(status, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", buf.Bytes())

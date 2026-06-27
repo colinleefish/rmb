@@ -39,11 +39,11 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 	case "cat", "tree", "meta":
 		return r.runInspect(ctx, args[0], args[1:])
 	case "t1":
-		return r.runT1(ctx, args[1:])
+		return r.runBackfill(ctx, "t1", args[1:])
 	case "t2":
-		return r.runT2(ctx, args[1:])
+		return r.runBackfill(ctx, "t2", args[1:])
 	case "t3":
-		return r.runT3(ctx, args[1:])
+		return r.runBackfill(ctx, "t3", args[1:])
 	case "embed":
 		return r.runEmbed(ctx, args[1:])
 	case "search":
@@ -83,65 +83,23 @@ func (r Runner) runHookSubmit(ctx context.Context, args []string) error {
 	})
 }
 
-func (r Runner) runT1(ctx context.Context, args []string) error {
+func (r Runner) runBackfill(ctx context.Context, tier string, args []string) error {
 	if len(args) == 0 || args[0] != "backfill" {
-		return fmt.Errorf("usage: rmb t1 backfill [--session=<uuid>]")
+		return fmt.Errorf("usage: rmb %s backfill [--session=<uuid>]", tier)
 	}
 	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
 	cl, ok := client.Resolve()
 	if !ok {
-		return fmt.Errorf("t1 backfill requires RMB_URL (the server owns the database)")
+		return fmt.Errorf("%s backfill requires RMB_URL (the server owns the database)", tier)
 	}
-	n, err := cl.Backfill(ctx, "t1", sessionKey)
+	n, err := cl.Backfill(ctx, tier, sessionKey)
 	if err != nil {
 		return err
 	}
 	if sessionKey != "" {
-		fmt.Fprintln(r.stdout(), "enqueued t1 for session", sessionKey)
+		fmt.Fprintf(r.stdout(), "enqueued %s for session %s\n", tier, sessionKey)
 	} else {
-		fmt.Fprintf(r.stdout(), "enqueued t1 for %d session(s)\n", n)
-	}
-	return nil
-}
-
-func (r Runner) runT2(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "backfill" {
-		return fmt.Errorf("usage: rmb t2 backfill [--session=<uuid>]")
-	}
-	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
-	cl, ok := client.Resolve()
-	if !ok {
-		return fmt.Errorf("t2 backfill requires RMB_URL (the server owns the database)")
-	}
-	n, err := cl.Backfill(ctx, "t2", sessionKey)
-	if err != nil {
-		return err
-	}
-	if sessionKey != "" {
-		fmt.Fprintln(r.stdout(), "enqueued t2 for session", sessionKey)
-	} else {
-		fmt.Fprintf(r.stdout(), "enqueued t2 for %d session(s)\n", n)
-	}
-	return nil
-}
-
-func (r Runner) runT3(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "backfill" {
-		return fmt.Errorf("usage: rmb t3 backfill [--session=<uuid>]")
-	}
-	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
-	cl, ok := client.Resolve()
-	if !ok {
-		return fmt.Errorf("t3 backfill requires RMB_URL (the server owns the database)")
-	}
-	n, err := cl.Backfill(ctx, "t3", sessionKey)
-	if err != nil {
-		return err
-	}
-	if sessionKey != "" {
-		fmt.Fprintln(r.stdout(), "enqueued t3 for session", sessionKey)
-	} else {
-		fmt.Fprintf(r.stdout(), "enqueued t3 for %d session(s)\n", n)
+		fmt.Fprintf(r.stdout(), "enqueued %s for %d session(s)\n", tier, n)
 	}
 	return nil
 }
@@ -151,7 +109,10 @@ func (r Runner) runSearch(ctx context.Context, args []string) error {
 	if query == "" {
 		return fmt.Errorf("usage: rmb search \"<query>\" [--scope=memory,scene] [--k=<n>]")
 	}
-	k := parseK(args, 0) // 0 → server default (5)
+	k, err := parseK(args, 0) // 0 → server default (5)
+	if err != nil {
+		return err
+	}
 	scopes := parseScopes(args)
 
 	cl, ok := client.Resolve()
@@ -306,13 +267,15 @@ func positionalArgs(args []string) []string {
 	return out
 }
 
-func parseK(args []string, def int) int {
+func parseK(args []string, def int) (int, error) {
 	if v := strings.TrimSpace(parseFlagValue(args, "--k")); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
-			return parsed
+		parsed, err := strconv.Atoi(v)
+		if err != nil || parsed <= 0 {
+			return 0, fmt.Errorf("--k must be a positive integer")
 		}
+		return parsed, nil
 	}
-	return def
+	return def, nil
 }
 
 func (r Runner) runEmbed(ctx context.Context, args []string) error {

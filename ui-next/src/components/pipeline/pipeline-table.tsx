@@ -3,10 +3,10 @@
 import { useMemo, useState } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 
-import { DataTable } from "@/components/data-table";
+import { ServerDataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
 import { SessionDetailDialog } from "@/components/sessions/session-detail-dialog";
-import { listPipelineStates } from "@/lib/api";
+import { pagePipelineStates } from "@/lib/api";
 import { pick, shortKey } from "@/lib/format";
 import type { PipelineRow } from "@/lib/types";
 
@@ -64,19 +64,9 @@ export function PipelineTable() {
 
   return (
     <>
-      <DataTable
-        load={listPipelineStates}
+      <ServerDataTable
+        loadPage={pagePipelineStates}
         columns={columns}
-        searchText={(r) =>
-          [
-            r.session_key,
-            pick(r, "T1Status", "t1_status"),
-            pick(r, "T2Status", "t2_status"),
-            pick(r, "T3Status", "t3_status"),
-          ]
-            .filter(Boolean)
-            .join(" ")
-        }
         searchPlaceholder="Search by session key or status…"
         emptyMessage="No pipeline state yet."
         onRowClick={(r) => r.session_key && setSelectedKey(r.session_key)}

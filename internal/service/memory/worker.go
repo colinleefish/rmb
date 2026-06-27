@@ -123,13 +123,6 @@ func (w *Worker) rollup(ctx context.Context) error {
 		return fmt.Errorf("load atoms: %w", err)
 	}
 
-	var scenes []model.Scene
-	if err := w.db.WithContext(ctx).
-		Select("uri", "source_atom_uris").
-		Find(&scenes).Error; err != nil {
-		return fmt.Errorf("load scenes: %w", err)
-	}
-
 	buckets, skipped := groupAtomsIntoBuckets(atoms)
 	if skipped > 0 {
 		log.Printf("t3 worker skipped %d slug-less atoms in slug categories", skipped)
@@ -137,6 +130,21 @@ func (w *Worker) rollup(ctx context.Context) error {
 	if len(buckets) == 0 {
 		// Nothing to distill; still clear pending so they do not loop forever.
 		return w.markSessionsIdle(ctx, pendingIDs, w.now().UTC())
+	}
+
+	atomURIs := make([]string, 0)
+	for _, b := range buckets {
+		for _, atom := range b.Atoms {
+			atomURIs = append(atomURIs, atom.URI)
+		}
+	}
+
+	var scenes []model.Scene
+	if err := w.db.WithContext(ctx).
+		Select("uri", "source_atom_uris").
+		Where("source_atom_uris && ?", pgarray.TextArray(atomURIs)).
+		Find(&scenes).Error; err != nil {
+		return fmt.Errorf("load scenes: %w", err)
 	}
 
 	index := buildAtomSceneIndex(scenes)

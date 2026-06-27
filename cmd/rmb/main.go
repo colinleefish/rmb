@@ -118,7 +118,7 @@ func main() {
 
 			browseSvc := browse.NewService(database)
 			healthHandler := handler.NewHealthHandler(healthSvc)
-			sessionUploadHandler := handler.NewSessionUploadHandler(sessionUploadSvc)
+			sessionUploadHandler := handler.NewSessionUploadHandler(sessionUploadSvc, cfg.Server.MaxUploadBytes)
 			browseHandler := handler.NewBrowseHandler(browseSvc)
 
 			// Recall endpoints (find/search) need a query embedder. Build a

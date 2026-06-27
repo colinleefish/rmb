@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/colinleefish/rmb/internal/http/httperr"
 	"github.com/colinleefish/rmb/internal/service/embed"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -21,7 +22,7 @@ func NewEmbedHandler(db *gorm.DB) *EmbedHandler {
 func (h *EmbedHandler) Status(c *gin.Context) {
 	rows, err := embed.Status(c.Request.Context(), h.db)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	items := make([]gin.H, 0, len(rows))

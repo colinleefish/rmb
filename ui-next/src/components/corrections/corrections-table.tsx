@@ -3,13 +3,13 @@
 import { useMemo } from "react";
 import { type ColumnDef } from "@tanstack/react-table";
 
-import { DataTable, SortButton, type RowDetail } from "@/components/data-table";
+import { ServerDataTable, SortButton, type RowDetail } from "@/components/data-table";
 import {
   DetailLead,
   DetailMeta,
   DetailUri,
 } from "@/components/detail";
-import { listCorrections } from "@/lib/api";
+import { pageCorrections } from "@/lib/api";
 import { fmtDateShort, fmtDateTime, truncate } from "@/lib/format";
 import type { CorrectionModel } from "@/lib/types";
 
@@ -86,14 +86,9 @@ export function CorrectionsTable() {
   );
 
   return (
-    <DataTable
-      load={() => listCorrections()}
+    <ServerDataTable
+      loadPage={(req) => pageCorrections(req)}
       columns={columns}
-      searchText={(a) =>
-        [a.statement, a.target_uris?.join(" "), a.uri]
-          .filter(Boolean)
-          .join(" ")
-      }
       searchPlaceholder="Search corrections…"
       emptyMessage="No corrections yet."
       initialSorting={[{ id: "created", desc: true }]}

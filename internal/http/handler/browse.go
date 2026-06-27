@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/colinleefish/rmb/internal/http/httperr"
 	"github.com/colinleefish/rmb/internal/service/browse"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -20,14 +21,14 @@ const (
 // per-entity allowlist, so they are passed through verbatim here.
 func parseListParams(c *gin.Context) browse.ListParams {
 	limit := defaultPageLimit
-	if v, err := strconv.Atoi(c.Query("limit")); err == nil && v > 0 {
+	if v, err := parsePositiveInt(c.Query("limit")); err == nil && v > 0 {
 		limit = v
 	}
 	if limit > maxPageLimit {
 		limit = maxPageLimit
 	}
 	offset := 0
-	if v, err := strconv.Atoi(c.Query("offset")); err == nil && v > 0 {
+	if v, err := parsePositiveInt(c.Query("offset")); err == nil && v > 0 {
 		offset = v
 	}
 	return browse.ListParams{
@@ -50,19 +51,20 @@ func NewBrowseHandler(svc *browse.Service) *BrowseHandler {
 func (h *BrowseHandler) Overview(c *gin.Context) {
 	out, err := h.svc.Overview(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, out)
 }
 
 func (h *BrowseHandler) ListSessions(c *gin.Context) {
-	rows, err := h.svc.ListSessions(c.Request.Context())
+	p := parseListParams(c)
+	rows, total, err := h.svc.ListSessions(c.Request.Context(), p)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": rows})
+	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
 }
 
 func (h *BrowseHandler) GetSession(c *gin.Context) {
@@ -70,10 +72,10 @@ func (h *BrowseHandler) GetSession(c *gin.Context) {
 	detail, err := h.svc.GetSession(c.Request.Context(), key)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
+			httperr.JSON(c, http.StatusNotFound, "session not found")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, detail)
@@ -83,7 +85,7 @@ func (h *BrowseHandler) ListAtoms(c *gin.Context) {
 	p := parseListParams(c)
 	rows, total, err := h.svc.ListAtoms(c.Request.Context(), p)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
@@ -93,7 +95,7 @@ func (h *BrowseHandler) ListScenes(c *gin.Context) {
 	p := parseListParams(c)
 	rows, total, err := h.svc.ListScenes(c.Request.Context(), p)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
@@ -103,27 +105,32 @@ func (h *BrowseHandler) ListMemories(c *gin.Context) {
 	p := parseListParams(c)
 	rows, total, err := h.svc.ListMemories(c.Request.Context(), p)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
 }
 
 func (h *BrowseHandler) ListPipelineStates(c *gin.Context) {
-	rows, err := h.svc.ListPipelineStates(c.Request.Context())
+	p := parseListParams(c)
+	rows, total, err := h.svc.ListPipelineStates(c.Request.Context(), p)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"items": rows})
+	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
 }
 
 func (h *BrowseHandler) ListTasks(c *gin.Context) {
 	p := parseListParams(c)
 	rows, total, err := h.svc.ListTasks(c.Request.Context(), p)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
+}
+
+func parsePositiveInt(raw string) (int, error) {
+	return strconv.Atoi(raw)
 }

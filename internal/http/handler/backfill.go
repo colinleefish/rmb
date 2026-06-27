@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/colinleefish/rmb/internal/http/httperr"
 	"github.com/colinleefish/rmb/internal/service/extract"
 	"github.com/colinleefish/rmb/internal/service/memory"
 	"github.com/colinleefish/rmb/internal/service/scene"
@@ -29,7 +30,7 @@ func (h *BackfillHandler) T1(c *gin.Context) {
 
 	if sessionKey != "" {
 		if err := extract.EnqueueSessionByKey(ctx, h.db, sessionKey); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperr.Write(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"enqueued": 1, "session": sessionKey})
@@ -45,12 +46,12 @@ func (h *BackfillHandler) T1(c *gin.Context) {
 		FROM session_turns
 		WHERE t1_extracted_at IS NULL
 	`).Scan(&rows).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	for _, r := range rows {
 		if err := extract.EnqueueSession(ctx, h.db, r.SessionID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperr.Write(c, err)
 			return
 		}
 	}
@@ -65,7 +66,7 @@ func (h *BackfillHandler) T2(c *gin.Context) {
 
 	if sessionKey != "" {
 		if err := scene.EnqueueSessionByKey(ctx, h.db, sessionKey); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperr.Write(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"enqueued": 1, "session": sessionKey})
@@ -74,7 +75,7 @@ func (h *BackfillHandler) T2(c *gin.Context) {
 
 	count, err := scene.EnqueueAllSessionsWithAtoms(ctx, h.db)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"enqueued": count})
@@ -88,7 +89,7 @@ func (h *BackfillHandler) T3(c *gin.Context) {
 
 	if sessionKey != "" {
 		if err := memory.EnqueueSessionByKey(ctx, h.db, sessionKey); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			httperr.Write(c, err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"enqueued": 1, "session": sessionKey})
@@ -97,7 +98,7 @@ func (h *BackfillHandler) T3(c *gin.Context) {
 
 	count, err := memory.EnqueueAllSessionsWithScenes(ctx, h.db)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"enqueued": count})

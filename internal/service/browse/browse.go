@@ -96,6 +96,12 @@ var (
 		allowed:    map[string]string{"created": "created_at", "kind": "kind", "status": "status", "progress": "progress"},
 		defaultKey: "created",
 	}
+
+	sessionSearchCols = []string{"session_key", "title", "scope_key", "abstract", "status"}
+	sessionSort       = sortColumns{
+		allowed:    map[string]string{"updated": "updated_at", "created": "created_at", "status": "status"},
+		defaultKey: "updated",
+	}
 )
 
 type Overview struct {
@@ -179,26 +185,59 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 	return out, nil
 }
 
-func (s *Service) ListSessions(ctx context.Context) ([]SessionRow, error) {
+func (s *Service) ListSessions(ctx context.Context, p ListParams) ([]SessionRow, int64, error) {
+	base := func() *gorm.DB {
+		return applySearch(s.db.WithContext(ctx).Model(&model.Session{}), p.Query, sessionSearchCols)
+	}
+	var total int64
+	if err := base().Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count sessions: %w", err)
+	}
+
+	limit := p.Limit
+	if limit <= 0 {
+		limit = defaultListLimit
+	}
+
 	var sessions []model.Session
-	if err := s.db.WithContext(ctx).
-		Order("updated_at desc").
-		Limit(defaultListLimit).
+	if err := base().
+		Order(sessionSort.clause(p.Sort, p.Order)).
+		Limit(limit).
+		Offset(p.Offset).
 		Find(&sessions).Error; err != nil {
-		return nil, fmt.Errorf("list sessions: %w", err)
+		return nil, 0, fmt.Errorf("list sessions: %w", err)
+	}
+	if len(sessions) == 0 {
+		return []SessionRow{}, total, nil
+	}
+
+	ids := make([]uuid.UUID, len(sessions))
+	for i, session := range sessions {
+		ids[i] = session.ID
+	}
+
+	type countRow struct {
+		SessionID uuid.UUID
+		Count     int64
+	}
+	var counts []countRow
+	if err := s.db.WithContext(ctx).Model(&model.SessionTurn{}).
+		Select("session_id, COUNT(*) AS count").
+		Where("session_id IN ?", ids).
+		Group("session_id").
+		Scan(&counts).Error; err != nil {
+		return nil, 0, fmt.Errorf("count turns: %w", err)
+	}
+	turnCounts := make(map[uuid.UUID]int64, len(counts))
+	for _, row := range counts {
+		turnCounts[row.SessionID] = row.Count
 	}
 
 	rows := make([]SessionRow, 0, len(sessions))
 	for _, session := range sessions {
-		var turnCount int64
-		if err := s.db.WithContext(ctx).Model(&model.SessionTurn{}).
-			Where("session_id = ?", session.ID).
-			Count(&turnCount).Error; err != nil {
-			return nil, fmt.Errorf("count turns: %w", err)
-		}
-		rows = append(rows, sessionToRow(session, turnCount))
+		rows = append(rows, sessionToRow(session, turnCounts[session.ID]))
 	}
-	return rows, nil
+	return rows, total, nil
 }
 
 func (s *Service) GetSession(ctx context.Context, sessionKey string) (SessionDetail, error) {
@@ -318,21 +357,42 @@ func (s *Service) ListMemories(ctx context.Context, p ListParams) ([]model.Memor
 	return rows, total, nil
 }
 
-func (s *Service) ListPipelineStates(ctx context.Context) ([]PipelineStateRow, error) {
+func (s *Service) ListPipelineStates(ctx context.Context, p ListParams) ([]PipelineStateRow, int64, error) {
 	type row struct {
 		model.PipelineState
 		SessionKey string `gorm:"column:session_key"`
 	}
 
+	base := func() *gorm.DB {
+		q := s.db.WithContext(ctx).
+			Table("pipeline_state ps").
+			Select("ps.*, s.session_key").
+			Joins("JOIN sessions s ON s.id = ps.session_id")
+		if t := strings.TrimSpace(p.Query); t != "" {
+			like := "%" + t + "%"
+			q = q.Where("s.session_key ILIKE ? OR ps.t1_status ILIKE ? OR ps.t2_status ILIKE ? OR ps.t3_status ILIKE ?",
+				like, like, like, like)
+		}
+		return q
+	}
+
+	var total int64
+	if err := base().Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count pipeline_state: %w", err)
+	}
+
+	limit := p.Limit
+	if limit <= 0 {
+		limit = defaultListLimit
+	}
+
 	var joined []row
-	if err := s.db.WithContext(ctx).
-		Table("pipeline_state ps").
-		Select("ps.*, s.session_key").
-		Joins("JOIN sessions s ON s.id = ps.session_id").
+	if err := base().
 		Order("ps.updated_at desc").
-		Limit(defaultListLimit).
+		Limit(limit).
+		Offset(p.Offset).
 		Scan(&joined).Error; err != nil {
-		return nil, fmt.Errorf("list pipeline_state: %w", err)
+		return nil, 0, fmt.Errorf("list pipeline_state: %w", err)
 	}
 
 	out := make([]PipelineStateRow, 0, len(joined))
@@ -343,7 +403,7 @@ func (s *Service) ListPipelineStates(ctx context.Context) ([]PipelineStateRow, e
 			SessionURI:    uri.BuildSession(r.SessionKey),
 		})
 	}
-	return out, nil
+	return out, total, nil
 }
 
 type PipelineStateRow struct {

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/colinleefish/rmb/internal/http/httperr"
 	"github.com/colinleefish/rmb/internal/service/correction"
 	"github.com/colinleefish/rmb/internal/service/memory"
 	"github.com/gin-gonic/gin"
@@ -29,7 +30,7 @@ type createCorrectionRequest struct {
 func (h *CorrectionHandler) Create(c *gin.Context) {
 	var req createCorrectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httperr.JSON(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	row, err := h.service.Create(c.Request.Context(), correction.CreateInput{
@@ -37,11 +38,7 @@ func (h *CorrectionHandler) Create(c *gin.Context) {
 		Statement:  req.Statement,
 	})
 	if err != nil {
-		if errors.Is(err, correction.ErrInvalidInput) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	wakeT3ForTargets(c, h.db, []string(row.TargetURIs))
@@ -61,13 +58,10 @@ func wakeT3ForTargets(c *gin.Context, db *gorm.DB, targets []string) {
 }
 
 func (h *CorrectionHandler) List(c *gin.Context) {
-	rows, err := h.service.List(c.Request.Context(), c.Query("target"))
+	p := parseListParams(c)
+	rows, total, err := h.service.List(c.Request.Context(), c.Query("target"), p.Limit, p.Offset)
 	if err != nil {
-		if errors.Is(err, correction.ErrInvalidInput) {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	items := make([]gin.H, 0, len(rows))
@@ -83,13 +77,13 @@ func (h *CorrectionHandler) List(c *gin.Context) {
 			"created_at":  r.CreatedAt,
 		})
 	}
-	c.JSON(http.StatusOK, gin.H{"items": items})
+	c.JSON(http.StatusOK, gin.H{"items": items, "total": total, "limit": p.Limit, "offset": p.Offset})
 }
 
 func (h *CorrectionHandler) Retract(c *gin.Context) {
 	target := c.Query("uri")
 	if target == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "uri is required"})
+		httperr.JSON(c, http.StatusBadRequest, "uri is required")
 		return
 	}
 	targets, err := h.service.Retract(c.Request.Context(), target)
@@ -98,10 +92,10 @@ func (h *CorrectionHandler) Retract(c *gin.Context) {
 		wakeT3ForTargets(c, h.db, targets)
 		c.JSON(http.StatusOK, gin.H{"uri": target, "retracted": true})
 	case errors.Is(err, correction.ErrInvalidInput):
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 	case errors.Is(err, correction.ErrNotFound):
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 	default:
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 	}
 }

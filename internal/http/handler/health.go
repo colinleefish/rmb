@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/colinleefish/rmb/internal/service/health"
@@ -18,7 +19,8 @@ func NewHealthHandler(svc *health.Service) *HealthHandler {
 func (h *HealthHandler) Get(c *gin.Context) {
 	status, err := h.health.Check(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"db": err.Error()})
+		log.Printf("health check failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"db": "unavailable"})
 		return
 	}
 

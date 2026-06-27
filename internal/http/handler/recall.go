@@ -2,11 +2,13 @@ package handler
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/colinleefish/rmb/internal/db/pgarray"
+	"github.com/colinleefish/rmb/internal/http/httperr"
 	"github.com/colinleefish/rmb/internal/service/recall"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -32,6 +34,9 @@ func (h *RecallHandler) embedQuery(ctx context.Context, query string) (pgarray.V
 	if err != nil {
 		return nil, err
 	}
+	if len(vecs) == 0 || len(vecs[0]) == 0 {
+		return nil, fmt.Errorf("embedding provider returned no vectors")
+	}
 	return pgarray.Vector(vecs[0]), nil
 }
 
@@ -39,13 +44,13 @@ func (h *RecallHandler) embedQuery(ctx context.Context, query string) (pgarray.V
 // scope defaults to "memory,scene"; k defaults to 5.
 func (h *RecallHandler) Search(c *gin.Context) {
 	if h.embed == nil {
-		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "embeddings not configured"})
+		httperr.JSON(c, http.StatusServiceUnavailable, "embeddings not configured")
 		return
 	}
 
 	query := c.Query("q")
 	if query == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "q is required"})
+		httperr.JSON(c, http.StatusBadRequest, "q is required")
 		return
 	}
 
@@ -53,7 +58,7 @@ func (h *RecallHandler) Search(c *gin.Context) {
 	if v := c.Query("k"); v != "" {
 		parsed, err := strconv.Atoi(v)
 		if err != nil || parsed <= 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "k must be a positive integer"})
+			httperr.JSON(c, http.StatusBadRequest, "k must be a positive integer")
 			return
 		}
 		k = parsed
@@ -64,7 +69,7 @@ func (h *RecallHandler) Search(c *gin.Context) {
 		for _, s := range strings.Split(raw, ",") {
 			s = strings.TrimSpace(s)
 			if s != "memory" && s != "scene" {
-				c.JSON(http.StatusBadRequest, gin.H{"error": "scope must be memory and/or scene"})
+				httperr.JSON(c, http.StatusBadRequest, "scope must be memory and/or scene")
 				return
 			}
 			scopes = append(scopes, s)
@@ -73,7 +78,7 @@ func (h *RecallHandler) Search(c *gin.Context) {
 
 	matches, err := recall.Search(c.Request.Context(), h.db, h.embedQuery, query, k, scopes)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		httperr.Write(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"items": matches})

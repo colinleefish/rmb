@@ -45,6 +45,16 @@ func Resolve() (*Client, bool) {
 	}, true
 }
 
+func apiError(path string, status int, body []byte) error {
+	var e struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(body, &e) == nil && e.Error != "" {
+		return fmt.Errorf("remote %s: %s", path, e.Error)
+	}
+	return fmt.Errorf("remote %s returned %d", path, status)
+}
+
 // BaseURL reports the remote target (for user-facing messages).
 func (c *Client) BaseURL() string { return c.baseURL }
 
@@ -73,13 +83,7 @@ func (c *Client) Backfill(ctx context.Context, tier, sessionKey string) (int, er
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK {
-		var e struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(body, &e) == nil && e.Error != "" {
-			return 0, fmt.Errorf("remote backfill/%s: %s", tier, e.Error)
-		}
-		return 0, fmt.Errorf("remote backfill/%s returned %d", tier, resp.StatusCode)
+		return 0, apiError("backfill/"+tier, resp.StatusCode, body)
 	}
 	var out struct {
 		Enqueued int `json:"enqueued"`
@@ -115,13 +119,7 @@ func (c *Client) EmbedStatus(ctx context.Context) ([]EmbedStatusItem, error) {
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK {
-		var e struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(body, &e) == nil && e.Error != "" {
-			return nil, fmt.Errorf("remote embed/status: %s", e.Error)
-		}
-		return nil, fmt.Errorf("remote embed/status returned %d", resp.StatusCode)
+		return nil, apiError("embed/status", resp.StatusCode, body)
 	}
 	var out struct {
 		Items []EmbedStatusItem `json:"items"`
@@ -166,13 +164,7 @@ func (c *Client) CreateCorrection(ctx context.Context, targets []string, stateme
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		var e struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(body, &e) == nil && e.Error != "" {
-			return "", fmt.Errorf("remote corrections: %s", e.Error)
-		}
-		return "", fmt.Errorf("remote corrections returned %d", resp.StatusCode)
+		return "", apiError("corrections", resp.StatusCode, body)
 	}
 	var out struct {
 		URI string `json:"uri"`
@@ -206,14 +198,7 @@ func (c *Client) Inspect(ctx context.Context, kind, uri string) (string, error) 
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if resp.StatusCode != http.StatusOK {
-		// Error responses are JSON {"error": "..."}; surface the message.
-		var e struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(body, &e) == nil && e.Error != "" {
-			return "", fmt.Errorf("remote inspect/%s: %s", kind, e.Error)
-		}
-		return "", fmt.Errorf("remote inspect/%s returned %d", kind, resp.StatusCode)
+		return "", apiError("inspect/"+kind, resp.StatusCode, body)
 	}
 	return string(body), nil
 }
@@ -245,7 +230,7 @@ func (c *Client) recall(ctx context.Context, path, query string, k int, scopes [
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("remote %s returned %d: %s", path, resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, apiError(path, resp.StatusCode, body)
 	}
 
 	var out struct {
@@ -287,7 +272,7 @@ func (c *Client) ListCorrections(ctx context.Context, target string) ([]Correcti
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("remote corrections list returned %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, apiError("corrections list", resp.StatusCode, body)
 	}
 	var out struct {
 		Items []CorrectionItem `json:"items"`
@@ -319,13 +304,7 @@ func (c *Client) RetractCorrection(ctx context.Context, correctionURI string) er
 
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNoContent {
-		var e struct {
-			Error string `json:"error"`
-		}
-		if json.Unmarshal(body, &e) == nil && e.Error != "" {
-			return fmt.Errorf("remote retract: %s", e.Error)
-		}
-		return fmt.Errorf("remote retract returned %d", resp.StatusCode)
+		return apiError("retract", resp.StatusCode, body)
 	}
 	return nil
 }

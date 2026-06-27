@@ -10,7 +10,7 @@ import type {
   TaskModel,
 } from "@/lib/types";
 
-// Proxied to the Go backend via next.config rewrites (see next.config.ts).
+// Proxied to the Go backend via the App Router handler at app/api/v1/[...path]/route.ts.
 const API = "/api/v1";
 
 async function apiGet<T>(path: string): Promise<T> {
@@ -54,20 +54,10 @@ export function getOverview(): Promise<Overview> {
   return apiGet<Overview>("/browse/overview");
 }
 
-export async function listSessions(): Promise<SessionRow[]> {
-  const { items } = await apiGet<{ items: SessionRow[] }>("/browse/sessions");
-  return items ?? [];
-}
-
 export function getSession(sessionKey: string): Promise<SessionDetail> {
   return apiGet<SessionDetail>(
     `/browse/sessions/${encodeURIComponent(sessionKey)}`,
   );
-}
-
-async function listItems<T>(path: string): Promise<T[]> {
-  const { items } = await apiGet<{ items: T[] }>(path);
-  return items ?? [];
 }
 
 // Server-side pagination contract for the browse list endpoints.
@@ -100,6 +90,29 @@ async function listPage<T>(path: string, req: PageRequest): Promise<Page<T>> {
   return { items: items ?? [], total: total ?? 0 };
 }
 
+export const pageSessions = (req: PageRequest) =>
+  listPage<SessionRow>("/browse/sessions", req);
+export const pagePipelineStates = (req: PageRequest) =>
+  listPage<PipelineRow>("/browse/pipeline-state", req);
+export const pageCorrections = (req: PageRequest, target?: string) => {
+  const params = new URLSearchParams({
+    limit: String(req.limit),
+    offset: String(req.offset),
+  });
+  if (req.q) params.set("q", req.q);
+  if (req.sort) {
+    params.set("sort", req.sort);
+    params.set("order", req.order ?? "desc");
+  }
+  if (target) params.set("target", target);
+  return apiGet<{ items: CorrectionModel[]; total: number }>(
+    `/corrections?${params.toString()}`,
+  ).then(({ items, total }) => ({
+    items: items ?? [],
+    total: total ?? 0,
+  }));
+};
+
 export const pageAtoms = (req: PageRequest) =>
   listPage<AtomModel>("/browse/atoms", req);
 export const pageScenes = (req: PageRequest) =>
@@ -109,17 +122,15 @@ export const pageMemories = (req: PageRequest) =>
 export const pageTasks = (req: PageRequest) =>
   listPage<TaskModel>("/browse/tasks", req);
 
-export const listPipelineStates = () =>
-  listItems<PipelineRow>("/browse/pipeline-state");
+export async function listSessions(): Promise<SessionRow[]> {
+  const { items } = await pageSessions({ limit: 200, offset: 0 });
+  return items;
+}
 
-// Corrections: human corrections that overlay distilled memory.
-// `target` filters to corrections attached to a single memory URI.
-export const listCorrections = (target?: string) =>
-  listItems<CorrectionModel>(
-    target
-      ? `/corrections?target=${encodeURIComponent(target)}`
-      : "/corrections",
-  );
+export async function listCorrections(target?: string): Promise<CorrectionModel[]> {
+  const { items } = await pageCorrections({ limit: 200, offset: 0 }, target);
+  return items;
+}
 
 export function createCorrection(input: {
   statement: string;

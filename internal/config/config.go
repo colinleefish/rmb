@@ -11,7 +11,8 @@ import (
 
 const (
 	defaultDBURL = "postgres://admin@127.0.0.1:5432/rmb_db?sslmode=disable"
-	defaultAddr  = ":8080"
+	defaultAddr            = "127.0.0.1:8080"
+	defaultMaxUploadBytes  = 32 << 20 // 32 MiB
 )
 
 type Config struct {
@@ -41,6 +42,7 @@ type DBConfig struct {
 type ServerConfig struct {
 	Addr            string
 	ShutdownTimeout time.Duration
+	MaxUploadBytes  int64
 }
 
 type LLMConfig struct {
@@ -161,6 +163,7 @@ func Load() (Config, error) {
 		Server: ServerConfig{
 			Addr:            defaultAddr,
 			ShutdownTimeout: 5 * time.Second,
+			MaxUploadBytes:  defaultMaxUploadBytes,
 		},
 		LLM: LLMConfig{
 			Provider:        "openai",
@@ -221,6 +224,15 @@ func Load() (Config, error) {
 		if strings.TrimSpace(cfg.Auth.Username) == "" || strings.TrimSpace(cfg.Auth.Password) == "" {
 			return Config{}, fmt.Errorf("auth: both USERNAME and PASSWORD must be set when either is provided")
 		}
+	}
+	if addrRequiresAuth(cfg.Server.Addr) && !cfg.Auth.Enabled() {
+		return Config{}, fmt.Errorf(
+			"server: binding to %q requires auth; set USERNAME and PASSWORD or bind to 127.0.0.1",
+			cfg.Server.Addr,
+		)
+	}
+	if cfg.Server.MaxUploadBytes <= 0 {
+		return Config{}, fmt.Errorf("server: max upload bytes must be positive")
 	}
 
 	switch cfg.LLM.ThinkingStyle {
@@ -477,6 +489,13 @@ func applyEnvOverrides(cfg *Config) error {
 			return fmt.Errorf("parse RMB_SHUTDOWN_TIMEOUT: %w", err)
 		}
 		cfg.Server.ShutdownTimeout = timeout
+	}
+	if v := os.Getenv("RMB_MAX_UPLOAD_BYTES"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n <= 0 {
+			return fmt.Errorf("parse RMB_MAX_UPLOAD_BYTES: want positive integer")
+		}
+		cfg.Server.MaxUploadBytes = n
 	}
 	if v := firstEnv("RMB_USERNAME", "USERNAME"); v != "" {
 		cfg.Auth.Username = v

@@ -78,7 +78,7 @@ func TestLoadFromYAMLServerConfig(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	body := "db:\n  url: postgres://rmb@127.0.0.1:5432/rmb_db?sslmode=disable\nserver:\n  addr: \":9090\"\n"
+	body := "db:\n  url: postgres://rmb@127.0.0.1:5432/rmb_db?sslmode=disable\nserver:\n  addr: \"127.0.0.1:9090\"\n"
 	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestLoadFromYAMLServerConfig(t *testing.T) {
 	if cfg.DB.URL != "postgres://rmb@127.0.0.1:5432/rmb_db?sslmode=disable" {
 		t.Fatalf("DB.URL = %q", cfg.DB.URL)
 	}
-	if cfg.Server.Addr != ":9090" {
+	if cfg.Server.Addr != "127.0.0.1:9090" {
 		t.Fatalf("Server.Addr = %q", cfg.Server.Addr)
 	}
 }

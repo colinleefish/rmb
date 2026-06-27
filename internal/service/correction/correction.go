@@ -110,20 +110,27 @@ func (s *Service) Retract(ctx context.Context, correctionURI string) ([]string, 
 
 // List returns active corrections, newest-first. When target is non-empty, only
 // corrections whose target_uris include that URI are returned.
-func (s *Service) List(ctx context.Context, target string) ([]model.Correction, error) {
-	q := s.db.WithContext(ctx).Where("superseded_at IS NULL")
+func (s *Service) List(ctx context.Context, target string, limit, offset int) ([]model.Correction, int64, error) {
+	q := s.db.WithContext(ctx).Model(&model.Correction{}).Where("superseded_at IS NULL")
 	if t := strings.TrimSpace(target); t != "" {
 		u, err := uri.Parse(t)
 		if err != nil {
-			return nil, fmt.Errorf("%w: target %q: %v", ErrInvalidInput, target, err)
+			return nil, 0, fmt.Errorf("%w: target %q: %v", ErrInvalidInput, target, err)
 		}
 		q = q.Where("target_uris && ?", pgarray.TextArray([]string{u.String()}))
 	}
-	var rows []model.Correction
-	if err := q.Order("created_at DESC").Limit(200).Find(&rows).Error; err != nil {
-		return nil, fmt.Errorf("list corrections: %w", err)
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count corrections: %w", err)
 	}
-	return rows, nil
+	if limit <= 0 {
+		limit = 200
+	}
+	var rows []model.Correction
+	if err := q.Order("created_at DESC").Limit(limit).Offset(offset).Find(&rows).Error; err != nil {
+		return nil, 0, fmt.Errorf("list corrections: %w", err)
+	}
+	return rows, total, nil
 }
 
 // ForTargets returns active corrections overlapping the given target URIs, keyed
