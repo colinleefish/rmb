@@ -44,6 +44,31 @@ export function shortKey(key: string | null | undefined, len = 8): string {
   return key.length > len ? `${key.slice(0, len)}…` : key;
 }
 
+/** Human label for a session row: explicit title, then T2 abstract, else untitled. */
+export function sessionDisplayTitle(
+  session: {
+    title?: string | null;
+    abstract?: string | null;
+    session_key: string;
+  },
+  maxLen = 72,
+): string {
+  const title = session.title?.trim();
+  if (title) return title;
+  const abstract = session.abstract?.trim();
+  if (abstract) {
+    const firstLine = abstract.split(/\n+/)[0]?.trim() || abstract;
+    return truncate(firstLine, maxLen);
+  }
+  return "Untitled session";
+}
+
+export function sessionHasSummary(
+  session: { title?: string | null; abstract?: string | null },
+): boolean {
+  return Boolean(session.title?.trim() || session.abstract?.trim());
+}
+
 export function parseJSONL(raw: string | null | undefined): ChatMessage[] {
   if (!raw) return [];
   return raw
@@ -57,6 +82,56 @@ export function parseJSONL(raw: string | null | undefined): ChatMessage[] {
         return { role: "?", content: line };
       }
     });
+}
+
+/** Strip Cursor-style user_query wrappers from archived turn text. */
+export function stripUserQueryTags(text: string): string {
+  return text
+    .replace(/^\s*<user_query>\s*/i, "")
+    .replace(/\s*<\/user_query>\s*$/i, "")
+    .trim();
+}
+
+/** Split assistant paraphrase lead-in from the actual reply body. */
+export function formatTurnMessage(
+  role: string | undefined,
+  content: string | undefined,
+): { aside: string | null; body: string } {
+  const normalizedRole = (role ?? "").toLowerCase();
+  let body = stripUserQueryTags(content ?? "").trim();
+  body = body.replace(/\n*\[REDACTED\]\s*$/gi, "").trim();
+
+  if (!body) return { aside: null, body: "" };
+
+  if (normalizedRole === "assistant") {
+    const match = body.match(/^(You're saying[^\n]+)\n\n([\s\S]+)$/);
+    if (match) {
+      return { aside: match[1].trim(), body: match[2].trim() };
+    }
+  }
+
+  return { aside: null, body };
+}
+
+export function turnMessagePreview(messages: ChatMessage[]): string {
+  const user = messages.find((m) => (m.role ?? "").toLowerCase() === "user");
+  const text = formatTurnMessage(user?.role, user?.content).body;
+  return truncate(text.replace(/\s+/g, " "), 96) || "Empty turn";
+}
+
+export function turnRoleLabel(role: string | undefined): string {
+  switch ((role ?? "").toLowerCase()) {
+    case "user":
+      return "You";
+    case "assistant":
+      return "Assistant";
+    case "system":
+      return "System";
+    case "tool":
+      return "Tool";
+    default:
+      return role?.trim() || "Message";
+  }
 }
 
 export type Tone = "neutral" | "success" | "warning" | "destructive" | "info";

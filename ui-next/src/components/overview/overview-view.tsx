@@ -12,11 +12,11 @@ import type { OverviewCounts } from "@/lib/types";
 const STATS: Array<{ key: keyof OverviewCounts; label: string; href?: string }> = [
   { key: "sessions", label: "Sessions", href: "/sessions" },
   { key: "turns", label: "Turns" },
-  { key: "atoms", label: "Atoms", href: "/atoms" },
-  { key: "scenes", label: "Scenes", href: "/scenes" },
+  { key: "atoms", label: "Atoms" },
+  { key: "scenes", label: "Scenes" },
   { key: "memories", label: "Memories", href: "/memories" },
-  { key: "pipeline_states", label: "Pipeline", href: "/pipeline" },
   { key: "tasks", label: "Tasks", href: "/tasks" },
+  { key: "corrections", label: "Corrections", href: "/corrections" },
 ];
 
 const PYRAMID = [

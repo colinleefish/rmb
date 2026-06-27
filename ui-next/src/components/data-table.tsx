@@ -15,6 +15,8 @@ import {
   useReactTable,
 } from "@tanstack/react-table";
 import {
+  ArrowDown,
+  ArrowUp,
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
@@ -43,10 +45,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Page, PageRequest } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 const DEFAULT_PAGE_SIZE = 25;
 
-/** Sortable column header button, for use in column definitions. */
+/** Sortable column header: cycles neutral → asc → desc → neutral. */
 export function SortButton<T>({
   column,
   label,
@@ -54,14 +57,32 @@ export function SortButton<T>({
   column: Column<T, unknown>;
   label: string;
 }) {
+  const sorted = column.getIsSorted();
+  const Icon =
+    sorted === "asc" ? ArrowUp : sorted === "desc" ? ArrowDown : ArrowUpDown;
+
   return (
     <button
       type="button"
-      onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-      className="hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
+      onClick={() => {
+        if (sorted === false) {
+          column.toggleSorting(false);
+        } else if (sorted === "asc") {
+          column.toggleSorting(true);
+        } else {
+          column.clearSorting();
+        }
+      }}
+      className={cn(
+        "hover:text-foreground inline-flex items-center gap-1.5 transition-colors",
+        sorted && "text-foreground font-medium",
+      )}
+      aria-label={`Sort by ${label}`}
     >
       {label}
-      <ArrowUpDown className="size-3.5 opacity-60" />
+      <Icon
+        className={cn("size-3.5 shrink-0", sorted ? "opacity-100" : "opacity-50")}
+      />
     </button>
   );
 }
@@ -210,7 +231,7 @@ function TableShell<T>({
                   className={clickable ? "cursor-pointer" : undefined}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-3 align-top">
+                    <TableCell key={cell.id} className="py-3 align-middle">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -329,6 +350,8 @@ export function DataTable<T>({
     state: { globalFilter, sorting },
     onGlobalFilterChange: setGlobalFilter,
     onSortingChange: setSorting,
+    enableMultiSort: false,
+    enableSortingRemoval: true,
     globalFilterFn: (row, _columnId, value) => {
       const needle = String(value).toLowerCase().trim();
       if (!needle) return true;
@@ -450,6 +473,8 @@ export function ServerDataTable<T>({
     manualPagination: true,
     manualSorting: true,
     manualFiltering: true,
+    enableMultiSort: false,
+    enableSortingRemoval: true,
     rowCount: total,
     onSortingChange: setSorting,
     onPaginationChange: setPagination,

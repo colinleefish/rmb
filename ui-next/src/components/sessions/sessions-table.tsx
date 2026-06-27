@@ -1,82 +1,82 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { type ColumnDef } from "@tanstack/react-table";
 
-import { Badge } from "@/components/ui/badge";
 import { ServerDataTable, SortButton } from "@/components/data-table";
-import { StatusBadge } from "@/components/status-badge";
-import { SessionDetailDialog } from "@/components/sessions/session-detail-dialog";
+import { SessionPipelineSummary } from "@/components/sessions/session-pipeline-summary";
 import { pageSessions } from "@/lib/api";
-import { fmtDateShort } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { fmtDateTime, sessionDisplayTitle } from "@/lib/format";
 import type { SessionRow } from "@/lib/types";
 
 export function SessionsTable() {
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const router = useRouter();
 
   const columns = useMemo<ColumnDef<SessionRow>[]>(
     () => [
       {
         id: "title",
-        accessorFn: (s) => s.title ?? s.session_key,
-        header: ({ column }) => <SortButton column={column} label="Session" />,
+        enableSorting: false,
+        accessorFn: (s) =>
+          s.title?.trim() || s.abstract?.trim() || s.session_key,
+        header: "Session",
         cell: ({ row }) => {
           const s = row.original;
-          const title = s.title?.trim();
+          const label = sessionDisplayTitle(s);
           return (
-            <div className="flex flex-col">
-              <span
-                className={cn(
-                  "text-foreground font-medium",
-                  !title && "font-mono",
-                )}
-              >
-                {title || s.session_key}
+            <div className="flex max-w-xl flex-col gap-0.5">
+              <span className="text-foreground line-clamp-2 font-medium leading-snug">
+                {label}
               </span>
-              <span className="text-muted-foreground text-xs">
-                Updated {fmtDateShort(s.updated_at)}
+              <span className="text-muted-foreground break-all font-mono text-xs">
+                {s.uri}
               </span>
             </div>
           );
         },
       },
       {
-        id: "turns",
-        accessorFn: (s) => s.turn_count,
-        header: ({ column }) => <SortButton column={column} label="Turns" />,
+        id: "pipeline",
+        header: "Distillation",
         cell: ({ row }) => (
-          <Badge variant="secondary" className="font-mono">
-            {row.original.turn_count}
-          </Badge>
+          <SessionPipelineSummary session={row.original} />
         ),
       },
       {
-        id: "status",
-        accessorFn: (s) => s.status,
-        header: ({ column }) => <SortButton column={column} label="Status" />,
-        cell: ({ row }) => <StatusBadge status={row.original.status} />,
+        id: "created",
+        accessorFn: (s) => s.created_at,
+        header: ({ column }) => <SortButton column={column} label="Created" />,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground text-sm whitespace-nowrap tabular-nums">
+            {fmtDateTime(row.original.created_at)}
+          </span>
+        ),
+      },
+      {
+        id: "updated",
+        accessorFn: (s) => s.last_turn_at ?? "",
+        header: ({ column }) => <SortButton column={column} label="Updated" />,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground text-sm whitespace-nowrap tabular-nums">
+            {fmtDateTime(row.original.last_turn_at)}
+          </span>
+        ),
       },
     ],
     [],
   );
 
   return (
-    <>
-      <ServerDataTable
-        loadPage={pageSessions}
-        columns={columns}
-        searchPlaceholder="Search title, key, status…"
-        emptyMessage="No sessions yet."
-        initialSorting={[{ id: "updated", desc: true }]}
-        onRowClick={(s) => setSelectedKey(s.session_key)}
-      />
-      <SessionDetailDialog
-        sessionKey={selectedKey}
-        onOpenChange={(open) => {
-          if (!open) setSelectedKey(null);
-        }}
-      />
-    </>
+    <ServerDataTable
+      loadPage={pageSessions}
+      columns={columns}
+      searchPlaceholder="Search title, summary, key…"
+      emptyMessage="No sessions yet."
+      initialSorting={[{ id: "updated", desc: true }]}
+      onRowClick={(s) =>
+        router.push(`/sessions/${encodeURIComponent(s.session_key)}`)
+      }
+    />
   );
 }

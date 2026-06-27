@@ -28,9 +28,16 @@ export interface SessionRow {
   status: string;
   abstract: string | null;
   turn_count: number;
+  atom_count: number;
+  scene_count: number;
+  t1_status?: string;
+  t2_status?: string;
+  t3_status?: string;
   uri: string;
   created_at: string;
   updated_at: string;
+  /** Timestamp of the most recently inserted turn, if any. */
+  last_turn_at: string | null;
 }
 
 export interface TurnRow {

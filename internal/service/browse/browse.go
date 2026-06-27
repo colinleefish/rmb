@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/colinleefish/rmb/internal/model"
 	"github.com/colinleefish/rmb/internal/uri"
@@ -125,9 +126,23 @@ type SessionRow struct {
 	Status     string    `json:"status"`
 	Abstract   *string   `json:"abstract"`
 	TurnCount  int64     `json:"turn_count"`
+	AtomCount  int64     `json:"atom_count"`
+	SceneCount int64     `json:"scene_count"`
+	T1Status   string    `json:"t1_status,omitempty"`
+	T2Status   string    `json:"t2_status,omitempty"`
+	T3Status   string    `json:"t3_status,omitempty"`
 	URI        string    `json:"uri"`
 	CreatedAt  string    `json:"created_at"`
 	UpdatedAt  string    `json:"updated_at"`
+	LastTurnAt *string   `json:"last_turn_at"`
+}
+
+type sessionSummary struct {
+	AtomCount  int64
+	SceneCount int64
+	T1Status   string
+	T2Status   string
+	T3Status   string
 }
 
 type SessionDetail struct {
@@ -187,7 +202,13 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 
 func (s *Service) ListSessions(ctx context.Context, p ListParams) ([]SessionRow, int64, error) {
 	base := func() *gorm.DB {
-		return applySearch(s.db.WithContext(ctx).Model(&model.Session{}), p.Query, sessionSearchCols)
+		q := s.db.WithContext(ctx).Model(&model.Session{}).
+			Joins(`LEFT JOIN (
+				SELECT session_id, MAX(created_at) AS last_turn_at
+				FROM session_turns
+				GROUP BY session_id
+			) AS turn_stats ON turn_stats.session_id = sessions.id`)
+		return applySearch(q, p.Query, sessionSearchCols)
 	}
 	var total int64
 	if err := base().Count(&total).Error; err != nil {
@@ -201,7 +222,7 @@ func (s *Service) ListSessions(ctx context.Context, p ListParams) ([]SessionRow,
 
 	var sessions []model.Session
 	if err := base().
-		Order(sessionSort.clause(p.Sort, p.Order)).
+		Order(sessionListOrderClause(p.Sort, p.Order)).
 		Limit(limit).
 		Offset(p.Offset).
 		Find(&sessions).Error; err != nil {
@@ -216,28 +237,107 @@ func (s *Service) ListSessions(ctx context.Context, p ListParams) ([]SessionRow,
 		ids[i] = session.ID
 	}
 
-	type countRow struct {
-		SessionID uuid.UUID
-		Count     int64
+	type turnStatsRow struct {
+		SessionID  uuid.UUID
+		Count      int64
+		LastTurnAt *time.Time `gorm:"column:last_turn_at"`
 	}
-	var counts []countRow
+	var turnStats []turnStatsRow
 	if err := s.db.WithContext(ctx).Model(&model.SessionTurn{}).
-		Select("session_id, COUNT(*) AS count").
+		Select("session_id, COUNT(*) AS count, MAX(created_at) AS last_turn_at").
 		Where("session_id IN ?", ids).
 		Group("session_id").
-		Scan(&counts).Error; err != nil {
-		return nil, 0, fmt.Errorf("count turns: %w", err)
+		Scan(&turnStats).Error; err != nil {
+		return nil, 0, fmt.Errorf("load turn stats: %w", err)
 	}
-	turnCounts := make(map[uuid.UUID]int64, len(counts))
-	for _, row := range counts {
+	turnCounts := make(map[uuid.UUID]int64, len(turnStats))
+	lastTurnAt := make(map[uuid.UUID]*time.Time, len(turnStats))
+	for _, row := range turnStats {
 		turnCounts[row.SessionID] = row.Count
+		lastTurnAt[row.SessionID] = row.LastTurnAt
+	}
+
+	summaries, err := s.loadSessionSummaries(ctx, ids)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	rows := make([]SessionRow, 0, len(sessions))
 	for _, session := range sessions {
-		rows = append(rows, sessionToRow(session, turnCounts[session.ID]))
+		rows = append(rows, sessionToRow(session, turnCounts[session.ID], lastTurnAt[session.ID], summaries[session.ID]))
 	}
 	return rows, total, nil
+}
+
+func sessionListOrderClause(sort, order string) string {
+	dir := "DESC"
+	if strings.EqualFold(order, "asc") {
+		dir = "ASC"
+	}
+	switch sort {
+	case "created":
+		return "sessions.created_at " + dir
+	case "status":
+		return "sessions.status " + dir
+	default:
+		return "COALESCE(turn_stats.last_turn_at, sessions.created_at) " + dir
+	}
+}
+
+func (s *Service) loadSessionSummaries(ctx context.Context, sessionIDs []uuid.UUID) (map[uuid.UUID]sessionSummary, error) {
+	out := make(map[uuid.UUID]sessionSummary, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return out, nil
+	}
+
+	type countRow struct {
+		SessionID uuid.UUID
+		Count     int64
+	}
+
+	var atomCounts []countRow
+	if err := s.db.WithContext(ctx).Model(&model.Atom{}).
+		Select("session_id, COUNT(*) AS count").
+		Where("session_id IN ?", sessionIDs).
+		Group("session_id").
+		Scan(&atomCounts).Error; err != nil {
+		return nil, fmt.Errorf("count atoms: %w", err)
+	}
+	for _, row := range atomCounts {
+		summary := out[row.SessionID]
+		summary.AtomCount = row.Count
+		out[row.SessionID] = summary
+	}
+
+	var sceneCounts []countRow
+	if err := s.db.WithContext(ctx).Model(&model.Scene{}).
+		Select("session_id, COUNT(*) AS count").
+		Where("session_id IN ?", sessionIDs).
+		Group("session_id").
+		Scan(&sceneCounts).Error; err != nil {
+		return nil, fmt.Errorf("count scenes: %w", err)
+	}
+	for _, row := range sceneCounts {
+		summary := out[row.SessionID]
+		summary.SceneCount = row.Count
+		out[row.SessionID] = summary
+	}
+
+	var pipelineRows []model.PipelineState
+	if err := s.db.WithContext(ctx).
+		Where("session_id IN ?", sessionIDs).
+		Find(&pipelineRows).Error; err != nil {
+		return nil, fmt.Errorf("load pipeline_state: %w", err)
+	}
+	for _, ps := range pipelineRows {
+		summary := out[ps.SessionID]
+		summary.T1Status = ps.T1Status
+		summary.T2Status = ps.T2Status
+		summary.T3Status = ps.T3Status
+		out[ps.SessionID] = summary
+	}
+
+	return out, nil
 }
 
 func (s *Service) GetSession(ctx context.Context, sessionKey string) (SessionDetail, error) {
@@ -290,8 +390,23 @@ func (s *Service) GetSession(ctx context.Context, sessionKey string) (SessionDet
 		return SessionDetail{}, fmt.Errorf("load scenes: %w", err)
 	}
 
+	var summary sessionSummary
+	summary.AtomCount = int64(len(atoms))
+	summary.SceneCount = int64(len(scenes))
+	if pipeline != nil {
+		summary.T1Status = pipeline.T1Status
+		summary.T2Status = pipeline.T2Status
+		summary.T3Status = pipeline.T3Status
+	}
+
+	var lastTurnAt *time.Time
+	if len(turns) > 0 {
+		t := turns[len(turns)-1].CreatedAt
+		lastTurnAt = &t
+	}
+
 	return SessionDetail{
-		Session:       sessionToRow(session, int64(len(turns))),
+		Session:       sessionToRow(session, int64(len(turns)), lastTurnAt, summary),
 		Turns:         turnRows,
 		PipelineState: pipeline,
 		Atoms:         atoms,
@@ -430,8 +545,8 @@ func (s *Service) ListTasks(ctx context.Context, p ListParams) ([]model.Task, in
 	return rows, total, nil
 }
 
-func sessionToRow(session model.Session, turnCount int64) SessionRow {
-	return SessionRow{
+func sessionToRow(session model.Session, turnCount int64, lastTurnAt *time.Time, summary sessionSummary) SessionRow {
+	row := SessionRow{
 		ID:         session.ID,
 		SessionKey: session.SessionKey,
 		ScopeKey:   session.ScopeKey,
@@ -439,10 +554,20 @@ func sessionToRow(session model.Session, turnCount int64) SessionRow {
 		Status:     session.Status,
 		Abstract:   session.Abstract,
 		TurnCount:  turnCount,
+		AtomCount:  summary.AtomCount,
+		SceneCount: summary.SceneCount,
+		T1Status:   summary.T1Status,
+		T2Status:   summary.T2Status,
+		T3Status:   summary.T3Status,
 		URI:        uri.BuildSession(session.SessionKey),
 		CreatedAt:  session.CreatedAt.UTC().Format(timeRFC3339),
 		UpdatedAt:  session.UpdatedAt.UTC().Format(timeRFC3339),
 	}
+	if lastTurnAt != nil {
+		formatted := lastTurnAt.UTC().Format(timeRFC3339)
+		row.LastTurnAt = &formatted
+	}
+	return row
 }
 
 func turnToRow(sessionKey string, idx int, turn model.SessionTurn) TurnRow {

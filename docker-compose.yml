@@ -9,7 +9,8 @@ services:
     ports:
       - "5433:5432"   # host 5433 to avoid clashing with local postgres@18
     volumes:
-      - rmb_pg:/var/lib/postgresql/data
+      # PG 18+ images expect the mount at /var/lib/postgresql (not .../data).
+      - rmb_pg:/var/lib/postgresql
       - ./docker/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rmb -d rmb_db"]

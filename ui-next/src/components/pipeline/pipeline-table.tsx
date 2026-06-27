@@ -1,17 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { type ColumnDef } from "@tanstack/react-table";
 
 import { ServerDataTable } from "@/components/data-table";
 import { StatusBadge } from "@/components/status-badge";
-import { SessionDetailDialog } from "@/components/sessions/session-detail-dialog";
 import { pagePipelineStates } from "@/lib/api";
 import { pick, shortKey } from "@/lib/format";
 import type { PipelineRow } from "@/lib/types";
 
 export function PipelineTable() {
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const router = useRouter();
 
   const columns = useMemo<ColumnDef<PipelineRow>[]>(
     () => [
@@ -63,20 +63,16 @@ export function PipelineTable() {
   );
 
   return (
-    <>
-      <ServerDataTable
-        loadPage={pagePipelineStates}
-        columns={columns}
-        searchPlaceholder="Search by session key or status…"
-        emptyMessage="No pipeline state yet."
-        onRowClick={(r) => r.session_key && setSelectedKey(r.session_key)}
-      />
-      <SessionDetailDialog
-        sessionKey={selectedKey}
-        onOpenChange={(open) => {
-          if (!open) setSelectedKey(null);
-        }}
-      />
-    </>
+    <ServerDataTable
+      loadPage={pagePipelineStates}
+      columns={columns}
+      searchPlaceholder="Search by session key or status…"
+      emptyMessage="No pipeline state yet."
+      onRowClick={(r) => {
+        if (r.session_key) {
+          router.push(`/sessions/${encodeURIComponent(r.session_key)}`);
+        }
+      }}
+    />
   );
 }
