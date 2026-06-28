@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveMock } from "@/lib/mock-data";
 
 // Server-side proxy for /api/v1/* → the rmb Go API.
 //
@@ -47,21 +46,6 @@ async function forward(
       cache: "no-store",
     });
   } catch (err) {
-    // Backend unreachable: fall back to the mock dataset so the dashboard still
-    // renders during offline/local development. Disable with RMB_DISABLE_MOCK=1.
-    if (process.env.RMB_DISABLE_MOCK !== "1") {
-      const mock = resolveMock(
-        request.method,
-        path,
-        request.nextUrl.searchParams,
-      );
-      if (mock != null) {
-        return NextResponse.json(mock, {
-          status: request.method === "POST" ? 201 : 200,
-          headers: { "x-rmb-mock": "1" },
-        });
-      }
-    }
     return NextResponse.json(
       { error: `cannot reach rmb API at ${API_BASE}: ${(err as Error).message}` },
       { status: 502 },
