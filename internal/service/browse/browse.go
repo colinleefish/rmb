@@ -383,7 +383,7 @@ func (s *Service) GetSession(ctx context.Context, sessionKey string) (SessionDet
 	var scenes []model.Scene
 	if err := s.db.WithContext(ctx).
 		Where("session_id = ?", session.ID).
-		Order("created_at asc, uri asc").
+		Order("created_at asc, id asc").
 		Find(&scenes).Error; err != nil {
 		return SessionDetail{}, fmt.Errorf("load scenes: %w", err)
 	}

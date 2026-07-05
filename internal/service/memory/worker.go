@@ -118,7 +118,7 @@ func (w *Worker) rollup(ctx context.Context) error {
 
 	var atoms []model.Atom
 	if err := w.db.WithContext(ctx).
-		Order("category asc, created_at asc, uri asc").
+		Order("category asc, created_at asc, id asc").
 		Find(&atoms).Error; err != nil {
 		return fmt.Errorf("load atoms: %w", err)
 	}

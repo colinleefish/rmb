@@ -200,7 +200,7 @@ func (w *Worker) prepareBatch(ctx context.Context, sessionID uuid.UUID) (*sceneB
 
 		var atoms []model.Atom
 		if err := tx.Where("session_id = ?", sessionID).
-			Order("created_at asc, uri asc").
+			Order("created_at asc, id asc").
 			Find(&atoms).Error; err != nil {
 			return fmt.Errorf("load atoms: %w", err)
 		}
