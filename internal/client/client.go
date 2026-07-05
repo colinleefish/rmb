@@ -1,6 +1,7 @@
 // Package client is the CLI's HTTP client for talking to a remote rmb server.
-// It is selected automatically when RMB_URL is configured (env,
-// ~/.rmb.conf, or ~/.rmb/config.yaml), so the CLI commands work against a remote service.
+// It is selected automatically when RMB_URL is configured (non-empty env,
+// ~/.rmb.conf, or ~/.rmb/config.yaml). Relative RMB_CONFIG from a project
+// checkout is ignored so recall works from any cwd.
 package client
 
 import (

@@ -41,6 +41,24 @@ func TestBuildAtom(t *testing.T) {
 	}
 }
 
+func TestParseAtomID(t *testing.T) {
+	const id = "019eb28e-e351-7812-91a6-328b1f77a4bd"
+	fromURI, err := ParseAtomID(BuildAtom(id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fromBare, err := ParseAtomID(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fromURI != fromBare {
+		t.Fatalf("uri vs bare mismatch: %v vs %v", fromURI, fromBare)
+	}
+	if _, err := ParseAtomID("rmb://scenes/x"); err == nil {
+		t.Fatal("expected error for non-atom uri")
+	}
+}
+
 func TestParseRejectsNestedTurnURI(t *testing.T) {
 	_, err := Parse("rmb://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/0")
 	if err == nil {

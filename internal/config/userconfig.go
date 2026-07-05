@@ -12,7 +12,7 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
-// resolveConfigPath returns the first user config file to load. Precedence:
+// resolveConfigPath returns the server config file for rmb serve. Precedence:
 // RMB_CONFIG, then ~/.rmb.conf, then ~/.rmb/config.yaml.
 func resolveConfigPath() (path string, explicit bool) {
 	if v := strings.TrimSpace(os.Getenv("RMB_CONFIG")); v != "" {
@@ -21,6 +21,25 @@ func resolveConfigPath() (path string, explicit bool) {
 	if v := strings.TrimSpace(os.Getenv("RMB_CONF")); v != "" {
 		return v, true
 	}
+	return resolveHomeConfigPath()
+}
+
+// resolveClientConfigPath returns the recall/client config file. It ignores
+// relative RMB_CONFIG/RMB_CONF (e.g. RMB_CONFIG=.env from a project checkout)
+// so agents can call search/cat from any cwd with only ~/.rmb/config.yaml.
+// Absolute RMB_CONFIG/RMB_CONF still override for tests and power users.
+func resolveClientConfigPath() string {
+	if v := strings.TrimSpace(os.Getenv("RMB_CONFIG")); v != "" && filepath.IsAbs(v) {
+		return v
+	}
+	if v := strings.TrimSpace(os.Getenv("RMB_CONF")); v != "" && filepath.IsAbs(v) {
+		return v
+	}
+	path, _ := resolveHomeConfigPath()
+	return path
+}
+
+func resolveHomeConfigPath() (path string, explicit bool) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", false
@@ -50,13 +69,13 @@ func isDotenvConfig(path string) bool {
 	}
 }
 
-// EnvValue reads a config key from the environment, then from the resolved
-// user config file (~/.rmb.conf or ~/.rmb/config.yaml).
+// EnvValue reads a client/recall key from a non-empty environment variable,
+// then from the client config file (~/.rmb.conf or ~/.rmb/config.yaml).
 func EnvValue(key string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v
 	}
-	path, _ := resolveConfigPath()
+	path := resolveClientConfigPath()
 	if path == "" {
 		return ""
 	}

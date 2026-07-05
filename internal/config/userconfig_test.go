@@ -94,3 +94,65 @@ func TestLoadFromYAMLServerConfig(t *testing.T) {
 		t.Fatalf("Server.Addr = %q", cfg.Server.Addr)
 	}
 }
+
+func TestEnvValueIgnoresRelativeRMBConfig(t *testing.T) {
+	home := t.TempDir()
+	wd := t.TempDir()
+	t.Chdir(wd)
+	t.Setenv("HOME", home)
+	t.Setenv("RMB_URL", "")
+	t.Setenv("RMB_CONFIG", ".env")
+
+	dir := filepath.Join(home, ".rmb")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body := "client:\n  url: https://home.test\n"
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Relative RMB_CONFIG must not shadow home config for client recall.
+	if got := EnvValue("RMB_URL"); got != "https://home.test" {
+		t.Fatalf("EnvValue(RMB_URL) = %q, want https://home.test", got)
+	}
+}
+
+func TestEnvValueHonorsAbsoluteRMBConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("RMB_URL", "")
+
+	override := filepath.Join(t.TempDir(), "override.conf")
+	if err := os.WriteFile(override, []byte("RMB_URL=https://override.test\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RMB_CONFIG", override)
+
+	dir := filepath.Join(home, ".rmb")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("client:\n  url: https://home.test\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := EnvValue("RMB_URL"); got != "https://override.test" {
+		t.Fatalf("EnvValue(RMB_URL) = %q, want https://override.test", got)
+	}
+}
+
+func TestLoadDotEnvOverridesEmptyEnv(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("RMB_URL=https://from-file.test\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RMB_URL", "")
+
+	if err := loadDotEnv(path); err != nil {
+		t.Fatal(err)
+	}
+	if got := os.Getenv("RMB_URL"); got != "https://from-file.test" {
+		t.Fatalf("RMB_URL = %q, want https://from-file.test", got)
+	}
+}

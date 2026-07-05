@@ -5,6 +5,8 @@ import (
 
 	"github.com/colinleefish/rmb/internal/db/pgarray"
 	"github.com/colinleefish/rmb/internal/model"
+	"github.com/colinleefish/rmb/internal/uri"
+	"github.com/google/uuid"
 )
 
 func strPtr(s string) *string { return &s }
@@ -91,13 +93,19 @@ func TestEqualStringSets(t *testing.T) {
 }
 
 func TestBuildAtomSceneIndexAndProvenance(t *testing.T) {
+	a1 := uuid.MustParse("00000000-0000-4000-8000-000000000001")
+	a2 := uuid.MustParse("00000000-0000-4000-8000-000000000002")
+	a3 := uuid.MustParse("00000000-0000-4000-8000-000000000003")
 	scenes := []model.Scene{
-		{URI: "rmb://scenes/s1", SourceAtomURIs: pgarray.TextArray{"a1", "a2"}},
-		{URI: "rmb://scenes/s2", SourceAtomURIs: pgarray.TextArray{"a2", "a3"}},
+		{URI: "rmb://scenes/s1", SourceAtoms: pgarray.UUIDArray{a1, a2}},
+		{URI: "rmb://scenes/s2", SourceAtoms: pgarray.UUIDArray{a2, a3}},
 	}
 	index := buildAtomSceneIndex(scenes)
 
-	bucket := memoryBucket{Atoms: []model.Atom{{URI: "a2"}, {URI: "a3"}}}
+	bucket := memoryBucket{Atoms: []model.Atom{
+		{URI: uri.BuildAtom(a2.String())},
+		{URI: uri.BuildAtom(a3.String())},
+	}}
 	got := sourceSceneURIsFor(bucket, index)
 	if len(got) != 2 || got[0] != "rmb://scenes/s1" || got[1] != "rmb://scenes/s2" {
 		t.Fatalf("unexpected source scenes: %+v", got)

@@ -263,7 +263,7 @@ func (w *Worker) persistScenes(
 				DisplayName:    &displayName,
 				Abstract:       &abstract,
 				Body:           &body,
-				SourceAtomURIs: pgarray.TextArray(append([]string(nil), s.SourceAtomURIs...)),
+				SourceAtoms: pgarray.UUIDArray(append([]uuid.UUID(nil), s.SourceAtoms...)),
 				CreatedAt:      now,
 				UpdatedAt:      now,
 			}
@@ -275,7 +275,7 @@ func (w *Worker) persistScenes(
 					"display_name":     gorm.Expr("EXCLUDED.display_name"),
 					"abstract":         gorm.Expr("EXCLUDED.abstract"),
 					"body":             gorm.Expr("EXCLUDED.body"),
-					"source_atom_uris": gorm.Expr("EXCLUDED.source_atom_uris"),
+					"source_atoms": gorm.Expr("EXCLUDED.source_atoms"),
 					"updated_at":       gorm.Expr("EXCLUDED.updated_at"),
 					"embedding":        gorm.Expr("NULL"),
 				}),

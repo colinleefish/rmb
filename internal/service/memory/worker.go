@@ -12,6 +12,7 @@ import (
 	"github.com/colinleefish/rmb/internal/db/pgarray"
 	"github.com/colinleefish/rmb/internal/model"
 	"github.com/colinleefish/rmb/internal/service/correction"
+	"github.com/colinleefish/rmb/internal/uri"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -132,17 +133,21 @@ func (w *Worker) rollup(ctx context.Context) error {
 		return w.markSessionsIdle(ctx, pendingIDs, w.now().UTC())
 	}
 
-	atomURIs := make([]string, 0)
+	atomIDs := make([]uuid.UUID, 0)
 	for _, b := range buckets {
 		for _, atom := range b.Atoms {
-			atomURIs = append(atomURIs, atom.URI)
+			id, err := uri.ParseAtomID(atom.URI)
+			if err != nil {
+				continue
+			}
+			atomIDs = append(atomIDs, id)
 		}
 	}
 
 	var scenes []model.Scene
 	if err := w.db.WithContext(ctx).
-		Select("uri", "source_atom_uris").
-		Where("source_atom_uris && ?", pgarray.TextArray(atomURIs)).
+		Select("uri", "source_atoms").
+		Where("source_atoms && ?", pgarray.UUIDArray(atomIDs)).
 		Find(&scenes).Error; err != nil {
 		return fmt.Errorf("load scenes: %w", err)
 	}

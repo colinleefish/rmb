@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -170,6 +172,25 @@ func BuildMemory(category, segment string) string {
 
 func BuildCorrection(id string) string {
 	return Scheme + "://" + ScopeCorrections + "/" + strings.ToLower(id)
+}
+
+// ParseAtomID extracts the atom key UUID from a full atom URI (rmb://atoms/<id>)
+// or a bare UUID string.
+func ParseAtomID(raw string) (uuid.UUID, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return uuid.Nil, fmt.Errorf("%w: empty atom reference", ErrInvalidURI)
+	}
+	if u, err := Parse(s); err == nil {
+		if u.Scope != ScopeAtoms || len(u.Segments) != 1 {
+			return uuid.Nil, fmt.Errorf("%w: not an atom uri", ErrInvalidURI)
+		}
+		return uuid.Parse(u.Segments[0])
+	}
+	if !uuidSegment.MatchString(s) {
+		return uuid.Nil, fmt.Errorf("%w: invalid atom id %q", ErrInvalidURI, raw)
+	}
+	return uuid.Parse(s)
 }
 
 // SanitizeSlug normalizes a label into a strict URI slug: lowercase ASCII,

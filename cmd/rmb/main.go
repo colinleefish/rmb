@@ -27,13 +27,22 @@ import (
 )
 
 func main() {
+	runCtx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+
+	args := os.Args[1:]
+	if len(args) == 0 || args[0] != "serve" {
+		runner := cli.Runner{}
+		if err := runner.Run(runCtx, args); err != nil {
+			log.Fatalf("run command: %v", err)
+		}
+		return
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("load config: %v", err)
 	}
-
-	runCtx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer cancel()
 
 	runner := cli.Runner{
 		Config: cfg,
@@ -149,7 +158,7 @@ func main() {
 		},
 	}
 
-	if err := runner.Run(runCtx, os.Args[1:]); err != nil {
+	if err := runner.Run(runCtx, args); err != nil {
 		log.Fatalf("run command: %v", err)
 	}
 }

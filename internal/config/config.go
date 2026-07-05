@@ -295,7 +295,7 @@ func loadDotEnv(path string) error {
 			return fmt.Errorf("parse dotenv %q line %d: empty key", path, i+1)
 		}
 
-		if _, exists := os.LookupEnv(key); exists {
+		if v, exists := os.LookupEnv(key); exists && strings.TrimSpace(v) != "" {
 			continue
 		}
 

@@ -428,7 +428,7 @@ func (s *Service) metaScene(ctx context.Context, target string) (map[string]any,
 		"session_id":        row.SessionID,
 		"display_name":      row.DisplayName,
 		"abstract":          row.Abstract,
-		"source_atom_uris":  row.SourceAtomURIs,
+		"source_atoms": row.SourceAtoms,
 		"created_at":        row.CreatedAt,
 		"updated_at":        row.UpdatedAt,
 	}, nil

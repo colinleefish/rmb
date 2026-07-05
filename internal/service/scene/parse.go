@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/colinleefish/rmb/internal/uri"
+	"github.com/google/uuid"
 )
 
 type llmScene struct {
@@ -18,10 +21,10 @@ type llmBuildScenesResponse struct {
 }
 
 type parsedScene struct {
-	DisplayName     string
-	Abstract        string
-	Body            string
-	SourceAtomURIs  []string
+	DisplayName string
+	Abstract    string
+	Body        string
+	SourceAtoms []uuid.UUID
 }
 
 func parseBuildScenesResponse(raw string, validURIs map[string]struct{}) ([]parsedScene, error) {
@@ -63,9 +66,9 @@ func parseBuildScenesResponse(raw string, validURIs map[string]struct{}) ([]pars
 
 		// Tolerate hallucinated/unknown atom URIs: drop them rather than failing
 		// the whole batch (one bad URI must not wedge a session into a retry
-		// loop). A scene with no valid URIs left is skipped.
-		uris := make([]string, 0, len(s.AtomURIs))
-		seen := make(map[string]struct{})
+		// loop). A scene with no valid atom refs left is skipped.
+		atomIDs := make([]uuid.UUID, 0, len(s.AtomURIs))
+		seen := make(map[uuid.UUID]struct{})
 		for _, u := range s.AtomURIs {
 			u = strings.TrimSpace(u)
 			if u == "" {
@@ -74,21 +77,25 @@ func parseBuildScenesResponse(raw string, validURIs map[string]struct{}) ([]pars
 			if _, ok := validURIs[u]; !ok {
 				continue
 			}
-			if _, dup := seen[u]; dup {
+			id, err := uri.ParseAtomID(u)
+			if err != nil {
 				continue
 			}
-			seen[u] = struct{}{}
-			uris = append(uris, u)
+			if _, dup := seen[id]; dup {
+				continue
+			}
+			seen[id] = struct{}{}
+			atomIDs = append(atomIDs, id)
 		}
-		if len(uris) == 0 {
+		if len(atomIDs) == 0 {
 			continue
 		}
 
 		out = append(out, parsedScene{
-			DisplayName:    displayName,
-			Abstract:       abstract,
-			Body:           body,
-			SourceAtomURIs: uris,
+			DisplayName: displayName,
+			Abstract:    abstract,
+			Body:        body,
+			SourceAtoms: atomIDs,
 		})
 	}
 	if len(out) == 0 {

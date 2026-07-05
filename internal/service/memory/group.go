@@ -8,6 +8,7 @@ import (
 
 	"github.com/colinleefish/rmb/internal/model"
 	"github.com/colinleefish/rmb/internal/uri"
+	"github.com/google/uuid"
 )
 
 // memoryBucket is one logical long-term memory target: a single profile, or a
@@ -136,13 +137,13 @@ func serializePartialsForLLM(partials []string) (string, error) {
 	return string(raw), nil
 }
 
-// buildAtomSceneIndex maps each atom URI to the scene URIs that cite it, used to
-// populate memories.source_scene_uris provenance.
-func buildAtomSceneIndex(scenes []model.Scene) map[string][]string {
-	index := make(map[string][]string)
+// buildAtomSceneIndex maps each atom key UUID to the scene URIs that cite it,
+// used to populate memories.source_scene_uris provenance.
+func buildAtomSceneIndex(scenes []model.Scene) map[uuid.UUID][]string {
+	index := make(map[uuid.UUID][]string)
 	for _, scene := range scenes {
-		for _, atomURI := range scene.SourceAtomURIs {
-			index[atomURI] = append(index[atomURI], scene.URI)
+		for _, atomID := range scene.SourceAtoms {
+			index[atomID] = append(index[atomID], scene.URI)
 		}
 	}
 	return index
@@ -150,10 +151,14 @@ func buildAtomSceneIndex(scenes []model.Scene) map[string][]string {
 
 // sourceSceneURIsFor returns the sorted, deduplicated scene URIs that cover a
 // bucket's atoms.
-func sourceSceneURIsFor(bucket memoryBucket, index map[string][]string) []string {
+func sourceSceneURIsFor(bucket memoryBucket, index map[uuid.UUID][]string) []string {
 	seen := make(map[string]struct{})
 	for _, atom := range bucket.Atoms {
-		for _, sceneURI := range index[atom.URI] {
+		atomID, err := uri.ParseAtomID(atom.URI)
+		if err != nil {
+			continue
+		}
+		for _, sceneURI := range index[atomID] {
 			seen[sceneURI] = struct{}{}
 		}
 	}
