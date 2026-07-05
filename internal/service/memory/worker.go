@@ -12,7 +12,6 @@ import (
 	"github.com/colinleefish/rmb/internal/db/pgarray"
 	"github.com/colinleefish/rmb/internal/model"
 	"github.com/colinleefish/rmb/internal/service/correction"
-	"github.com/colinleefish/rmb/internal/uri"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -136,11 +135,7 @@ func (w *Worker) rollup(ctx context.Context) error {
 	atomIDs := make([]uuid.UUID, 0)
 	for _, b := range buckets {
 		for _, atom := range b.Atoms {
-			id, err := uri.ParseAtomID(atom.URI)
-			if err != nil {
-				continue
-			}
-			atomIDs = append(atomIDs, id)
+			atomIDs = append(atomIDs, atom.ID)
 		}
 	}
 

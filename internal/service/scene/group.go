@@ -113,7 +113,7 @@ func serializeAtomsForLLM(groups []atomGroup) (string, error) {
 				sceneName = strings.TrimSpace(*atom.SceneName)
 			}
 			inputs = append(inputs, atomInput{
-				URI:       atom.URI,
+				URI:       uri.BuildAtom(atom.ID.String()),
 				Category:  atom.Category,
 				Priority:  atom.Priority,
 				SceneName: sceneName,
@@ -129,10 +129,10 @@ func serializeAtomsForLLM(groups []atomGroup) (string, error) {
 	return string(raw), nil
 }
 
-func atomURIs(atoms []model.Atom) map[string]struct{} {
+func atomURISet(atoms []model.Atom) map[string]struct{} {
 	out := make(map[string]struct{}, len(atoms))
 	for _, atom := range atoms {
-		out[atom.URI] = struct{}{}
+		out[uri.BuildAtom(atom.ID.String())] = struct{}{}
 	}
 	return out
 }

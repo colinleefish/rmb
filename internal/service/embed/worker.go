@@ -96,7 +96,7 @@ type embedRow struct {
 func (w *Worker) embedAtoms(ctx context.Context) (int, error) {
 	var rows []embedRow
 	if err := w.db.WithContext(ctx).Raw(`
-		SELECT uri AS key, content AS text
+		SELECT id::text AS key, content AS text
 		FROM atoms
 		WHERE embedding IS NULL AND content <> ''
 		ORDER BY created_at
@@ -104,7 +104,7 @@ func (w *Worker) embedAtoms(ctx context.Context) (int, error) {
 	`, w.batchSize()).Scan(&rows).Error; err != nil {
 		return 0, fmt.Errorf("select atoms: %w", err)
 	}
-	return w.embedAndStore(ctx, "atoms", "uri", rows)
+	return w.embedAndStore(ctx, "atoms", "id", rows)
 }
 
 func (w *Worker) embedScenes(ctx context.Context) (int, error) {

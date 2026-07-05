@@ -89,13 +89,13 @@ func TestChunkGroups_disabled(t *testing.T) {
 
 func TestSerializeAtomsForLLM(t *testing.T) {
 	groups := groupAtomsBySceneName([]model.Atom{
-		{URI: "rmb://atoms/1", Category: "entities", Priority: 50, Content: "fact"},
+		{ID: uuid.MustParse("019eb28e-e351-7812-91a6-328b1f77a4bd"), Category: "entities", Priority: 50, Content: "fact"},
 	})
 	raw, err := serializeAtomsForLLM(groups)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(raw, "rmb://atoms/1") {
+	if !strings.Contains(raw, "rmb://atoms/019eb28e-e351-7812-91a6-328b1f77a4bd") {
 		t.Fatalf("missing uri in json: %s", raw)
 	}
 }

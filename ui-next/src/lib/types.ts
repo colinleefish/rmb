@@ -50,6 +50,7 @@ export interface TurnRow {
 // Raw GORM models are marshalled with PascalCase keys (no JSON tags).
 // All fields optional/loose on purpose; read via pick() defensively.
 export interface AtomModel {
+  ID?: string;
   URI?: string;
   Category?: string;
   Priority?: number;

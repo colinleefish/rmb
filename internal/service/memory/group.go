@@ -115,7 +115,7 @@ func serializeAtomsForLLM(atoms []model.Atom) (string, error) {
 	inputs := make([]atomLLMInput, 0, len(atoms))
 	for _, atom := range atoms {
 		inputs = append(inputs, atomLLMInput{
-			URI:      atom.URI,
+			URI:      uri.BuildAtom(atom.ID.String()),
 			Priority: atom.Priority,
 			Content:  atom.Content,
 		})
@@ -155,11 +155,7 @@ func buildAtomSceneIndex(scenes []model.Scene) map[uuid.UUID][]string {
 func sourceSceneURIsFor(bucket memoryBucket, index map[uuid.UUID][]string) []string {
 	seen := make(map[string]struct{})
 	for _, atom := range bucket.Atoms {
-		atomID, err := uri.ParseAtomID(atom.URI)
-		if err != nil {
-			continue
-		}
-		for _, sceneURI := range index[atomID] {
+		for _, sceneURI := range index[atom.ID] {
 			seen[sceneURI] = struct{}{}
 		}
 	}

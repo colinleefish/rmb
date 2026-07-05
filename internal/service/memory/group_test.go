@@ -5,7 +5,6 @@ import (
 
 	"github.com/colinleefish/rmb/internal/db/pgarray"
 	"github.com/colinleefish/rmb/internal/model"
-	"github.com/colinleefish/rmb/internal/uri"
 	"github.com/google/uuid"
 )
 
@@ -103,8 +102,8 @@ func TestBuildAtomSceneIndexAndProvenance(t *testing.T) {
 	index := buildAtomSceneIndex(scenes)
 
 	bucket := memoryBucket{Atoms: []model.Atom{
-		{URI: uri.BuildAtom(a2.String())},
-		{URI: uri.BuildAtom(a3.String())},
+		{ID: a2},
+		{ID: a3},
 	}}
 	got := sourceSceneURIsFor(bucket, index)
 	if len(got) != 2 || got[0] != "rmb://scenes/00000000-0000-4000-8000-000000000010" || got[1] != "rmb://scenes/00000000-0000-4000-8000-000000000020" {

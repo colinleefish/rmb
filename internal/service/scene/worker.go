@@ -128,7 +128,7 @@ func (w *Worker) processSession(ctx context.Context, sessionID uuid.UUID) error 
 
 	groups := groupAtomsBySceneName(batch.Atoms)
 	chunks := chunkGroups(groups, w.config.MaxAtomsPerBatch)
-	validURIs := atomURIs(batch.Atoms)
+	validURIs := atomURISet(batch.Atoms)
 
 	var parsed []parsedScene
 	for _, chunk := range chunks {

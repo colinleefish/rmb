@@ -239,7 +239,7 @@ func (w *Worker) persistBatch(
 
 		turnIndex := buildTurnIndex(batch.Turns)
 		now := w.now().UTC()
-		var firstAtomURI string
+		var firstAtomID uuid.UUID
 
 		for _, a := range parsed {
 			atomID, err := uuid.NewV7()
@@ -271,13 +271,12 @@ func (w *Worker) persistBatch(
 				priority = 50
 			}
 
-			atomURI := uri.BuildAtom(atomID.String())
-			if firstAtomURI == "" {
-				firstAtomURI = atomURI
+			if firstAtomID == uuid.Nil {
+				firstAtomID = atomID
 			}
 
 			row := model.Atom{
-				URI:           atomURI,
+				ID:            atomID,
 				SessionID:     sessionID,
 				Category:      a.Category,
 				Priority:      priority,
@@ -316,7 +315,11 @@ func (w *Worker) persistBatch(
 			return fmt.Errorf("update pipeline_state: %w", err)
 		}
 
-		if err := w.completePendingTasks(tx, sessionID, firstAtomURI); err != nil {
+		resultURI := ""
+		if firstAtomID != uuid.Nil {
+			resultURI = uri.BuildAtom(firstAtomID.String())
+		}
+		if err := w.completePendingTasks(tx, sessionID, resultURI); err != nil {
 			return err
 		}
 

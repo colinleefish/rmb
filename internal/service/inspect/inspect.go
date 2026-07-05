@@ -12,6 +12,7 @@ import (
 	"github.com/colinleefish/rmb/internal/model"
 	"github.com/colinleefish/rmb/internal/service/correction"
 	"github.com/colinleefish/rmb/internal/uri"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -218,14 +219,15 @@ func (s *Service) treeSession(ctx context.Context, u uri.URI, w io.Writer) error
 			}
 		}
 
-		var atomURIs []string
+		var atomIDs []uuid.UUID
 		if err := s.db.WithContext(ctx).Model(&model.Atom{}).
 			Where("session_id = ?", session.ID).
 			Order("created_at asc").
-			Pluck("uri", &atomURIs).Error; err != nil {
+			Pluck("id", &atomIDs).Error; err != nil {
 			return fmt.Errorf("load atoms: %w", err)
 		}
-		for _, line := range atomURIs {
+		for _, id := range atomIDs {
+			line := uri.BuildAtom(id.String())
 			if _, err := fmt.Fprintln(w, line); err != nil {
 				return err
 			}
@@ -269,13 +271,13 @@ func (s *Service) treeScope(ctx context.Context, u uri.URI, w io.Writer) error {
 		var rows []model.Atom
 		q := s.db.WithContext(ctx).Order("created_at asc").Limit(200)
 		if len(u.Segments) == 1 {
-			q = q.Where("uri = ?", uri.BuildAtom(u.Segments[0]))
+			q = q.Where("id = ?", u.Segments[0])
 		}
 		if err := q.Find(&rows).Error; err != nil {
 			return fmt.Errorf("list atoms: %w", err)
 		}
 		for _, row := range rows {
-			if _, err := fmt.Fprintln(w, row.URI); err != nil {
+			if _, err := fmt.Fprintln(w, uri.BuildAtom(row.ID.String())); err != nil {
 				return err
 			}
 		}
@@ -369,8 +371,7 @@ func (s *Service) catTurn(ctx context.Context, turnID string, w io.Writer) error
 
 func (s *Service) catAtom(ctx context.Context, atomID string, w io.Writer) error {
 	var row model.Atom
-	target := uri.BuildAtom(atomID)
-	if err := s.db.WithContext(ctx).Where("uri = ?", target).Take(&row).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("id = ?", atomID).Take(&row).Error; err != nil {
 		return fmt.Errorf("load atom: %w", err)
 	}
 	_, err := io.WriteString(w, row.Content)
@@ -462,12 +463,20 @@ func (s *Service) metaTurn(ctx context.Context, target string) (map[string]any, 
 }
 
 func (s *Service) metaAtom(ctx context.Context, target string) (map[string]any, error) {
+	u, err := uri.Parse(target)
+	if err != nil {
+		return nil, err
+	}
+	if len(u.Segments) != 1 {
+		return nil, fmt.Errorf("atom id required")
+	}
 	var row model.Atom
-	if err := s.db.WithContext(ctx).Where("uri = ?", target).Take(&row).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("id = ?", u.Segments[0]).Take(&row).Error; err != nil {
 		return nil, fmt.Errorf("load atom: %w", err)
 	}
 	return map[string]any{
-		"uri":             row.URI,
+		"uri":             uri.BuildAtom(row.ID.String()),
+		"id":              row.ID,
 		"session_id":      row.SessionID,
 		"category":        row.Category,
 		"priority":        row.Priority,

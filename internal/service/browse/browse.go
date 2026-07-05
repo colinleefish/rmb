@@ -80,7 +80,7 @@ var (
 		defaultKey: "updated",
 	}
 
-	atomSearchCols = []string{"content", "category", "scene_name", "slug", "uri"}
+	atomSearchCols = []string{"content", "category", "scene_name", "slug", "CAST(id AS text)"}
 	atomSort       = sortColumns{
 		allowed:    map[string]string{"created": "created_at", "category": "category", "priority": "priority"},
 		defaultKey: "created",
