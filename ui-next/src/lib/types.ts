@@ -60,6 +60,7 @@ export interface AtomModel {
 }
 
 export interface SceneModel {
+  ID?: string;
   URI?: string;
   DisplayName?: string | null;
   Abstract?: string | null;

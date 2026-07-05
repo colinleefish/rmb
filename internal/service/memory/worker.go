@@ -146,7 +146,7 @@ func (w *Worker) rollup(ctx context.Context) error {
 
 	var scenes []model.Scene
 	if err := w.db.WithContext(ctx).
-		Select("uri", "source_atoms").
+		Select("id", "source_atoms").
 		Where("source_atoms && ?", pgarray.UUIDArray(atomIDs)).
 		Find(&scenes).Error; err != nil {
 		return fmt.Errorf("load scenes: %w", err)

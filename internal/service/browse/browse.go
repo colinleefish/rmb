@@ -86,7 +86,7 @@ var (
 		defaultKey: "created",
 	}
 
-	sceneSearchCols = []string{"display_name", "abstract", "body", "uri"}
+	sceneSearchCols = []string{"display_name", "abstract", "body", "CAST(id AS text)"}
 	sceneSort       = sortColumns{
 		allowed:    map[string]string{"updated": "updated_at", "created": "created_at"},
 		defaultKey: "updated",

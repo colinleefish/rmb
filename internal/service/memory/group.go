@@ -142,8 +142,9 @@ func serializePartialsForLLM(partials []string) (string, error) {
 func buildAtomSceneIndex(scenes []model.Scene) map[uuid.UUID][]string {
 	index := make(map[uuid.UUID][]string)
 	for _, scene := range scenes {
+		sceneURI := uri.BuildScene(scene.ID.String())
 		for _, atomID := range scene.SourceAtoms {
-			index[atomID] = append(index[atomID], scene.URI)
+			index[atomID] = append(index[atomID], sceneURI)
 		}
 	}
 	return index

@@ -247,30 +247,30 @@ func (w *Worker) persistScenes(
 
 		now := w.now().UTC()
 		dupCount := make(map[string]int, len(scenes))
-		keepURIs := make([]string, 0, len(scenes))
+		keepIDs := make([]uuid.UUID, 0, len(scenes))
 		for _, s := range scenes {
 			nameKey := strings.ToLower(strings.TrimSpace(s.DisplayName))
 			dupCount[nameKey]++
-			sceneURI := sceneURIForName(batch.SessionID, s.DisplayName, dupCount[nameKey])
-			keepURIs = append(keepURIs, sceneURI)
+			sceneID := sceneIDForName(batch.SessionID, s.DisplayName, dupCount[nameKey])
+			keepIDs = append(keepIDs, sceneID)
 
 			displayName := s.DisplayName
 			abstract := s.Abstract
 			body := s.Body
 			row := model.Scene{
-				URI:            sceneURI,
-				SessionID:      batch.SessionID,
-				DisplayName:    &displayName,
-				Abstract:       &abstract,
-				Body:           &body,
+				ID:          sceneID,
+				SessionID:   batch.SessionID,
+				DisplayName: &displayName,
+				Abstract:    &abstract,
+				Body:        &body,
 				SourceAtoms: pgarray.UUIDArray(append([]uuid.UUID(nil), s.SourceAtoms...)),
-				CreatedAt:      now,
-				UpdatedAt:      now,
+				CreatedAt:   now,
+				UpdatedAt:   now,
 			}
-			// Stable URI: reuse the existing row (preserve created_at), refresh content.
+			// Stable id: reuse the existing row (preserve created_at), refresh content.
 			// Reset embedding so the embed worker re-embeds the changed abstract/body.
 			if err := tx.Clauses(clause.OnConflict{
-				Columns: []clause.Column{{Name: "uri"}},
+				Columns: []clause.Column{{Name: "id"}},
 				DoUpdates: clause.Assignments(map[string]any{
 					"display_name":     gorm.Expr("EXCLUDED.display_name"),
 					"abstract":         gorm.Expr("EXCLUDED.abstract"),
@@ -286,8 +286,8 @@ func (w *Worker) persistScenes(
 
 		// Prune scenes for this session whose name no longer appears.
 		prune := tx.Where("session_id = ?", batch.SessionID)
-		if len(keepURIs) > 0 {
-			prune = prune.Where("uri NOT IN ?", keepURIs)
+		if len(keepIDs) > 0 {
+			prune = prune.Where("id NOT IN ?", keepIDs)
 		}
 		if err := prune.Delete(&model.Scene{}).Error; err != nil {
 			return fmt.Errorf("prune stale scenes: %w", err)

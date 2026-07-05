@@ -78,7 +78,7 @@ func FTSScenes(ctx context.Context, db *gorm.DB, query string, k int) ([]Match, 
 	}
 	var out []Match
 	if err := db.WithContext(ctx).Raw(`
-		SELECT uri,
+		SELECT 'rmb://scenes/' || lower(id::text) AS uri,
 		       'scenes' AS tier,
 		       ts_rank(
 		         to_tsvector('english', coalesce(body, '') || ' ' || coalesce(abstract, '')),
@@ -133,7 +133,7 @@ func VectorScenes(ctx context.Context, db *gorm.DB, queryVec pgarray.Vector, k i
 	}
 	var out []Match
 	if err := db.WithContext(ctx).Raw(`
-		SELECT uri,
+		SELECT 'rmb://scenes/' || lower(id::text) AS uri,
 		       'scenes' AS tier,
 		       1 - (embedding <=> ?::vector) AS rank,
 		       left(coalesce(abstract, body, ''), 160) AS snippet

@@ -97,8 +97,8 @@ func TestBuildAtomSceneIndexAndProvenance(t *testing.T) {
 	a2 := uuid.MustParse("00000000-0000-4000-8000-000000000002")
 	a3 := uuid.MustParse("00000000-0000-4000-8000-000000000003")
 	scenes := []model.Scene{
-		{URI: "rmb://scenes/s1", SourceAtoms: pgarray.UUIDArray{a1, a2}},
-		{URI: "rmb://scenes/s2", SourceAtoms: pgarray.UUIDArray{a2, a3}},
+		{ID: uuid.MustParse("00000000-0000-4000-8000-000000000010"), SourceAtoms: pgarray.UUIDArray{a1, a2}},
+		{ID: uuid.MustParse("00000000-0000-4000-8000-000000000020"), SourceAtoms: pgarray.UUIDArray{a2, a3}},
 	}
 	index := buildAtomSceneIndex(scenes)
 
@@ -107,7 +107,7 @@ func TestBuildAtomSceneIndexAndProvenance(t *testing.T) {
 		{URI: uri.BuildAtom(a3.String())},
 	}}
 	got := sourceSceneURIsFor(bucket, index)
-	if len(got) != 2 || got[0] != "rmb://scenes/s1" || got[1] != "rmb://scenes/s2" {
+	if len(got) != 2 || got[0] != "rmb://scenes/00000000-0000-4000-8000-000000000010" || got[1] != "rmb://scenes/00000000-0000-4000-8000-000000000020" {
 		t.Fatalf("unexpected source scenes: %+v", got)
 	}
 }

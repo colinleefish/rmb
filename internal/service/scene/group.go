@@ -19,18 +19,21 @@ const defaultSceneName = "General"
 // references across T2 rebuilds instead of pointing at re-minted UUIDs.
 var sceneNamespace = uuid.MustParse("b6f6e2c2-7c1a-4e2b-9c3d-7a1f0d2e4b88")
 
-// sceneURIForName derives a deterministic scene URI from the owning session and
-// the scene's display name. The same (session, name) always yields the same URI,
-// so rebuilding a session's scenes reuses existing URIs. `dup` disambiguates the
+// sceneIDForName derives a deterministic scene id from the owning session and
+// the scene's display name. The same (session, name) always yields the same id,
+// so rebuilding a session's scenes reuses existing rows. `dup` disambiguates the
 // rare case of two scenes sharing a name within one rebuild.
-func sceneURIForName(sessionID uuid.UUID, displayName string, dup int) string {
+func sceneIDForName(sessionID uuid.UUID, displayName string, dup int) uuid.UUID {
 	name := strings.ToLower(strings.TrimSpace(displayName))
 	seed := sessionID.String() + "\x00" + name
 	if dup > 1 {
 		seed += "\x00" + strconv.Itoa(dup)
 	}
-	id := uuid.NewSHA1(sceneNamespace, []byte(seed))
-	return uri.BuildScene(id.String())
+	return uuid.NewSHA1(sceneNamespace, []byte(seed))
+}
+
+func sceneURIForName(sessionID uuid.UUID, displayName string, dup int) string {
+	return uri.BuildScene(sceneIDForName(sessionID, displayName, dup).String())
 }
 
 type atomInput struct {

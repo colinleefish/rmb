@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/colinleefish/rmb/internal/model"
+	"github.com/colinleefish/rmb/internal/uri"
 	"github.com/google/uuid"
 )
 
@@ -28,19 +29,22 @@ func TestGroupAtomsBySceneName(t *testing.T) {
 	}
 }
 
-func TestSceneURIForName_stable(t *testing.T) {
+func TestSceneIDForName_stable(t *testing.T) {
 	sid := uuid.MustParse("019e53d8-e94d-770a-9e81-601d892f9502")
-	a := sceneURIForName(sid, "Hook Config", 1)
-	b := sceneURIForName(sid, "hook config", 1) // case/space-insensitive
+	a := sceneIDForName(sid, "Hook Config", 1)
+	b := sceneIDForName(sid, "hook config", 1) // case/space-insensitive
 	if a != b {
-		t.Fatalf("expected stable URI across case/space: %q vs %q", a, b)
+		t.Fatalf("expected stable id across case/space: %v vs %v", a, b)
 	}
-	if a == sceneURIForName(sid, "Hook Config", 2) {
-		t.Fatal("duplicate index should yield a different URI")
+	if a == sceneIDForName(sid, "Hook Config", 2) {
+		t.Fatal("duplicate index should yield a different id")
 	}
 	other := uuid.MustParse("019e5441-fe41-7cdf-88cd-feb35930a739")
-	if a == sceneURIForName(other, "Hook Config", 1) {
-		t.Fatal("different sessions must yield different URIs")
+	if a == sceneIDForName(other, "Hook Config", 1) {
+		t.Fatal("different sessions must yield different ids")
+	}
+	if sceneURIForName(sid, "Hook Config", 1) != uri.BuildScene(a.String()) {
+		t.Fatal("sceneURIForName should wrap sceneIDForName")
 	}
 }
 

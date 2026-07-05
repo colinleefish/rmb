@@ -26,7 +26,7 @@ func EnqueueSessionsForMemoryTargets(ctx context.Context, gdb *gorm.DB, targetUR
 	if err := gdb.WithContext(ctx).Raw(`
 		SELECT DISTINCT ps.session_id
 		FROM memories m
-		JOIN scenes sc ON sc.uri = ANY(m.source_scene_uris)
+		JOIN scenes sc ON ('rmb://scenes/' || lower(sc.id::text)) = ANY(m.source_scene_uris)
 		JOIN pipeline_state ps ON ps.session_id = sc.session_id
 		WHERE m.superseded_at IS NULL AND m.uri = ANY(?)
 	`, pgarray.TextArray(targetURIs)).Scan(&rows).Error; err != nil {

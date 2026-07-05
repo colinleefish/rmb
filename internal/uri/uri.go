@@ -193,7 +193,25 @@ func ParseAtomID(raw string) (uuid.UUID, error) {
 	return uuid.Parse(s)
 }
 
-// SanitizeSlug normalizes a label into a strict URI slug: lowercase ASCII,
+// ParseSceneID extracts the scene key UUID from a full scene URI (rmb://scenes/<id>)
+// or a bare UUID string.
+func ParseSceneID(raw string) (uuid.UUID, error) {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return uuid.Nil, fmt.Errorf("%w: empty scene reference", ErrInvalidURI)
+	}
+	if u, err := Parse(s); err == nil {
+		if u.Scope != ScopeScenes || len(u.Segments) != 1 {
+			return uuid.Nil, fmt.Errorf("%w: not a scene uri", ErrInvalidURI)
+		}
+		return uuid.Parse(u.Segments[0])
+	}
+	if !uuidSegment.MatchString(s) {
+		return uuid.Nil, fmt.Errorf("%w: invalid scene id %q", ErrInvalidURI, raw)
+	}
+	return uuid.Parse(s)
+}
+
 // hyphen-separated words, CJK preserved. Underscores, spaces, and dots become hyphens.
 func SanitizeSlug(raw string) (string, error) {
 	s := strings.TrimSpace(raw)

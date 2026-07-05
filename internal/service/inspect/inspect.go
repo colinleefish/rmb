@@ -254,13 +254,13 @@ func (s *Service) treeScope(ctx context.Context, u uri.URI, w io.Writer) error {
 		var rows []model.Scene
 		q := s.db.WithContext(ctx).Order("updated_at desc").Limit(200)
 		if len(u.Segments) == 1 {
-			q = q.Where("uri = ?", uri.BuildScene(u.Segments[0]))
+			q = q.Where("id = ?", u.Segments[0])
 		}
 		if err := q.Find(&rows).Error; err != nil {
 			return fmt.Errorf("list scenes: %w", err)
 		}
 		for _, row := range rows {
-			if _, err := fmt.Fprintln(w, row.URI); err != nil {
+			if _, err := fmt.Fprintln(w, uri.BuildScene(row.ID.String())); err != nil {
 				return err
 			}
 		}
@@ -379,8 +379,7 @@ func (s *Service) catAtom(ctx context.Context, atomID string, w io.Writer) error
 
 func (s *Service) catScene(ctx context.Context, sceneID string, w io.Writer) error {
 	var row model.Scene
-	target := uri.BuildScene(sceneID)
-	if err := s.db.WithContext(ctx).Where("uri = ?", target).Take(&row).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("id = ?", sceneID).Take(&row).Error; err != nil {
 		return fmt.Errorf("load scene: %w", err)
 	}
 	text := ""
@@ -419,12 +418,20 @@ func (s *Service) metaMemory(ctx context.Context, target string) (map[string]any
 }
 
 func (s *Service) metaScene(ctx context.Context, target string) (map[string]any, error) {
+	u, err := uri.Parse(target)
+	if err != nil {
+		return nil, err
+	}
+	if len(u.Segments) != 1 {
+		return nil, fmt.Errorf("scene id required")
+	}
 	var row model.Scene
-	if err := s.db.WithContext(ctx).Where("uri = ?", target).Take(&row).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("id = ?", u.Segments[0]).Take(&row).Error; err != nil {
 		return nil, fmt.Errorf("load scene: %w", err)
 	}
 	return map[string]any{
-		"uri":               row.URI,
+		"uri":          uri.BuildScene(row.ID.String()),
+		"id":           row.ID,
 		"session_id":        row.SessionID,
 		"display_name":      row.DisplayName,
 		"abstract":          row.Abstract,

@@ -110,7 +110,7 @@ func (w *Worker) embedAtoms(ctx context.Context) (int, error) {
 func (w *Worker) embedScenes(ctx context.Context) (int, error) {
 	var rows []embedRow
 	if err := w.db.WithContext(ctx).Raw(`
-		SELECT uri AS key, COALESCE(NULLIF(TRIM(abstract), ''), COALESCE(body, '')) AS text
+		SELECT id::text AS key, COALESCE(NULLIF(TRIM(abstract), ''), COALESCE(body, '')) AS text
 		FROM scenes
 		WHERE embedding IS NULL
 		ORDER BY created_at
@@ -118,7 +118,7 @@ func (w *Worker) embedScenes(ctx context.Context) (int, error) {
 	`, w.batchSize()).Scan(&rows).Error; err != nil {
 		return 0, fmt.Errorf("select scenes: %w", err)
 	}
-	return w.embedAndStore(ctx, "scenes", "uri", rows)
+	return w.embedAndStore(ctx, "scenes", "id", rows)
 }
 
 func (w *Worker) embedMemories(ctx context.Context) (int, error) {
