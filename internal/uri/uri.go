@@ -13,6 +13,8 @@ const (
 	MaxSegment       = 50
 	ScopeRoot        = ""
 	ScopeSessions    = "sessions"
+	ScopeTurns       = "turns"
+	ScopeAtoms       = "atoms"
 	ScopeScenes      = "scenes"
 	ScopeProfile     = "profile"
 	ScopePrefs       = "preferences"
@@ -28,6 +30,8 @@ var (
 	)
 	reservedSlug = map[string]struct{}{
 		ScopeSessions:    {},
+		ScopeTurns:       {},
+		ScopeAtoms:       {},
 		ScopeScenes:      {},
 		ScopeProfile:     {},
 		ScopePrefs:       {},
@@ -144,12 +148,12 @@ func BuildSession(sessionKey string) string {
 	return Scheme + "://" + ScopeSessions + "/" + strings.ToLower(sessionKey)
 }
 
-func BuildSessionTurn(sessionKey string, turnIndex int) string {
-	return fmt.Sprintf("%s/%s/%d", BuildSession(sessionKey), "turns", turnIndex)
+func BuildTurn(turnID string) string {
+	return Scheme + "://" + ScopeTurns + "/" + strings.ToLower(turnID)
 }
 
-func BuildSessionAtom(sessionKey, atomID string) string {
-	return BuildSession(sessionKey) + "/atoms/" + strings.ToLower(atomID)
+func BuildAtom(atomID string) string {
+	return Scheme + "://" + ScopeAtoms + "/" + strings.ToLower(atomID)
 }
 
 func BuildScene(sceneID string) string {
@@ -239,7 +243,7 @@ func splitSegments(path string) []string {
 
 func validateScope(scope string) error {
 	switch scope {
-	case ScopeSessions, ScopeScenes, ScopeProfile, ScopePrefs, ScopeEntities, ScopeEvents, ScopeCorrections:
+	case ScopeSessions, ScopeTurns, ScopeAtoms, ScopeScenes, ScopeProfile, ScopePrefs, ScopeEntities, ScopeEvents, ScopeCorrections:
 		return nil
 	default:
 		return fmt.Errorf("%w: unknown scope %q", ErrInvalidURI, scope)
@@ -272,22 +276,27 @@ func validateShape(scope string, segments []string) error {
 			}
 			return nil
 		}
-		if len(segments) == 2 && segments[1] == "turns" {
-			return fmt.Errorf("%w: turn index required", ErrInvalidURI)
-		}
-		if len(segments) == 3 && segments[1] == "turns" {
-			return nil
-		}
-		if len(segments) == 2 && segments[1] == "atoms" {
-			return fmt.Errorf("%w: atom id required", ErrInvalidURI)
-		}
-		if len(segments) == 3 && segments[1] == "atoms" {
-			if !uuidSegment.MatchString(segments[2]) {
-				return fmt.Errorf("%w: atom id must be uuid", ErrInvalidURI)
-			}
-			return nil
-		}
 		return fmt.Errorf("%w: invalid sessions path", ErrInvalidURI)
+	case ScopeTurns:
+		if len(segments) == 0 {
+			return nil
+		}
+		if len(segments) != 1 {
+			return fmt.Errorf("%w: turns require one id segment", ErrInvalidURI)
+		}
+		if !uuidSegment.MatchString(segments[0]) {
+			return fmt.Errorf("%w: turn id must be uuid", ErrInvalidURI)
+		}
+	case ScopeAtoms:
+		if len(segments) == 0 {
+			return nil
+		}
+		if len(segments) != 1 {
+			return fmt.Errorf("%w: atoms require one id segment", ErrInvalidURI)
+		}
+		if !uuidSegment.MatchString(segments[0]) {
+			return fmt.Errorf("%w: atom id must be uuid", ErrInvalidURI)
+		}
 	case ScopeScenes:
 		// Zero segments is the category container (e.g. rmb://scenes/),
 		// which `tree` lists; one segment is a single scene.

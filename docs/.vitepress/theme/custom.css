@@ -1,0 +1,33 @@
+/**
+ * Sidebar polish — closer to vitepress.dev reference layout.
+ */
+:root {
+  --vp-sidebar-bg: var(--vp-c-bg-soft);
+}
+
+.VPSidebar {
+  border-right: 1px solid var(--vp-c-divider);
+}
+
+.VPSidebarItem.level-0 > .item > .text {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--vp-c-text-1);
+}
+
+.VPSidebarItem.level-1 > .item > .text {
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.VPSidebarItem.is-link > .item.is-active {
+  background-color: var(--vp-c-brand-soft);
+  border-radius: 6px;
+}
+
+.VPSidebarItem.is-link > .item.is-active > .text {
+  color: var(--vp-c-brand-1);
+  font-weight: 500;
+}

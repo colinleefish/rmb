@@ -271,7 +271,7 @@ func (w *Worker) persistBatch(
 				priority = 50
 			}
 
-			atomURI := uri.BuildSessionAtom(batch.SessionKey, atomID.String())
+			atomURI := uri.BuildAtom(atomID.String())
 			if firstAtomURI == "" {
 				firstAtomURI = atomURI
 			}

@@ -228,6 +228,5 @@ the merged truth (orthogonal corrections are combined by the distiller).
 | Doc | Use when |
 |-----|----------|
 | This file | "How do human corrections override memory?" |
-| [`design-l0-l4.md`](./design-l0-l4.md) §6.1 | Why append-first / explicit-merge-only |
-| [`project-review.md`](./project-review.md) | Entity-resolution / slug-drift context |
-| [`cli-agent-guide.md`](./cli-agent-guide.md) | The agent's recall + precedence rules |
+| [Design §6.1](/design/l0-l3#_6-memory-taxonomy-t1-and-t3-share-these) | Why append-first / explicit-merge-only |
+| [CLI for agents](/guide/cli-for-agents) | The agent's recall + precedence rules |

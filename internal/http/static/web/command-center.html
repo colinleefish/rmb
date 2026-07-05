@@ -963,13 +963,21 @@ body {
     <section class="glass-panel uri-panel animate-in delay-6">
       <div class="panel-header">
         <div class="panel-title">URI Addressing Scheme</div>
-        <div class="panel-badge" style="background: var(--violet-dim); color: var(--violet);">6 scopes</div>
+        <div class="panel-badge" style="background: var(--violet-dim); color: var(--violet);">8 scopes</div>
       </div>
       <div class="panel-body">
         <div class="uri-grid">
           <div class="uri-item">
             <div class="uri-scheme">rmb://sessions/&lt;uuid&gt;</div>
-            <div class="uri-desc">Session container -- turns, atoms, scenes within one conversation</div>
+            <div class="uri-desc">Session container -- conversation abstract</div>
+          </div>
+          <div class="uri-item">
+            <div class="uri-scheme">rmb://turns/&lt;uuid&gt;</div>
+            <div class="uri-desc">Raw user+assistant exchange (session_id in meta)</div>
+          </div>
+          <div class="uri-item">
+            <div class="uri-scheme">rmb://atoms/&lt;uuid&gt;</div>
+            <div class="uri-desc">Typed fact extracted from a session (session_id in meta)</div>
           </div>
           <div class="uri-item">
             <div class="uri-scheme">rmb://scenes/&lt;uuid&gt;</div>
@@ -1322,16 +1330,15 @@ async function loadSessions() {
   badge.textContent = items.length;
 
   list.innerHTML = items.slice(0, 12).map((s, i) => {
-    const isCursor = s.title?.toLowerCase().includes('cursor') || s.scope_key?.includes('cursor');
-    const agentClass = isCursor ? 'cursor' : 'claude';
-    const agentIcon = isCursor ? '&#9674;' : '&#9670;';
     const time = s.created_at ? timeAgo(new Date(s.created_at)) : '';
-    const title = s.title || s.session_key?.slice(0, 8) || 'Untitled';
+    const label = s.abstract?.trim()?.split(/\n+/)[0]?.trim()
+      || s.session_key?.slice(0, 8)
+      || 'Untitled';
     return `
       <div class="session-item" style="animation: fade-up 0.4s ${i * 0.05}s both">
-        <div class="session-agent ${agentClass}">${agentIcon}</div>
+        <div class="session-agent cursor">&#9674;</div>
         <div class="session-info">
-          <div class="session-title">${escapeHtml(title)}</div>
+          <div class="session-title">${escapeHtml(label)}</div>
           <div class="session-meta">${time}</div>
         </div>
         <div class="session-turns">${s.turn_count ?? 0} turns</div>

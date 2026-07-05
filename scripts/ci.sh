@@ -9,6 +9,6 @@ cd "$(dirname "$0")/.."
 export GOPROXY="${GOPROXY:-https://goproxy.cn,direct}"
 
 echo "==> go test"
-go test ./...
+go test ./cmd/... ./internal/...
 
 echo "CI OK"

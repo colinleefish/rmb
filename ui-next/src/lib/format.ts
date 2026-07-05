@@ -60,29 +60,26 @@ export function shortKey(key: string | null | undefined, len = 8): string {
   return key.length > len ? `${key.slice(0, len)}…` : key;
 }
 
-/** Human label for a session row: explicit title, then T2 abstract, else untitled. */
+/** Human label for a session row: T2 abstract, else short session key. */
 export function sessionDisplayTitle(
   session: {
-    title?: string | null;
     abstract?: string | null;
     session_key: string;
   },
   maxLen = 72,
 ): string {
-  const title = session.title?.trim();
-  if (title) return title;
   const abstract = session.abstract?.trim();
   if (abstract) {
     const firstLine = abstract.split(/\n+/)[0]?.trim() || abstract;
     return truncate(firstLine, maxLen);
   }
-  return "Untitled session";
+  return shortKey(session.session_key) || "Untitled session";
 }
 
 export function sessionHasSummary(
-  session: { title?: string | null; abstract?: string | null },
+  session: { abstract?: string | null },
 ): boolean {
-  return Boolean(session.title?.trim() || session.abstract?.trim());
+  return Boolean(session.abstract?.trim());
 }
 
 export function parseJSONL(raw: string | null | undefined): ChatMessage[] {

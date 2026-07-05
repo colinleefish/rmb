@@ -8,7 +8,6 @@ import (
 
 func TestClassifySessionPath(t *testing.T) {
 	const sess = "0622aba4-f3ae-4bcd-837a-52e170a88c2b"
-	const atom = "019eb28e-e351-7812-91a6-328b1f77a4bd"
 
 	cases := []struct {
 		name string
@@ -16,8 +15,6 @@ func TestClassifySessionPath(t *testing.T) {
 		want sessionPathKind
 	}{
 		{"session root", uri.BuildSession(sess), sessionPathSession},
-		{"turn", uri.BuildSessionTurn(sess, 0), sessionPathTurn},
-		{"atom", uri.BuildSessionAtom(sess, atom), sessionPathAtom},
 	}
 
 	for _, c := range cases {
@@ -34,13 +31,12 @@ func TestClassifySessionPath(t *testing.T) {
 }
 
 func TestClassifySessionPath_unknown(t *testing.T) {
-	// Hand-built shapes that uri.Parse rejects but the dispatcher must still
-	// treat as unsupported rather than mis-route.
 	cases := []uri.URI{
-		{Scope: uri.ScopeSessions},                                                      // no session id
-		{Scope: uri.ScopeSessions, Segments: []string{"s", "turns"}},                    // turn index missing
-		{Scope: uri.ScopeSessions, Segments: []string{"s", "bogus", "x"}},               // unknown sub-collection
-		{Scope: uri.ScopeSessions, Segments: []string{"s", "atoms", "a", "extra"}},      // too deep
+		{Scope: uri.ScopeSessions},
+		{Scope: uri.ScopeSessions, Segments: []string{"s", "turns"}},
+		{Scope: uri.ScopeSessions, Segments: []string{"s", "bogus", "x"}},
+		{Scope: uri.ScopeSessions, Segments: []string{"s", "turns", "0"}},
+		{Scope: uri.ScopeSessions, Segments: []string{"s", "atoms", "a", "extra"}},
 	}
 	for i, u := range cases {
 		if got := classifySessionPath(u); got != sessionPathUnknown {

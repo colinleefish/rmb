@@ -98,7 +98,7 @@ var (
 		defaultKey: "created",
 	}
 
-	sessionSearchCols = []string{"session_key", "title", "scope_key", "abstract", "status"}
+	sessionSearchCols = []string{"session_key", "abstract", "status"}
 	sessionSort       = sortColumns{
 		allowed:    map[string]string{"updated": "updated_at", "created": "created_at", "status": "status"},
 		defaultKey: "updated",
@@ -121,8 +121,6 @@ type Overview struct {
 type SessionRow struct {
 	ID         uuid.UUID `json:"id"`
 	SessionKey string    `json:"session_key"`
-	ScopeKey   *string   `json:"scope_key"`
-	Title      *string   `json:"title"`
 	Status     string    `json:"status"`
 	Abstract   *string   `json:"abstract"`
 	TurnCount  int64     `json:"turn_count"`
@@ -549,8 +547,6 @@ func sessionToRow(session model.Session, turnCount int64, lastTurnAt *time.Time,
 	row := SessionRow{
 		ID:         session.ID,
 		SessionKey: session.SessionKey,
-		ScopeKey:   session.ScopeKey,
-		Title:      session.Title,
 		Status:     session.Status,
 		Abstract:   session.Abstract,
 		TurnCount:  turnCount,
@@ -574,7 +570,7 @@ func turnToRow(sessionKey string, idx int, turn model.SessionTurn) TurnRow {
 	return TurnRow{
 		ID:            turn.ID,
 		TurnIndex:     idx,
-		URI:           uri.BuildSessionTurn(sessionKey, idx),
+		URI:           uri.BuildTurn(turn.ID.String()),
 		MessagesJSONL: turn.MessagesJSONL,
 		CreatedAt:     turn.CreatedAt.UTC().Format(timeRFC3339),
 		UpdatedAt:     turn.UpdatedAt.UTC().Format(timeRFC3339),

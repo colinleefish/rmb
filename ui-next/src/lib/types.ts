@@ -23,8 +23,6 @@ export interface Overview {
 export interface SessionRow {
   id: string;
   session_key: string;
-  scope_key: string | null;
-  title: string | null;
   status: string;
   abstract: string | null;
   turn_count: number;

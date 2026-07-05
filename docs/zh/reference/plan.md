@@ -1,11 +1,15 @@
 # rmb — implementation plan
 
+::: info 说明
+本文档暂无完整中文版，以下为英文原文。
+:::
+
 > Roadmap for the T0→T3 memory pipeline. Phases are **shipping milestones**, not calendar quarters.
 > Each phase should be deployable on its own; the upload API (`POST /api/v1/sessions/:id/upload`) stays stable throughout.
 >
-> **Design detail:** [`design-l0-l4.md`](./design-l0-l4.md) / [`design-l0-l4.zh.md`](./design-l0-l4.zh.md)  
-> **Consolidation policy:** [`memory-consolidation-review.zh.md`](./memory-consolidation-review.zh.md)  
-> **Tables & URIs:** [`entity-model.md`](./entity-model.md)
+> **设计细节：** [L0→L3 (英文)](/design/l0-l3) / [L0→L3 (中文)](/zh/design/l0-l3)  
+> **整合策略：** [整合策略评述](/zh/design/consolidation)  
+> **Tables & URIs:** [Entity model](/reference/entity-model)
 
 ## Pyramid reminder
 
@@ -24,7 +28,7 @@ Workers move data **up** the pyramid on a schedule (not every hook). T0 is never
 
 | Milestone                                      | Status          | Notes                                         |
 | ---------------------------------------------- | --------------- | --------------------------------------------- |
-| **Ops** — `make ci` / `make deploy`            | ✅ Done         | Agent-driven; see [`deploy.md`](./deploy.md)  |
+| **Ops** — `make ci` / `make deploy`            | ✅ Done         | Agent-driven; see [Deploy](/reference/deploy)  |
 | **Phase A** — schema + observe                 | ✅ Done         | Migrations `00001`–`00002`, CLI, `/ui/`       |
 | **Design lock** — append-first, versioning     | ✅ Done         | §6.1 in design doc; review doc updated        |
 | **Phase B+** — `memories` versioning migration | ✅ Done (early) | `00003` applied on prod before T3 code exists |
@@ -56,7 +60,7 @@ Production: <https://rmb.colinleefish.com>
 
 - `make ci`
 - `/ui/` shows empty atoms/scenes/memories until workers run
-- `rmb tree rmb://sessions/<id>` lists turns
+- `rmb tree rmb://sessions/<id>/` 列出该 session 下的扁平 `rmb://turns/<uuid>` 与 `rmb://atoms/<uuid>`
 
 ---
 
@@ -81,12 +85,12 @@ Production: <https://rmb.colinleefish.com>
 
 **Do not**
 
-- In-place merge atoms in the worker (see [`memory-consolidation-review.zh.md`](./memory-consolidation-review.zh.md)).
+- In-place merge atoms in the worker (see [整合策略评述](/zh/design/consolidation)).
 
 **Verify**
 
 - Hook a real Cursor/CC session → `/ui/` shows new `atoms` with `source_turn_ids`.
-- `rmb cat rmb://sessions/<sid>/atoms/<uuid>`
+- `rmb cat rmb://atoms/<uuid>`
 - `pipeline_state.t1_status` advances; `t2_status` becomes `pending` after T1.
 
 **Suggested slice for first PR**
@@ -193,7 +197,7 @@ make deploy
 curl -fsS https://rmb.colinleefish.com/healthz
 ```
 
-Proxy notes: [`deploy.md`](./deploy.md) and README § CI / Deploy.
+Proxy notes: [Deploy](/reference/deploy) and README § CI / Deploy.
 
 ---
 
@@ -214,7 +218,7 @@ Locked policy (do not re-litigate without updating design §6.1): T0 append-only
 | Doc                                                                        | Use when                                   |
 | -------------------------------------------------------------------------- | ------------------------------------------ |
 | **This file**                                                              | “What phase are we in? What’s next?”       |
-| [`design-l0-l4.md`](./design-l0-l4.md)                                     | Full architecture, URIs, worker pseudocode |
-| [`memory-consolidation-review.zh.md`](./memory-consolidation-review.zh.md) | Why append-first / versioning              |
-| [`entity-model.md`](./entity-model.md)                                     | Table relationships                        |
-| [`deploy.md`](./deploy.md)                                                 | Ship to production                         |
+| [L0→L3 design](/design/l0-l3)                                     | Full architecture, URIs, worker pseudocode |
+| [整合策略评述](/zh/design/consolidation) | Why append-first / versioning              |
+| [Entity model](/reference/entity-model)                                     | Table relationships                        |
+| [Deploy](/reference/deploy)                                                 | Ship to production                         |

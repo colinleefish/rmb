@@ -17,7 +17,6 @@ import { TurnsSection } from "@/components/sessions/turn-messages";
 import { getSession } from "@/lib/api";
 import {
   sessionDisplayTitle,
-  sessionHasSummary,
   shortKey,
 } from "@/lib/format";
 import { sessionDetailHref } from "@/lib/session-routes";
@@ -57,11 +56,11 @@ export function SessionDetailView({ sessionKey }: { sessionKey: string }) {
     : shortKey(sessionKey);
   useSetPageHeaderTitle(breadcrumbTitle);
 
+  const fullAbstract = session?.abstract?.trim() ?? null;
   const abstract =
-    session?.abstract?.trim() &&
-    session.abstract.trim() !== session.title?.trim() &&
-    sessionHasSummary(session)
-      ? session.abstract.trim()
+    fullAbstract &&
+    (fullAbstract.includes("\n") || fullAbstract.length > 120)
+      ? fullAbstract
       : null;
 
   return (

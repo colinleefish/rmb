@@ -2,7 +2,7 @@ APP := rmb
 CMD := ./cmd/rmb
 BIN := ./bin/$(APP)
 
-.PHONY: build run ci deploy
+.PHONY: build run ci deploy docs-dev docs-build
 
 build:
 	go build -o $(BIN) $(CMD)
@@ -15,3 +15,9 @@ ci:
 
 deploy:
 	./scripts/deploy.sh
+
+docs-dev:
+	cd docs && pnpm install && pnpm dev
+
+docs-build:
+	cd docs && pnpm install && pnpm build

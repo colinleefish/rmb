@@ -1,37 +1,17 @@
 # Entity model — how the pieces relate
 
 > Short guide to what each table is and how data flows from a chat into long-term memory.
-> Full design: [`design-l0-l4.md`](./design-l0-l4.md).
+> Full design: [L0→L3 distillation](/design/l0-l3).
 
 ## One picture
 
-```mermaid
-flowchart TB
-  subgraph capture["Capture (today)"]
-    Hook["Agent hook"] --> Upload["POST …/upload"]
-    Upload --> Session["sessions"]
-    Upload --> Turn["session_turns (T0)"]
-  end
+```
+Capture:  hook → POST /upload → sessions + session_turns (T0)
 
-  subgraph distill["Distillation (planned workers)"]
-    Turn --> T1["T1 worker"]
-    T1 --> Atom["atoms (T1)"]
-    Atom --> T2["T2 worker"]
-    T2 --> Scene["scenes (T2)"]
-    Scene --> T3["T3 worker"]
-    T3 --> Mem["memories (T3)"]
-    Scene --> SessionAbs["sessions.abstract"]
-  end
+Distill:  turns → T1 → atoms → T2 → scenes → T3 → memories
+          scenes also refresh sessions.abstract
 
-  subgraph ops["Operations (schema ready)"]
-    Session --> PS["pipeline_state"]
-    T1 & T2 & T3 --> Task["tasks"]
-  end
-
-  Session --> Turn
-  Session --> Atom
-  Session --> Scene
-  Session --> PS
+Ops:      sessions ↔ pipeline_state; workers ↔ tasks
 ```
 
 **Direction of truth:** conversations flow **up** the pyramid (raw → facts → scenes → long-term memory). Each layer keeps pointers back to what it came from.
@@ -66,7 +46,7 @@ many scenes (across sessions)
 ### `sessions`
 
 - **Identity:** `session_key` = the agent’s conversation UUID.
-- **Human fields:** optional `title`, `scope_key`, `status`.
+- **Status:** `status` (e.g. `active`).
 - **Summaries:** `abstract` (new pipeline); `overview_text` (legacy summarizer, being retired).
 - **URI:** `rmb://sessions/<session_key>`
 - **“Body”:** not a single blob — read turns via `rmb tree rmb://sessions/<id>/`.
@@ -75,7 +55,7 @@ many scenes (across sessions)
 
 - **One row** = one captured Q/A pair (`messages_jsonl`).
 - **Links:** `session_id` → `sessions`.
-- **URI:** `rmb://sessions/<session_key>/turns/<n>` (`n` = 0, 1, 2, … in order).
+- **URI:** `rmb://turns/<uuid>` (`session_turns.id`, uuidv7). `meta` includes `session_id`.
 - **Status:** `turn_status` tracks the old per-turn summarizer (`not_summarized` → …); future T1 worker uses `pipeline_state` instead.
 
 ### `atoms` (T1)
@@ -84,7 +64,7 @@ many scenes (across sessions)
 - **Links:** `session_id`; `source_turn_ids[]` points at T0 rows it was extracted from.
 - **Taxonomy:** `category` ∈ `profile` | `preferences` | `entities` | `events`.
 - **Grouping:** `scene_name` hints which scene segment this atom belongs to (filled at extraction).
-- **URI:** `rmb://sessions/<session_key>/atoms/<uuid>` (opaque id; content can change when deduped).
+- **URI:** `rmb://atoms/<uuid>` (opaque id; content can change when deduped). `session_id` in `meta` links back to the owning session.
 
 ### `scenes` (T2)
 
@@ -143,16 +123,16 @@ T3 routing is mechanical: roll up atoms/scenes **by category** into the matching
 | Piece | Status |
 |-------|--------|
 | `sessions`, `session_turns` | **Live** — hooks + upload API |
-| `atoms` | **Live** — T1 worker fills rows |
-| `scenes` | **Schema only** — Phase C |
-| `memories` | **Schema ready** — versioned (`00003`); empty until T3 worker |
-| `pipeline_state`, `tasks` | **Live** — wired on upload; T1 tasks |
+| `atoms` | **Live** — T1 worker; flat URIs (`rmb://atoms/<uuid>`) |
+| `scenes` | **Live** — T2 worker |
+| `memories` | **Live** — T3 worker; versioned (`00003`) |
+| `pipeline_state`, `tasks` | **Live** — wired on upload |
 | Observer UI | **Live** — `/ui/` lists all tables |
-| T1 worker | **Live** — see [`plan.md`](./plan.md) |
-| T2/T3 workers | **Not built** |
+| T1 / T2 / T3 workers | **Live** — see [implementation plan](/reference/plan) |
+| `rmb eval` | **Planned** — drift detection after rollup |
 
 ## See also
 
-- URI shapes: [`design-l0-l4.md` §5](./design-l0-l4.md)
-- Worker triggers: [`design-l0-l4.md` §8–9](./design-l0-l4.md)
-- Mandarin version: [`entity-model.zh.md`](./entity-model.zh.md)
+- [URI scheme](/concept/uri-scheme) — flat scopes, `tree`, provenance
+- URI shapes: [design doc §5](/design/l0-l3#_5-uri-scheme)
+- Worker triggers: [design doc §8–9](/design/l0-l3#_8-pipeline-sketch)

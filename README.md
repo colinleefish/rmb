@@ -27,7 +27,7 @@ scenes, memories, pipeline state, and tasks).
 Production (`rmb.colinleefish.com`): Caddy in Docker terminates TLS and proxies to
 `rmb` on `:8080` — see `deploy/Caddyfile` and `docker-compose.prod.yml`.
 
-**Roadmap:** [`docs/plan.md`](docs/plan.md) (Phase A–E, current status, next steps).
+**Roadmap:** [`docs/reference/plan.md`](docs/reference/plan.md) (Phase A–E). Run `make docs-dev` for the full docs site.
 
 Planned (see `TODO.md`): storage CLI (`store/read/list/delete/search`),
 embedding worker, hybrid recall, MCP wrapper.
@@ -165,7 +165,7 @@ ssproxy && git push origin main
 3. `make deploy`.
 4. Report whether `/healthz` passed and link https://rmb.colinleefish.com
 
-More detail: [`docs/deploy.md`](docs/deploy.md).
+More detail: [deploy guide](docs/reference/deploy.md) (`make docs-dev` to preview).
 
 ## Configuration
 
@@ -189,7 +189,6 @@ Key variables (see `.env.example` for the full list):
 
 For `hook-submit`, the target API URL is read from `RMB_URL` or
 `~/.rmb.conf` or `~/.rmb/config.yaml` (`client.url` / `RMB_URL=`), defaulting to `http://127.0.0.1:8080`.
-To mirror turns to **local + production**, register **two hook entries** — see [`docs/hooks-dual.md`](docs/hooks-dual.md).
 
 ## Hook Integration
 
@@ -238,8 +237,6 @@ pairing on Claude Code) live in `internal/hook/cursor.go` and
 
 ```json
 {
-  "scope_key": "optional",
-  "title":     "optional",
   "started_at":"optional RFC3339",
   "messages":  [
     {"role": "user",      "content": "..."},
@@ -250,7 +247,7 @@ pairing on Claude Code) live in `internal/hook/cursor.go` and
 
 `session_id` must be a UUID. Each request appends one `session_turns` row
 to the session (creating the session row on first upload). Response includes
-the `rmb://sessions/<id>/turns/<n>` URI for the new turn.
+the `rmb://turns/<uuid>` URI for the new turn.
 
 `GET /healthz` — DB ping + `pg_extension` lookup for `vector`.
 

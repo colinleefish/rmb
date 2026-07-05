@@ -33,8 +33,6 @@ type Message struct {
 
 type UploadInput struct {
 	SessionID string
-	ScopeKey  string
-	Title     string
 	StartedAt *time.Time
 	Messages  []Message
 }
@@ -106,15 +104,12 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (UploadRe
 		return UploadResult{}, err
 	}
 
-	title := normalizeNullableText(input.Title)
-	scopeKey := normalizeNullableText(input.ScopeKey)
-
 	var session model.Session
 	var turn model.SessionTurn
 	var archiveIdx int
 	var taskID *uuid.UUID
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		lockedSession, err := s.findOrCreateSessionForUpdate(tx, sessionID, title, scopeKey)
+		lockedSession, err := s.findOrCreateSessionForUpdate(tx, sessionID)
 		if err != nil {
 			return err
 		}
@@ -170,7 +165,7 @@ func (s *UploadService) Upload(ctx context.Context, input UploadInput) (UploadRe
 		return UploadResult{}, err
 	}
 
-	turnURI := uri.BuildSessionTurn(sessionID, archiveIdx)
+	turnURI := uri.BuildTurn(turn.ID.String())
 
 	return UploadResult{
 		URI:        turnURI,
@@ -212,29 +207,11 @@ func (s *UploadService) markPipelinePending(tx *gorm.DB, sessionID uuid.UUID) er
 func (s *UploadService) findOrCreateSessionForUpdate(
 	tx *gorm.DB,
 	sessionKey string,
-	title *string,
-	scopeKey *string,
 ) (model.Session, error) {
 	var session model.Session
 	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 		Where("session_key = ?", sessionKey).
 		Take(&session).Error; err == nil {
-		if title != nil && (session.Title == nil || strings.TrimSpace(*session.Title) == "") {
-			if err := tx.Model(&model.Session{}).
-				Where("id = ?", session.ID).
-				Update("title", *title).Error; err != nil {
-				return model.Session{}, fmt.Errorf("update session title: %w", err)
-			}
-			session.Title = title
-		}
-		if scopeKey != nil && (session.ScopeKey == nil || strings.TrimSpace(*session.ScopeKey) == "") {
-			if err := tx.Model(&model.Session{}).
-				Where("id = ?", session.ID).
-				Update("scope_key", *scopeKey).Error; err != nil {
-				return model.Session{}, fmt.Errorf("update session scope_key: %w", err)
-			}
-			session.ScopeKey = scopeKey
-		}
 		return session, nil
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return model.Session{}, fmt.Errorf("load session: %w", err)
@@ -248,9 +225,7 @@ func (s *UploadService) findOrCreateSessionForUpdate(
 	session = model.Session{
 		ID:         id,
 		SessionKey: sessionKey,
-		ScopeKey:   scopeKey,
 		Status:     "active",
-		Title:      title,
 	}
 	if err := tx.Create(&session).Error; err != nil {
 		if !isUniqueViolation(err) {
@@ -264,14 +239,6 @@ func (s *UploadService) findOrCreateSessionForUpdate(
 	}
 
 	return session, nil
-}
-
-func normalizeNullableText(raw string) *string {
-	v := strings.TrimSpace(raw)
-	if v == "" {
-		return nil
-	}
-	return &v
 }
 
 func newUUIDv7() (uuid.UUID, error) {

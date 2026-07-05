@@ -76,7 +76,9 @@ Memory is a pyramid; results carry a `tier` and a `uri`:
 |------|-----------|------------|
 | memories | `rmb://profile`, `rmb://preferences/<slug>`, `rmb://entities/<slug>`, `rmb://events/<slug>` | Long-term, cross-session distilled facts. Most useful. |
 | scenes | `rmb://scenes/<uuid>` | Per-conversation summaries ("what we were doing"). |
-| sessions/turns | `rmb://sessions/<id>`, `.../turns/<n>` | Raw conversation evidence (ground truth). |
+| turns | `rmb://turns/<uuid>` | Raw user+assistant exchange (`meta` → `session_id`). |
+| atoms | `rmb://atoms/<uuid>` | Structured facts from a session (`meta` → `session_id`). |
+| sessions | `rmb://sessions/<id>` | Session abstract — container for a conversation. |
 
 Memory categories:
 

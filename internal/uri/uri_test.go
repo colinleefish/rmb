@@ -8,8 +8,8 @@ func TestParseAndString(t *testing.T) {
 		want string
 	}{
 		{"rmb://", "rmb://"},
-		{"/sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/0",
-			"rmb://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/0"},
+		{"rmb://turns/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d",
+			"rmb://turns/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d"},
 		{"rmb://profile", "rmb://profile"},
 		{"rmb://preferences/coffee", "rmb://preferences/coffee"},
 	}
@@ -25,11 +25,33 @@ func TestParseAndString(t *testing.T) {
 	}
 }
 
-func TestBuildSessionTurn(t *testing.T) {
-	got := BuildSessionTurn("4F1916CE-2F6E-4B76-8249-4A5F4184FD8D", 3)
-	want := "rmb://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/3"
+func TestBuildTurn(t *testing.T) {
+	got := BuildTurn("4F1916CE-2F6E-4B76-8249-4A5F4184FD8D")
+	want := "rmb://turns/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d"
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestBuildAtom(t *testing.T) {
+	got := BuildAtom("019EB28E-E351-7812-91A6-328B1F77A4BD")
+	want := "rmb://atoms/019eb28e-e351-7812-91a6-328b1f77a4bd"
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestParseRejectsNestedTurnURI(t *testing.T) {
+	_, err := Parse("rmb://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/turns/0")
+	if err == nil {
+		t.Fatal("expected nested turn path to be rejected")
+	}
+}
+
+func TestParseRejectsNestedAtomURI(t *testing.T) {
+	_, err := Parse("rmb://sessions/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d/atoms/019eb28e-e351-7812-91a6-328b1f77a4bd")
+	if err == nil {
+		t.Fatal("expected nested atom path to be rejected")
 	}
 }
 
@@ -82,13 +104,13 @@ func TestContainerTrailingSlash(t *testing.T) {
 	}
 }
 
-// Scope-level container URIs (no leaf segment) must parse so that `tree` can
-// list everything under a category. treeRoot advertises these exact URIs.
 func TestParseScopeContainers(t *testing.T) {
 	cases := []string{
 		"rmb://entities/",
 		"rmb://preferences/",
 		"rmb://events/",
+		"rmb://turns/",
+		"rmb://atoms/",
 		"rmb://scenes/",
 	}
 	for _, in := range cases {

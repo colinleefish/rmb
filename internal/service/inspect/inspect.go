@@ -41,6 +41,16 @@ func (s *Service) Cat(ctx context.Context, raw string, w io.Writer) error {
 			return fmt.Errorf("scene id required; use `tree %s` to list scenes", u.String())
 		}
 		return s.catScene(ctx, u.Segments[0], w)
+	case uri.ScopeAtoms:
+		if len(u.Segments) == 0 {
+			return fmt.Errorf("atom id required; use `tree %s` to list atoms", u.String())
+		}
+		return s.catAtom(ctx, u.Segments[0], w)
+	case uri.ScopeTurns:
+		if len(u.Segments) == 0 {
+			return fmt.Errorf("turn id required; use `tree %s` to list turns", u.String())
+		}
+		return s.catTurn(ctx, u.Segments[0], w)
 	case uri.ScopeSessions:
 		return s.catSessionPath(ctx, u, w)
 	default:
@@ -61,7 +71,7 @@ func (s *Service) Tree(ctx context.Context, raw string, w io.Writer) error {
 	switch u.Scope {
 	case uri.ScopeSessions:
 		return s.treeSession(ctx, u, w)
-	case uri.ScopeScenes, uri.ScopePrefs, uri.ScopeEntities, uri.ScopeEvents, uri.ScopeProfile:
+	case uri.ScopeScenes, uri.ScopeAtoms, uri.ScopeTurns, uri.ScopePrefs, uri.ScopeEntities, uri.ScopeEvents, uri.ScopeProfile:
 		return s.treeScope(ctx, u, w)
 	default:
 		return fmt.Errorf("unsupported tree prefix %q", u.String())
@@ -82,6 +92,10 @@ func (s *Service) Meta(ctx context.Context, raw string, w io.Writer) error {
 		payload, err = s.metaMemory(ctx, u.String())
 	case uri.ScopeScenes:
 		payload, err = s.metaScene(ctx, u.String())
+	case uri.ScopeAtoms:
+		payload, err = s.metaAtom(ctx, u.String())
+	case uri.ScopeTurns:
+		payload, err = s.metaTurn(ctx, u.String())
 	case uri.ScopeSessions:
 		payload, err = s.metaSessionPath(ctx, u)
 	default:
@@ -105,6 +119,8 @@ func (s *Service) treeRoot(w io.Writer) error {
 	scopes := []string{
 		uri.BuildProfile(),
 		"rmb://sessions/",
+		"rmb://turns/",
+		"rmb://atoms/",
 		"rmb://scenes/",
 		"rmb://preferences/",
 		"rmb://entities/",
@@ -139,69 +155,23 @@ func (s *Service) catSessionPath(ctx context.Context, u uri.URI, w io.Writer) er
 		_, err := io.WriteString(w, text)
 		return err
 
-	case sessionPathTurn:
-		var session model.Session
-		if err := s.db.WithContext(ctx).
-			Where("session_key = ?", sessionKey).
-			Take(&session).Error; err != nil {
-			return fmt.Errorf("load session: %w", err)
-		}
-
-		var turns []model.SessionTurn
-		if err := s.db.WithContext(ctx).
-			Where("session_id = ?", session.ID).
-			Order("created_at asc, id asc").
-			Find(&turns).Error; err != nil {
-			return fmt.Errorf("load turns: %w", err)
-		}
-
-		idx, err := parseTurnIndex(u.Segments[2])
-		if err != nil {
-			return err
-		}
-		if idx < 0 || idx >= len(turns) {
-			return fmt.Errorf("turn index %d out of range (have %d turns)", idx, len(turns))
-		}
-		_, err = io.WriteString(w, turns[idx].MessagesJSONL)
-		return err
-
-	case sessionPathAtom:
-		target := uri.BuildSessionAtom(sessionKey, u.Segments[2])
-		var row model.Atom
-		if err := s.db.WithContext(ctx).Where("uri = ?", target).Take(&row).Error; err != nil {
-			return fmt.Errorf("load atom: %w", err)
-		}
-		_, err := io.WriteString(w, row.Content)
-		return err
-
 	default:
 		return fmt.Errorf("cat not supported for %q", u.String())
 	}
 }
 
-// sessionPathKind classifies the shape of a rmb://sessions/... URI so that
-// the cat dispatch (and any future reader) can route by intent rather than
-// re-deriving segment arithmetic at every call site.
 type sessionPathKind int
 
 const (
 	sessionPathUnknown sessionPathKind = iota
 	sessionPathSession
-	sessionPathTurn
-	sessionPathAtom
 )
 
 func classifySessionPath(u uri.URI) sessionPathKind {
-	switch {
-	case len(u.Segments) == 1:
+	if len(u.Segments) == 1 {
 		return sessionPathSession
-	case len(u.Segments) == 3 && u.Segments[1] == "turns":
-		return sessionPathTurn
-	case len(u.Segments) == 3 && u.Segments[1] == "atoms":
-		return sessionPathAtom
-	default:
-		return sessionPathUnknown
 	}
+	return sessionPathUnknown
 }
 
 func (s *Service) treeSession(ctx context.Context, u uri.URI, w io.Writer) error {
@@ -241,8 +211,8 @@ func (s *Service) treeSession(ctx context.Context, u uri.URI, w io.Writer) error
 			Find(&turns).Error; err != nil {
 			return fmt.Errorf("load turns: %w", err)
 		}
-		for i := range turns {
-			line := uri.BuildSessionTurn(sessionKey, i)
+		for _, turn := range turns {
+			line := uri.BuildTurn(turn.ID.String())
 			if _, err := fmt.Fprintln(w, line); err != nil {
 				return err
 			}
@@ -291,6 +261,36 @@ func (s *Service) treeScope(ctx context.Context, u uri.URI, w io.Writer) error {
 		}
 		for _, row := range rows {
 			if _, err := fmt.Fprintln(w, row.URI); err != nil {
+				return err
+			}
+		}
+		return nil
+	case uri.ScopeAtoms:
+		var rows []model.Atom
+		q := s.db.WithContext(ctx).Order("created_at asc").Limit(200)
+		if len(u.Segments) == 1 {
+			q = q.Where("uri = ?", uri.BuildAtom(u.Segments[0]))
+		}
+		if err := q.Find(&rows).Error; err != nil {
+			return fmt.Errorf("list atoms: %w", err)
+		}
+		for _, row := range rows {
+			if _, err := fmt.Fprintln(w, row.URI); err != nil {
+				return err
+			}
+		}
+		return nil
+	case uri.ScopeTurns:
+		var rows []model.SessionTurn
+		q := s.db.WithContext(ctx).Order("created_at asc").Limit(200)
+		if len(u.Segments) == 1 {
+			q = q.Where("id = ?", u.Segments[0])
+		}
+		if err := q.Find(&rows).Error; err != nil {
+			return fmt.Errorf("list turns: %w", err)
+		}
+		for _, row := range rows {
+			if _, err := fmt.Fprintln(w, uri.BuildTurn(row.ID.String())); err != nil {
 				return err
 			}
 		}
@@ -358,6 +358,25 @@ func (s *Service) correctionsBlock(ctx context.Context, target string) (string, 
 	return b.String(), nil
 }
 
+func (s *Service) catTurn(ctx context.Context, turnID string, w io.Writer) error {
+	var row model.SessionTurn
+	if err := s.db.WithContext(ctx).Where("id = ?", turnID).Take(&row).Error; err != nil {
+		return fmt.Errorf("load turn: %w", err)
+	}
+	_, err := io.WriteString(w, row.MessagesJSONL)
+	return err
+}
+
+func (s *Service) catAtom(ctx context.Context, atomID string, w io.Writer) error {
+	var row model.Atom
+	target := uri.BuildAtom(atomID)
+	if err := s.db.WithContext(ctx).Where("uri = ?", target).Take(&row).Error; err != nil {
+		return fmt.Errorf("load atom: %w", err)
+	}
+	_, err := io.WriteString(w, row.Content)
+	return err
+}
+
 func (s *Service) catScene(ctx context.Context, sceneID string, w io.Writer) error {
 	var row model.Scene
 	target := uri.BuildScene(sceneID)
@@ -415,6 +434,44 @@ func (s *Service) metaScene(ctx context.Context, target string) (map[string]any,
 	}, nil
 }
 
+func (s *Service) metaTurn(ctx context.Context, target string) (map[string]any, error) {
+	u, err := uri.Parse(target)
+	if err != nil {
+		return nil, err
+	}
+	if len(u.Segments) != 1 {
+		return nil, fmt.Errorf("turn id required")
+	}
+	var row model.SessionTurn
+	if err := s.db.WithContext(ctx).Where("id = ?", u.Segments[0]).Take(&row).Error; err != nil {
+		return nil, fmt.Errorf("load turn: %w", err)
+	}
+	return map[string]any{
+		"uri":        uri.BuildTurn(row.ID.String()),
+		"session_id": row.SessionID,
+		"created_at": row.CreatedAt,
+		"updated_at": row.UpdatedAt,
+	}, nil
+}
+
+func (s *Service) metaAtom(ctx context.Context, target string) (map[string]any, error) {
+	var row model.Atom
+	if err := s.db.WithContext(ctx).Where("uri = ?", target).Take(&row).Error; err != nil {
+		return nil, fmt.Errorf("load atom: %w", err)
+	}
+	return map[string]any{
+		"uri":             row.URI,
+		"session_id":      row.SessionID,
+		"category":        row.Category,
+		"priority":        row.Priority,
+		"scene_name":      row.SceneName,
+		"slug":            row.Slug,
+		"source_turn_ids": row.SourceTurnIDs,
+		"created_at":      row.CreatedAt,
+		"updated_at":      row.UpdatedAt,
+	}, nil
+}
+
 func (s *Service) metaSessionPath(ctx context.Context, u uri.URI) (map[string]any, error) {
 	if len(u.Segments) == 0 {
 		return nil, errors.New("session id required")
@@ -429,75 +486,16 @@ func (s *Service) metaSessionPath(ctx context.Context, u uri.URI) (map[string]an
 			return nil, fmt.Errorf("load session: %w", err)
 		}
 		return map[string]any{
-			"uri":           uri.BuildSession(sessionKey),
-			"session_key":   session.SessionKey,
-			"scope_key":     session.ScopeKey,
-			"title":         session.Title,
-			"status":        session.Status,
-			"abstract":      session.Abstract,
+			"uri":         uri.BuildSession(sessionKey),
+			"session_key": session.SessionKey,
+			"status":      session.Status,
+			"abstract":    session.Abstract,
 			"created_at":    session.CreatedAt,
 			"updated_at":    session.UpdatedAt,
 		}, nil
 	}
 
-	if len(u.Segments) == 3 && u.Segments[1] == "turns" {
-		var session model.Session
-		if err := s.db.WithContext(ctx).
-			Where("session_key = ?", sessionKey).
-			Take(&session).Error; err != nil {
-			return nil, fmt.Errorf("load session: %w", err)
-		}
-		var turns []model.SessionTurn
-		if err := s.db.WithContext(ctx).
-			Where("session_id = ?", session.ID).
-			Order("created_at asc, id asc").
-			Find(&turns).Error; err != nil {
-			return nil, fmt.Errorf("load turns: %w", err)
-		}
-		idx, err := parseTurnIndex(u.Segments[2])
-		if err != nil {
-			return nil, err
-		}
-		if idx < 0 || idx >= len(turns) {
-			return nil, fmt.Errorf("turn index %d out of range", idx)
-		}
-		turn := turns[idx]
-		return map[string]any{
-			"uri":        uri.BuildSessionTurn(sessionKey, idx),
-			"session_id": turn.SessionID,
-			"created_at": turn.CreatedAt,
-			"updated_at": turn.UpdatedAt,
-		}, nil
-	}
-
-	if len(u.Segments) == 3 && u.Segments[1] == "atoms" {
-		target := uri.BuildSessionAtom(sessionKey, u.Segments[2])
-		var row model.Atom
-		if err := s.db.WithContext(ctx).Where("uri = ?", target).Take(&row).Error; err != nil {
-			return nil, fmt.Errorf("load atom: %w", err)
-		}
-		return map[string]any{
-			"uri":              row.URI,
-			"session_id":       row.SessionID,
-			"category":         row.Category,
-			"priority":         row.Priority,
-			"scene_name":       row.SceneName,
-			"slug":             row.Slug,
-			"source_turn_ids":  row.SourceTurnIDs,
-			"created_at":       row.CreatedAt,
-			"updated_at":       row.UpdatedAt,
-		}, nil
-	}
-
 	return nil, fmt.Errorf("meta not supported for %q", u.String())
-}
-
-func parseTurnIndex(raw string) (int, error) {
-	var idx int
-	if _, err := fmt.Sscanf(raw, "%d", &idx); err != nil {
-		return 0, fmt.Errorf("invalid turn index %q", raw)
-	}
-	return idx, nil
 }
 
 // SortedSessionKeys is used in tests.

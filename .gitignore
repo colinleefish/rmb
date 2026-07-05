@@ -3,3 +3,6 @@ bin/
 *.log
 .env
 scripts/deploy.env
+docs/node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/

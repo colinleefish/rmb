@@ -17,8 +17,6 @@ type SessionUploadHandler struct {
 }
 
 type sessionUploadRequest struct {
-	ScopeKey  string                  `json:"scope_key"`
-	Title     string                  `json:"title"`
 	StartedAt string                  `json:"started_at"`
 	Messages  []sessionMessageRequest `json:"messages"`
 }
@@ -72,8 +70,6 @@ func (h *SessionUploadHandler) Upload(c *gin.Context) {
 
 	result, err := h.service.Upload(c.Request.Context(), session.UploadInput{
 		SessionID: sessionID,
-		ScopeKey:  req.ScopeKey,
-		Title:     req.Title,
 		StartedAt: startedAt,
 		Messages:  messages,
 	})

@@ -29,8 +29,7 @@ export function SessionsTable() {
       {
         id: "title",
         enableSorting: false,
-        accessorFn: (s) =>
-          s.title?.trim() || s.abstract?.trim() || s.session_key,
+        accessorFn: (s) => s.abstract?.trim() || s.session_key,
         header: "Session",
         cell: ({ row }) => {
           const s = row.original;
@@ -100,7 +99,7 @@ export function SessionsTable() {
     <ServerDataTable
       loadPage={pageSessions}
       columns={columns}
-      searchPlaceholder="Search title, summary, key…"
+      searchPlaceholder="Search summary, key…"
       emptyMessage="No sessions yet."
       initialSorting={[{ id: "updated", desc: true }]}
       onRowClick={(s) => router.push(sessionDetailHref(s.session_key))}
