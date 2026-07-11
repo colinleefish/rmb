@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/colinleefish/rmb/internal/buildinfo"
 	"gorm.io/gorm"
 )
 
@@ -11,6 +12,7 @@ type Status struct {
 	Status   string `json:"status"`
 	DB       string `json:"db"`
 	PGVector string `json:"pgvector"`
+	Commit   string `json:"commit"`
 }
 
 type Service struct {
@@ -36,5 +38,6 @@ func (s *Service) Check(ctx context.Context) (Status, error) {
 		Status:   "ok",
 		DB:       pgVersion,
 		PGVector: vectorVersion,
+		Commit:   buildinfo.Commit,
 	}, nil
 }

@@ -51,6 +51,7 @@ TAG_COMMIT="${REGISTRY}:${SLUG}-${SHA}"
 
 echo "==> Build and push ${TAG_BRANCH}, ${TAG_COMMIT} (linux/amd64)"
 docker buildx build --platform linux/amd64 \
+  --build-arg GIT_COMMIT="${SHA}" \
   -t "${TAG_BRANCH}" \
   -t "${TAG_COMMIT}" \
   --push .

@@ -8,6 +8,7 @@ import { Brain } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -92,6 +93,7 @@ function NavMenuItem({
 export function AppSidebar() {
   const pathname = usePathname();
   const [counts, setCounts] = useState<OverviewCounts | null>(null);
+  const [commit, setCommit] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -99,6 +101,23 @@ export function AppSidebar() {
       .then((o) => active && setCounts(o.counts))
       .catch(() => {
         /* badge counts are best-effort */
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/healthz")
+      .then((r) => r.json())
+      .then((d: { commit?: string }) => {
+        if (active && d.commit && d.commit !== "unknown") {
+          setCommit(d.commit);
+        }
+      })
+      .catch(() => {
+        /* build info is best-effort */
       });
     return () => {
       active = false;
@@ -143,6 +162,14 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
       </SidebarContent>
+
+      {commit && (
+        <SidebarFooter>
+          <p className="text-muted-foreground px-2 font-mono text-[10px] group-data-[collapsible=icon]:hidden">
+            {commit}
+          </p>
+        </SidebarFooter>
+      )}
 
       <SidebarRail />
     </Sidebar>

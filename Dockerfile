@@ -36,7 +36,10 @@ COPY . .
 RUN rm -rf internal/http/static/web
 COPY --from=ui /ui/out internal/http/static/web
 
-RUN go build -trimpath -ldflags="-s -w" -o /out/rmb ./cmd/rmb
+ARG GIT_COMMIT=unknown
+RUN go build -trimpath \
+  -ldflags="-s -w -X github.com/colinleefish/rmb/internal/buildinfo.Commit=${GIT_COMMIT}" \
+  -o /out/rmb ./cmd/rmb
 
 # --- Runtime stage ------------------------------------------------------------
 # Docker Hub base (reachable via the configured registry accelerator) instead of

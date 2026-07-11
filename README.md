@@ -255,7 +255,7 @@ listens for `agent_settled` and pipes a JSON payload to
 to the session (creating the session row on first upload). Response includes
 the `rmb://turns/<uuid>` URI for the new turn.
 
-`GET /healthz` — DB ping + `pg_extension` lookup for `vector`.
+`GET /healthz` — DB ping + `pg_extension` lookup for `vector`, plus `commit` (git SHA baked in at build time).
 
 ### Recall API
 
