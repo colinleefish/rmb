@@ -348,7 +348,7 @@ func usage() string {
 	return strings.TrimSpace(`
 Usage:
   rmb serve                Start HTTP server
-  rmb hook-submit --source=<cursor|cc|codex>
+  rmb hook-submit --source=<cursor|cc|codex|pi>
                               Receive an agent transcript hook payload on stdin
   rmb cat <uri>            Print body / messages_jsonl for a URI
   rmb tree <uri-prefix>    List child URIs under a prefix

@@ -9,8 +9,8 @@ background so they can be recalled across sessions.
 What works today:
 
 - HTTP API for uploading conversation turns (`POST /api/v1/sessions/:id/upload`).
-- `rmb hook-submit --source=<cursor|cc>` for ingesting hook payloads from
-  Cursor and Claude Code, with race-free user/assistant pairing.
+- `rmb hook-submit --source=<cursor|cc|codex|pi>` for ingesting hook payloads from
+  Cursor, Claude Code, Codex, and [Pi](https://pi.dev).
 - **T1 extraction worker** (Phase B): async atom extraction from turns into
   `atoms` (append-only; `RMB_EXTRACTION_ENABLED=true` by default).
 - **T2 scene worker** (Phase C): groups atoms into `scenes` and writes
@@ -25,7 +25,7 @@ Web observer UI at `/ui/` when the server is running (browse sessions, turns, at
 scenes, memories, pipeline state, and tasks).
 
 Production (`rmb.colinleefish.com`): Caddy in Docker terminates TLS and proxies to
-`rmb` on `:8080` — see `deploy/Caddyfile` and `docker-compose.prod.yml`.
+`rmb` on `:8080` — see `deploy/config/Caddyfile` and `deploy/docker-compose.yml`.
 
 **Roadmap:** [`docs/reference/plan.md`](docs/reference/plan.md) (Phase A–E). Run `make docs-dev` for the full docs site.
 
@@ -129,28 +129,28 @@ and before deploy. For test-only or PR prep, stop here.
 
 ### Deploy
 
-**Production:** https://rmb.colinleefish.com — app at `/opt/rmb`, Caddy + Docker
-(`docker-compose.prod.yml`).
+**Production:** https://rmb.colinleefish.com — runtime at `/app/rmb` (`.env`,
+`docker-compose.yml`, `config/Caddyfile`; no git checkout on the server).
 
 ```bash
 make deploy
 ```
 
-Runs CI, then SSHs to the server, `git reset --hard` to `main`, `docker compose … up -d --build`, and waits for `/healthz`.
+Runs CI, builds and pushes a Docker image as `<branch-slug>` and
+`<branch-slug>-<sha>` (production uses `:main`), SCPs runtime files to `/app/rmb`,
+pulls and force-recreates the `rmb` container, and waits for `/healthz`.
 
 **Prerequisites**
 
-- Latest `main` pushed to GitHub (server pulls via deploy key).
 - SSH access to `root@rmb.colinleefish.com` (default key: `~/.ssh/colinleefish_ed25519`).
 - Optional overrides: `scripts/deploy.env` (copy from `scripts/deploy.env.example`; gitignored).
-- HTTP(S) proxy on port **1080** (local machine and production server) for GitHub access from China.
+- HTTP(S) proxy on port **1080** on your machine when pushing to GitHub from China.
 
 **Proxy (China → GitHub)**
 
 | Where | When | Setting |
 |-------|------|---------|
 | **Your machine** | `git push` / `git fetch` to GitHub | `ssproxy` then git (sets `http(s)_proxy=http://127.0.0.1:1080`) |
-| **Production server** | `git fetch` during `make deploy` | `git -c https.proxy=http://localhost:1080 … fetch` (proxy not exported globally; `healthz` curl bypasses proxy) |
 
 Example push from China:
 
@@ -230,6 +230,12 @@ payloads exit non-zero.
 Design notes for the extraction logic (status filter on Cursor, race-free
 pairing on Claude Code) live in `internal/hook/cursor.go` and
 `internal/hook/claude.go` as package-level comments.
+
+### Pi
+
+Pi has no shell hooks. Install the extension from `integrations/pi/` — it
+listens for `agent_settled` and pipes a JSON payload to
+`rmb hook-submit --source=pi`. See [`integrations/pi/README.md`](integrations/pi/README.md).
 
 ## API
 

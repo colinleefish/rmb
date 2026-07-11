@@ -1,10 +1,12 @@
 # Production: rmb + Caddy (host network).
 # - rmb → PostgreSQL 18 on host :5432 (set RMB_DB_URL in .env)
 # - caddy → :80 / :443 → reverse_proxy 127.0.0.1:8080
+#
+# Deployed to /app/rmb on rmb.colinleefish.com (see docs/reference/deploy.md).
 
 services:
   rmb:
-    image: registry.cn-beijing.aliyuncs.com/colinleefish/rmb:3cd5dc0
+    image: registry.cn-beijing.aliyuncs.com/colinleefish/rmb:main
     container_name: rmb-app
     command: ["serve"]
     network_mode: host
@@ -19,7 +21,7 @@ services:
     container_name: rmb-caddy
     network_mode: host
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     restart: unless-stopped

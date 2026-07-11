@@ -17,31 +17,34 @@ Runs `go test ./...` and a compile check.
 
 ## Deploy to production
 
-**Target:** `rmb.colinleefish.com` — `/opt/rmb`, `docker compose -f docker-compose.prod.yml up -d --build`.
+**Target:** `rmb.colinleefish.com` — `/app/rmb`, `docker compose up -d`.
 
 **Prerequisites**
 
-- `main` pushed to GitHub (server pulls via deploy key).
+- Code changes committed and pushed to GitHub before deploy (deploy does not commit).
 - SSH key with access to `root@rmb.colinleefish.com` (default: `~/.ssh/colinleefish_ed25519`).
 - Optional overrides: copy `scripts/deploy.env.example` → `scripts/deploy.env`.
-- HTTP(S) proxy on port **1080** on both your machine and the server (GitHub is blocked from China).
+- HTTP(S) proxy on port **1080** on your machine when pushing to GitHub from China.
 
 ### Proxy (China → GitHub)
 
 | Where | When | Setting |
 |-------|------|---------|
 | **Your machine** | push / fetch to GitHub | `ssproxy && git push origin main` (`http(s)_proxy=http://127.0.0.1:1080`) |
-| **Production server** | `git fetch` in deploy | `https_proxy=http://localhost:1080` (set in `scripts/deploy.sh`) |
 
-Deploy uses `git -c http.proxy=… -c https.proxy=… fetch` (proxy scoped to Git only).
-The post-deploy `curl` to `127.0.0.1:8080/healthz` uses `--noproxy '*'` so it never goes through the proxy.
+The production server has **no git checkout**. Deploy syncs runtime files over SCP and
+pulls the new image from ACR. The post-deploy `curl` to `127.0.0.1:8080/healthz` uses
+`--noproxy '*'` so it never goes through a proxy.
 
 ```bash
 make deploy
 # or: ./scripts/deploy.sh
 ```
 
-Deploy runs CI first, then `git reset --hard` to `main` on the server and rebuilds containers. Waits for `/healthz`.
+Deploy runs CI, builds and pushes a Docker image tagged `<branch-slug>` and
+`<branch-slug>-<sha>` (e.g. `main` and `main-3cd5dc0`), then SCPs runtime files
+to the server, `docker compose pull rmb`, and `docker compose up -d --force-recreate rmb`.
+Production compose pins `:main`. Waits for `/healthz`.
 
 ## Agent workflow
 
@@ -54,8 +57,22 @@ When the user asks to **ship**, **deploy**, or **release** after code changes:
 
 For **test-only** or PR prep: stop after step 1.
 
+## Server layout
+
+Production is a minimal runtime directory — no source tree, no git repo:
+
+```txt
+/app/rmb/
+├── .env                 # secrets (server only; not in git)
+├── docker-compose.yml   # synced from deploy/docker-compose.yml
+└── config/
+    └── Caddyfile        # synced from deploy/config/Caddyfile
+```
+
+Containers: `rmb-app` (host network, `:8080`) and `rmb-caddy` (TLS on `:443`).
+
 ## Server notes
 
-- Postgres runs on the host (`:5432`); app config in `/opt/rmb/.env`.
-- Production compose: `docker-compose.prod.yml` + `deploy/Caddyfile`.
+- Postgres runs on the host (`:5432`); app config in `/app/rmb/.env`.
+- Repo source of truth for runtime files: `deploy/docker-compose.yml` + `deploy/config/Caddyfile`.
 - Do not commit secrets or `scripts/deploy.env`.
