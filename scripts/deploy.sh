@@ -62,12 +62,13 @@ fi
 # IdentitiesOnly=yes forces use of the configured key only, so a loaded
 # ssh-agent with many keys cannot trip the server's MaxAuthTries.
 SSH_OPTS=(-i "$DEPLOY_SSH_KEY_FILE" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes -p "$DEPLOY_PORT")
+SCP_OPTS=(-i "$DEPLOY_SSH_KEY_FILE" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes -P "$DEPLOY_PORT")
 REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
 
 echo "==> Sync runtime files to ${REMOTE}:${DEPLOY_PATH}"
 ssh "${SSH_OPTS[@]}" "${REMOTE}" "mkdir -p ${DEPLOY_PATH}/config"
-scp "${SSH_OPTS[@]}" "${COMPOSE_FILE}" "${REMOTE}:${DEPLOY_PATH}/docker-compose.yml"
-scp "${SSH_OPTS[@]}" deploy/config/Caddyfile "${REMOTE}:${DEPLOY_PATH}/config/Caddyfile"
+scp "${SCP_OPTS[@]}" "${COMPOSE_FILE}" "${REMOTE}:${DEPLOY_PATH}/docker-compose.yml"
+scp "${SCP_OPTS[@]}" deploy/config/Caddyfile "${REMOTE}:${DEPLOY_PATH}/config/Caddyfile"
 
 echo "==> Pull :main and recreate rmb on ${REMOTE}"
 ssh "${SSH_OPTS[@]}" "${REMOTE}" bash -s <<EOF
