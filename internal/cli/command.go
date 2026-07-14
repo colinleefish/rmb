@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -25,9 +26,8 @@ type Runner struct {
 }
 
 func (r Runner) Run(ctx context.Context, args []string) error {
-	if len(args) == 0 {
-		fmt.Fprintln(r.stdout(), usage())
-		return nil
+	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+		return r.printHelp(ctx)
 	}
 	if args[0] == "serve" {
 		return r.Serve(ctx)
@@ -38,20 +38,12 @@ func (r Runner) Run(ctx context.Context, args []string) error {
 		return r.runHookSubmit(ctx, args[1:])
 	case "cat", "tree", "meta":
 		return r.runInspect(ctx, args[0], args[1:])
-	case "t1":
-		return r.runBackfill(ctx, "t1", args[1:])
-	case "t2":
-		return r.runBackfill(ctx, "t2", args[1:])
-	case "t3":
-		return r.runBackfill(ctx, "t3", args[1:])
-	case "embed":
-		return r.runEmbed(ctx, args[1:])
 	case "search":
 		return r.runSearch(ctx, args[1:])
 	case "correction":
 		return r.runCorrection(ctx, args[1:])
-	case "store", "read", "list", "delete", "load-context":
-		return fmt.Errorf("%q command is planned but not implemented yet", args[0])
+	case "skill":
+		return r.runSkill(ctx, args[1:])
 	default:
 		return fmt.Errorf("unknown command %q\n\n%s", args[0], usage())
 	}
@@ -83,31 +75,10 @@ func (r Runner) runHookSubmit(ctx context.Context, args []string) error {
 	})
 }
 
-func (r Runner) runBackfill(ctx context.Context, tier string, args []string) error {
-	if len(args) == 0 || args[0] != "backfill" {
-		return fmt.Errorf("usage: rmb %s backfill [--session=<uuid>]", tier)
-	}
-	sessionKey := strings.TrimSpace(parseFlagValue(args[1:], "--session"))
-	cl, ok := client.Resolve()
-	if !ok {
-		return fmt.Errorf("%s backfill requires RMB_URL (the server owns the database)", tier)
-	}
-	n, err := cl.Backfill(ctx, tier, sessionKey)
-	if err != nil {
-		return err
-	}
-	if sessionKey != "" {
-		fmt.Fprintf(r.stdout(), "enqueued %s for session %s\n", tier, sessionKey)
-	} else {
-		fmt.Fprintf(r.stdout(), "enqueued %s for %d session(s)\n", tier, n)
-	}
-	return nil
-}
-
 func (r Runner) runSearch(ctx context.Context, args []string) error {
 	query := strings.TrimSpace(strings.Join(positionalArgs(args), " "))
 	if query == "" {
-		return fmt.Errorf("usage: rmb search \"<query>\" [--scope=memory,scene] [--k=<n>]")
+		return fmt.Errorf("usage: rmb search \"<query>\" [--scope=memory,scene,skill] [--k=<n>]")
 	}
 	k, err := parseK(args, 0) // 0 → server default (5)
 	if err != nil {
@@ -278,26 +249,6 @@ func parseK(args []string, def int) (int, error) {
 	return def, nil
 }
 
-func (r Runner) runEmbed(ctx context.Context, args []string) error {
-	if len(args) == 0 || args[0] != "status" {
-		return fmt.Errorf("usage: rmb embed status")
-	}
-	cl, ok := client.Resolve()
-	if !ok {
-		return fmt.Errorf("embed status requires RMB_URL (the server owns the database)")
-	}
-	rows, err := cl.EmbedStatus(ctx)
-	if err != nil {
-		return err
-	}
-	out := r.stdout()
-	for _, row := range rows {
-		fmt.Fprintf(out, "%-10s embedded=%d/%d pending=%d\n",
-			row.Tier, row.Embedded, row.Total, row.Pending)
-	}
-	return nil
-}
-
 func orDash(s string) string {
 	if strings.TrimSpace(s) == "" {
 		return "-"
@@ -347,34 +298,168 @@ func parseFlagValue(args []string, key string) string {
 func usage() string {
 	return strings.TrimSpace(`
 Usage:
-  rmb serve                Start HTTP server
-  rmb hook-submit --source=<cursor|cc|codex|pi>
-                              Receive an agent transcript hook payload on stdin
-  rmb cat <uri>            Print body / messages_jsonl for a URI
-  rmb tree <uri-prefix>    List child URIs under a prefix
-  rmb meta <uri>           Print row metadata as JSON
-  rmb t1 backfill          Enqueue T1 extraction for sessions with unprocessed turns
-                              Optional: --session=<uuid>
-  rmb t2 backfill          Enqueue T2 scene build for sessions with atoms
-                              Optional: --session=<uuid>
-  rmb t3 backfill          Enqueue T3 memory rollup for sessions with scenes
-                              Optional: --session=<uuid>
-  rmb embed status         Show embedding coverage across atoms/scenes/memories
-  rmb search "<query>"     Hybrid recall (vector + FTS) across memories and scenes
-                              --scope=memory,scene  Tiers to search (default: memory,scene)
-                                memory  Long-term distilled facts
-                                scene   Per-session conversation summaries
-                              --k=<n>              Number of results (default: 5)
-  rmb correction add <uri> [<uri>...] "statement"
-                              Attach a human correction that overrides memory at recall
-  rmb correction rm <correction-uri>
-                              Retire a specific correction (URI from meta/ls output)
-  rmb correction ls [<target-uri>]
-                              List active corrections (optionally for one target)
-  rmb store <uri>          Planned
-  rmb read <uri>           Planned
-  rmb list <prefix>        Planned
-  rmb delete <uri>         Planned
-  rmb load-context         Planned
+  rmb [global-options] <command> [options]
+
+Agent Help:
+  Profile, Agent guide, and Skills sections above load from the server when RMB_URL is set.
+  Do not run serve — recall uses the remote server. Search before asking the user
+  (default scope includes skills); then cat / meta / tree as needed. Never invent uris.
+
+Memory uris:
+  profile | entities/<slug> | preferences/<slug> | events/<slug> | scenes/<uuid> | skills/<name>
+
+Commands:
+  serve
+  hook-submit --source=<cursor|cc|codex|pi>
+  search "<query>" [--scope=memory|scene|skill|...] [--k=<n>]
+  skill ls
+  skill put <name> [--dir=<path>]     default dir: ~/.rmb/skills/<name>/
+  skill pull <name> [--out=<dir>]     default: ~/.rmb/skills/<name>/
+  skill pull --all [--out=<base>]     default base: ~/.rmb/skills/
+  tree <uri-prefix>
+  cat <uri>
+  meta <uri>
+  correction add <uri> [<uri>...] "<statement>"
+  correction rm <correction-uri>
+  correction ls [<target-uri>]
+  help
+
+  search [--scope=...]       only search accepts --scope; cat/tree/meta take a single uri
+  tree <uri-prefix>          browse: rmb://entities/, rmb://skills/, rmb://profile (not rmb://memories/)
+
+Environment:
+  RMB_URL           Remote server (required for recall commands). Env or ~/.rmb.conf / ~/.rmb/config.yaml.
+  RMB_USERNAME      Basic auth user (alias: USERNAME).
+  RMB_PASSWORD      Basic auth password (alias: PASSWORD).
+  RMB_CONFIG        Override client config path (absolute path only for recall CLI).
 `)
+}
+
+func (r Runner) printHelp(ctx context.Context) error {
+	out := r.stdout()
+	fmt.Fprintln(out, "rmb - long-term memory for AI agents")
+	fmt.Fprintln(out)
+
+	cl, ok := client.Resolve()
+	if !ok {
+		fmt.Fprintln(out, "(set RMB_URL to load Profile, Agent guide, and Skills from the server)")
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, usage())
+		return nil
+	}
+
+	bootstrap := []struct {
+		marker string
+		title  string
+		uri    string
+		blurb  string
+	}{
+		{
+			marker: "profile",
+			title:  "Profile",
+			uri:    uri.BuildProfile(),
+			blurb:  "Who the user is — stable identity, work context, and preferences.",
+		},
+		{
+			marker: "agent",
+			title:  "Agent guide",
+			uri:    uri.BuildAgent(),
+			blurb:  "How to use rmb — recall rules, URI shapes, and skill discovery.",
+		},
+	}
+	for _, section := range bootstrap {
+		printHelpSectionHeader(out, section.marker, section.title, section.uri, section.blurb)
+		body, err := cl.Inspect(ctx, "cat", section.uri)
+		if err != nil {
+			fmt.Fprintf(out, "  (unavailable: %v)\n", err)
+		} else if strings.TrimSpace(body) == "" {
+			fmt.Fprintln(out, "  (empty)")
+		} else {
+			fmt.Fprintln(out, strings.TrimRight(body, "\n"))
+		}
+		fmt.Fprintln(out)
+	}
+
+	if err := r.printSkillsCatalog(ctx, cl, out); err != nil {
+		printHelpSectionHeader(out, "skills", "Skills", uri.BuildSkill(""), "Curated playbooks. Read SKILL.md with rmb cat; run scripts via rmb skill pull.")
+		fmt.Fprintf(out, "  (unavailable: %v)\n", err)
+	}
+
+	printHelpUsageDivider(out)
+	fmt.Fprintln(out, usage())
+	return nil
+}
+
+const helpSectionRule = "════════════════════════════════════════"
+
+func printHelpSectionHeader(out io.Writer, marker, title, targetURI, blurb string) {
+	fmt.Fprintln(out, helpSectionRule)
+	if marker = strings.TrimSpace(marker); marker != "" {
+		fmt.Fprintf(out, "[%s]\n", marker)
+	}
+	fmt.Fprintf(out, "%s  %s\n", title, targetURI)
+	if blurb = strings.TrimSpace(blurb); blurb != "" {
+		fmt.Fprintln(out, blurb)
+	}
+	fmt.Fprintln(out)
+}
+
+func printHelpUsageDivider(out io.Writer) {
+	fmt.Fprintln(out, helpSectionRule)
+	fmt.Fprintln(out, "[usage]")
+	fmt.Fprintln(out)
+}
+
+const (
+	helpSkillCatalogLimit = 20
+	helpSkillDescMaxLen   = 120
+)
+
+func (r Runner) printSkillsCatalog(ctx context.Context, cl *client.Client, out io.Writer) error {
+	items, err := cl.ListSkills(ctx)
+	if err != nil {
+		return err
+	}
+	printHelpSectionHeader(out, "skills", "Skills", uri.BuildSkill(""), "Curated playbooks. Read SKILL.md with rmb cat; run scripts via rmb skill pull.")
+	if len(items) == 0 {
+		fmt.Fprintln(out, "  (no skills)")
+		return nil
+	}
+
+	sort.Slice(items, func(i, j int) bool { return items[i].URI < items[j].URI })
+
+	limit := len(items)
+	if limit > helpSkillCatalogLimit {
+		limit = helpSkillCatalogLimit
+	}
+	for i := 0; i < limit; i++ {
+		printHelpSkillEntry(out, items[i])
+		if i < limit-1 {
+			fmt.Fprintln(out)
+		}
+	}
+	if len(items) > helpSkillCatalogLimit {
+		fmt.Fprintf(out, "\n  ... %d more — rmb tree rmb://skills/\n", len(items)-helpSkillCatalogLimit)
+	}
+	return nil
+}
+
+func printHelpSkillEntry(out io.Writer, it client.SkillSummary) {
+	fmt.Fprintln(out, it.URI)
+	fmt.Fprintf(out, "  [desc] %s\n", formatHelpSkillDescription(it.Description))
+	if len(it.Tags) > 0 {
+		fmt.Fprintf(out, "  [tags] %s\n", strings.Join(it.Tags, ", "))
+	}
+}
+
+func formatHelpSkillDescription(desc string) string {
+	desc = strings.TrimSpace(desc)
+	if desc == "" {
+		return "(no description)"
+	}
+	desc = strings.Join(strings.Fields(strings.ReplaceAll(desc, "\n", " ")), " ")
+	if len(desc) <= helpSkillDescMaxLen {
+		return desc
+	}
+	return desc[:helpSkillDescMaxLen-1] + "…"
 }

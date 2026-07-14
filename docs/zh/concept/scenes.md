@@ -68,8 +68,6 @@ T2 Worker 在短延迟后运行（`delay_after_t1`，默认约 90s）：
 
 有新原子时，T2 会**按当前全部原子重建**该 session 的场景，而非按原子增量追加。URI 稳定，内容刷新。
 
-手动触发：在服务器上 `rmb t2 backfill`。
-
 ## 延伸阅读
 
 - [金字塔](/zh/concept/pyramid) — 场景在 T0–T3 中的位置

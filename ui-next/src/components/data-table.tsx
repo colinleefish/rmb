@@ -231,7 +231,7 @@ function TableShell<T>({
                   className={clickable ? "group/row cursor-pointer" : undefined}
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className="py-3 align-middle">
+                    <TableCell key={cell.id} className="py-4 align-top">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}

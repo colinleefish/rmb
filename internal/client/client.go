@@ -17,6 +17,7 @@ import (
 
 	"github.com/colinleefish/rmb/internal/config"
 	"github.com/colinleefish/rmb/internal/service/recall"
+	"github.com/colinleefish/rmb/internal/service/skill"
 )
 
 // Client calls a remote rmb HTTP API with optional basic auth.
@@ -59,81 +60,9 @@ func apiError(path string, status int, body []byte) error {
 // BaseURL reports the remote target (for user-facing messages).
 func (c *Client) BaseURL() string { return c.baseURL }
 
-// Backfill triggers a server-side pipeline backfill for the given tier ("t1",
-// "t2", or "t3"). When sessionKey is non-empty only that session is enqueued;
-// otherwise all eligible sessions are enqueued. Returns the number of sessions
-// that were enqueued.
-func (c *Client) Backfill(ctx context.Context, tier, sessionKey string) (int, error) {
-	endpoint := c.baseURL + "/api/v1/backfill/" + tier
-	if sessionKey != "" {
-		q := url.Values{}
-		q.Set("session", sessionKey)
-		endpoint += "?" + q.Encode()
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, nil)
-	if err != nil {
-		return 0, fmt.Errorf("build request: %w", err)
-	}
-	if c.username != "" || c.password != "" {
-		req.SetBasicAuth(c.username, c.password)
-	}
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return 0, fmt.Errorf("call backfill/%s: %w", tier, err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode != http.StatusOK {
-		return 0, apiError("backfill/"+tier, resp.StatusCode, body)
-	}
-	var out struct {
-		Enqueued int `json:"enqueued"`
-	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return 0, fmt.Errorf("decode response: %w", err)
-	}
-	return out.Enqueued, nil
-}
-
-// EmbedStatusItem is one tier's embedding coverage from the remote server.
-type EmbedStatusItem struct {
-	Tier     string `json:"tier"`
-	Total    int64  `json:"total"`
-	Embedded int64  `json:"embedded"`
-	Pending  int64  `json:"pending"`
-}
-
-// EmbedStatus fetches embedding coverage across atoms, scenes, and memories.
-func (c *Client) EmbedStatus(ctx context.Context) ([]EmbedStatusItem, error) {
-	endpoint := c.baseURL + "/api/v1/embed/status"
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, fmt.Errorf("build request: %w", err)
-	}
-	if c.username != "" || c.password != "" {
-		req.SetBasicAuth(c.username, c.password)
-	}
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("call embed/status: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode != http.StatusOK {
-		return nil, apiError("embed/status", resp.StatusCode, body)
-	}
-	var out struct {
-		Items []EmbedStatusItem `json:"items"`
-	}
-	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
-	}
-	return out.Items, nil
-}
-
 // Search runs hybrid recall against the remote server. scopes filters which
-// tiers are searched ("memory", "scene"); nil uses the server default
-// (memory,scene). k=0 uses the server default (5).
+// tiers are searched ("memory", "scene", "skill"); nil uses the server default
+// (memory,scene,skill). k=0 uses the server default (5).
 func (c *Client) Search(ctx context.Context, query string, k int, scopes []string) ([]recall.Match, error) {
 	return c.recall(ctx, "/api/v1/search", query, k, scopes)
 }
@@ -308,6 +237,126 @@ func (c *Client) RetractCorrection(ctx context.Context, correctionURI string) er
 		return apiError("retract", resp.StatusCode, body)
 	}
 	return nil
+}
+
+// SkillFile is one file in a skill bundle upload.
+type SkillFile struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
+}
+
+// SkillSummary is catalog metadata from the server.
+type SkillSummary struct {
+	URI         string   `json:"uri"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+}
+
+// PutSkillResult is returned after uploading a skill bundle.
+type PutSkillResult struct {
+	URI     string `json:"uri"`
+	Version int    `json:"version"`
+	NoOp    bool   `json:"no_op"`
+}
+
+// PutSkill uploads a skill bundle to the remote server.
+func (c *Client) PutSkill(ctx context.Context, slug string, files []SkillFile) (PutSkillResult, error) {
+	reqBody, err := json.Marshal(map[string]any{"files": files})
+	if err != nil {
+		return PutSkillResult{}, fmt.Errorf("encode request: %w", err)
+	}
+	endpoint := c.baseURL + "/api/v1/skills/" + url.PathEscape(slug)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut, endpoint, strings.NewReader(string(reqBody)))
+	if err != nil {
+		return PutSkillResult{}, fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return PutSkillResult{}, fmt.Errorf("call skills put: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if resp.StatusCode != http.StatusOK {
+		return PutSkillResult{}, apiError("skills put", resp.StatusCode, body)
+	}
+	var out PutSkillResult
+	if err := json.Unmarshal(body, &out); err != nil {
+		return PutSkillResult{}, fmt.Errorf("decode response: %w", err)
+	}
+	return out, nil
+}
+
+// ListSkills returns the active skill catalog.
+func (c *Client) ListSkills(ctx context.Context) ([]SkillSummary, error) {
+	endpoint := c.baseURL + "/api/v1/browse/skills?limit=500"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("call skills list: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if resp.StatusCode != http.StatusOK {
+		return nil, apiError("skills list", resp.StatusCode, body)
+	}
+	var out struct {
+		Items []struct {
+			URI         string   `json:"uri"`
+			Name        string   `json:"name"`
+			Description string   `json:"description"`
+			Tags        []string `json:"tags"`
+		} `json:"items"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	items := make([]SkillSummary, 0, len(out.Items))
+	for _, it := range out.Items {
+		items = append(items, SkillSummary{
+			URI:         it.URI,
+			Name:        it.Name,
+			Description: it.Description,
+			Tags:        append([]string(nil), it.Tags...),
+		})
+	}
+	return items, nil
+}
+
+// GetSkill fetches full skill detail including file contents.
+func (c *Client) GetSkill(ctx context.Context, slug string) (skill.Detail, error) {
+	endpoint := c.baseURL + "/api/v1/browse/skills/" + url.PathEscape(slug)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return skill.Detail{}, fmt.Errorf("build request: %w", err)
+	}
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return skill.Detail{}, fmt.Errorf("call skills get: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if resp.StatusCode != http.StatusOK {
+		return skill.Detail{}, apiError("skills get", resp.StatusCode, body)
+	}
+	var out skill.Detail
+	if err := json.Unmarshal(body, &out); err != nil {
+		return skill.Detail{}, fmt.Errorf("decode response: %w", err)
+	}
+	return out, nil
 }
 
 func firstNonEmpty(vals ...string) string {

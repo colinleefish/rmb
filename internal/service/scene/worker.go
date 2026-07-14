@@ -11,7 +11,6 @@ import (
 	"github.com/colinleefish/rmb/internal/db"
 	"github.com/colinleefish/rmb/internal/db/pgarray"
 	"github.com/colinleefish/rmb/internal/model"
-	"github.com/colinleefish/rmb/internal/service/session"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -327,58 +326,4 @@ func (w *Worker) markSessionFailed(ctx context.Context, sessionID uuid.UUID, cau
 		return nil
 	})
 	return cause
-}
-
-// EnqueueSession marks a session for T2 (used by backfill CLI).
-func EnqueueSession(ctx context.Context, gdb *gorm.DB, sessionID uuid.UUID) error {
-	return gdb.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var ps model.PipelineState
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("session_id = ?", sessionID).
-			Take(&ps).Error
-		if err == gorm.ErrRecordNotFound {
-			return fmt.Errorf("pipeline_state not found for session %s", sessionID)
-		}
-		if err != nil {
-			return err
-		}
-		return tx.Model(&ps).Updates(map[string]any{
-			"t2_status": model.PipelineStatusPending,
-		}).Error
-	})
-}
-
-// EnqueueSessionByKey resolves session_key to id and enqueues T2.
-func EnqueueSessionByKey(ctx context.Context, gdb *gorm.DB, sessionKey string) error {
-	sessionKey, err := session.ValidateSessionKey(sessionKey)
-	if err != nil {
-		return err
-	}
-	var s model.Session
-	if err := gdb.WithContext(ctx).Where("session_key = ?", sessionKey).Take(&s).Error; err != nil {
-		return fmt.Errorf("load session: %w", err)
-	}
-	return EnqueueSession(ctx, gdb, s.ID)
-}
-
-// EnqueueAllSessionsWithAtoms enqueues T2 for every session that has atoms.
-func EnqueueAllSessionsWithAtoms(ctx context.Context, gdb *gorm.DB) (int, error) {
-	type row struct {
-		SessionID uuid.UUID
-	}
-	var rows []row
-	if err := gdb.WithContext(ctx).Raw(`
-		SELECT DISTINCT a.session_id
-		FROM atoms a
-		JOIN pipeline_state ps ON ps.session_id = a.session_id
-		WHERE ps.t1_status != 'running'
-	`).Scan(&rows).Error; err != nil {
-		return 0, fmt.Errorf("list sessions with atoms: %w", err)
-	}
-	for _, row := range rows {
-		if err := EnqueueSession(ctx, gdb, row.SessionID); err != nil {
-			return 0, err
-		}
-	}
-	return len(rows), nil
 }

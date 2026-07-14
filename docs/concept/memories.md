@@ -96,7 +96,6 @@ Atoms carry `priority` (0–100, or `-1` for "never drop"):
 
 ```bash
 rmb search "jenkins home directory"    # memories + scenes
-rmb find "postgres storage decision"   # memories only (vector)
 rmb cat rmb://entities/jenkins
 ```
 

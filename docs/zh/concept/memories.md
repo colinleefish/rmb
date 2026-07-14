@@ -89,7 +89,6 @@ rmb correction add rmb://entities/jenkins "Home is /var/lib/jenkins, not /opt"
 
 ```bash
 rmb search "jenkins home directory"
-rmb find "postgres storage decision"
 rmb cat rmb://entities/jenkins
 ```
 

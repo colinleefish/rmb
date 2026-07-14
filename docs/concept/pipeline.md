@@ -74,10 +74,9 @@ Embed worker fills `vector(1024)` on atoms, scenes, and active memories when `ab
 
 | Command | What it searches |
 |---------|------------------|
-| `rmb find` | Vector over memory abstracts |
 | `rmb search` | Hybrid vector + FTS over memories **and** scenes |
 
-CLI is dual-mode: remote via `RMB_URL` (HTTP to production) or local via `RMB_DB_URL`.
+The CLI calls the server over HTTP when `RMB_URL` is configured.
 
 ## Coordination
 

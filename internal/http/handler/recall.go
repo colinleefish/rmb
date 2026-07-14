@@ -40,8 +40,8 @@ func (h *RecallHandler) embedQuery(ctx context.Context, query string) (pgarray.V
 	return pgarray.Vector(vecs[0]), nil
 }
 
-// Search handles GET /api/v1/search?q=<query>[&scope=memory,scene][&k=<n>].
-// scope defaults to "memory,scene"; k defaults to 5.
+// Search handles GET /api/v1/search?q=<query>[&scope=memory,scene,skill][&k=<n>].
+// scope defaults to "memory,scene,skill"; k defaults to 5.
 func (h *RecallHandler) Search(c *gin.Context) {
 	if h.embed == nil {
 		httperr.JSON(c, http.StatusServiceUnavailable, "embeddings not configured")
@@ -68,8 +68,8 @@ func (h *RecallHandler) Search(c *gin.Context) {
 	if raw := strings.TrimSpace(c.Query("scope")); raw != "" {
 		for _, s := range strings.Split(raw, ",") {
 			s = strings.TrimSpace(s)
-			if s != "memory" && s != "scene" {
-				httperr.JSON(c, http.StatusBadRequest, "scope must be memory and/or scene")
+			if s != "memory" && s != "scene" && s != "skill" {
+				httperr.JSON(c, http.StatusBadRequest, "scope must be memory, scene, and/or skill")
 				return
 			}
 			scopes = append(scopes, s)

@@ -19,10 +19,13 @@ const (
 	ScopeAtoms       = "atoms"
 	ScopeScenes      = "scenes"
 	ScopeProfile     = "profile"
+	ScopeAgent       = "agent"
 	ScopePrefs       = "preferences"
 	ScopeEntities    = "entities"
 	ScopeEvents      = "events"
+	ScopeSkills      = "skills"
 	ScopeCorrections = "corrections"
+	MaxSkillPathDepth = 8
 )
 
 var (
@@ -30,15 +33,18 @@ var (
 	uuidSegment   = regexp.MustCompile(
 		`(?i)^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`,
 	)
+	skillNamePattern = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`)
 	reservedSlug = map[string]struct{}{
 		ScopeSessions:    {},
 		ScopeTurns:       {},
 		ScopeAtoms:       {},
 		ScopeScenes:      {},
 		ScopeProfile:     {},
+		ScopeAgent:       {},
 		ScopePrefs:       {},
 		ScopeEntities:    {},
 		ScopeEvents:      {},
+		ScopeSkills:      {},
 		ScopeCorrections: {},
 	}
 )
@@ -166,12 +172,49 @@ func BuildProfile() string {
 	return Scheme + "://" + ScopeProfile
 }
 
+func BuildAgent() string {
+	return Scheme + "://" + ScopeAgent
+}
+
 func BuildMemory(category, segment string) string {
 	return Scheme + "://" + category + "/" + segment
 }
 
 func BuildCorrection(id string) string {
 	return Scheme + "://" + ScopeCorrections + "/" + strings.ToLower(id)
+}
+
+// BuildSkill returns rmb://skills/<name> with optional path segments.
+func BuildSkill(name string, parts ...string) string {
+	var b strings.Builder
+	b.WriteString(Scheme)
+	b.WriteString("://")
+	b.WriteString(ScopeSkills)
+	b.WriteByte('/')
+	b.WriteString(name)
+	for _, p := range parts {
+		b.WriteByte('/')
+		b.WriteString(p)
+	}
+	return b.String()
+}
+
+// ValidateSkillName checks Agent Skills name constraints (lowercase [a-z0-9-], 1-64 chars).
+func ValidateSkillName(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("%w: empty skill name", ErrInvalidURI)
+	}
+	if len(name) > 64 {
+		return fmt.Errorf("%w: skill name too long", ErrInvalidURI)
+	}
+	if strings.Contains(name, "--") {
+		return fmt.Errorf("%w: skill name cannot contain consecutive hyphens", ErrInvalidURI)
+	}
+	if !skillNamePattern.MatchString(name) {
+		return fmt.Errorf("%w: invalid skill name %q", ErrInvalidURI, name)
+	}
+	return nil
 }
 
 // ParseAtomID extracts the atom key UUID from a full atom URI (rmb://atoms/<id>)
@@ -282,7 +325,7 @@ func splitSegments(path string) []string {
 
 func validateScope(scope string) error {
 	switch scope {
-	case ScopeSessions, ScopeTurns, ScopeAtoms, ScopeScenes, ScopeProfile, ScopePrefs, ScopeEntities, ScopeEvents, ScopeCorrections:
+	case ScopeSessions, ScopeTurns, ScopeAtoms, ScopeScenes, ScopeProfile, ScopeAgent, ScopePrefs, ScopeEntities, ScopeEvents, ScopeSkills, ScopeCorrections:
 		return nil
 	default:
 		return fmt.Errorf("%w: unknown scope %q", ErrInvalidURI, scope)
@@ -304,6 +347,10 @@ func validateShape(scope string, segments []string) error {
 	case ScopeProfile:
 		if len(segments) != 0 {
 			return fmt.Errorf("%w: profile is a singleton", ErrInvalidURI)
+		}
+	case ScopeAgent:
+		if len(segments) != 0 {
+			return fmt.Errorf("%w: agent is a singleton", ErrInvalidURI)
 		}
 	case ScopeSessions:
 		if len(segments) == 0 {
@@ -360,6 +407,16 @@ func validateShape(scope string, segments []string) error {
 		}
 		if len(segments) != 1 {
 			return fmt.Errorf("%w: %s requires one segment", ErrInvalidURI, scope)
+		}
+	case ScopeSkills:
+		if len(segments) == 0 {
+			return nil
+		}
+		if err := ValidateSkillName(segments[0]); err != nil {
+			return err
+		}
+		if len(segments)-1 > MaxSkillPathDepth {
+			return fmt.Errorf("%w: skill path too deep", ErrInvalidURI)
 		}
 	}
 	return nil

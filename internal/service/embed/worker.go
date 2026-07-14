@@ -72,6 +72,7 @@ func (w *Worker) runOneCycle(ctx context.Context) {
 		{"atoms", w.embedAtoms},
 		{"scenes", w.embedScenes},
 		{"memories", w.embedMemories},
+		{"skills", w.embedSkills},
 	} {
 		n, err := tier.fn(ctx)
 		if err != nil {
@@ -135,6 +136,22 @@ func (w *Worker) embedMemories(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("select memories: %w", err)
 	}
 	return w.embedAndStore(ctx, "memories", "id", rows)
+}
+
+func (w *Worker) embedSkills(ctx context.Context) (int, error) {
+	var rows []embedRow
+	if err := w.db.WithContext(ctx).Raw(`
+		SELECT s.id::text AS key,
+		       COALESCE(s.name, '') || E'\n' || COALESCE(s.description, '') || E'\n' || COALESCE(f.content, '') AS text
+		FROM skills s
+		LEFT JOIN skill_files f ON f.skill_id = s.id AND f.rel_path = 'SKILL.md'
+		WHERE s.embedding IS NULL AND s.superseded_at IS NULL
+		ORDER BY s.created_at
+		LIMIT ?
+	`, w.batchSize()).Scan(&rows).Error; err != nil {
+		return 0, fmt.Errorf("select skills: %w", err)
+	}
+	return w.embedAndStore(ctx, "skills", "id", rows)
 }
 
 func (w *Worker) embedAndStore(ctx context.Context, table, keyCol string, rows []embedRow) (int, error) {

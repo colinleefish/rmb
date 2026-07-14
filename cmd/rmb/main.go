@@ -146,10 +146,10 @@ func main() {
 
 			inspectHandler := handler.NewInspectHandler(inspect.NewService(database))
 			correctionHandler := handler.NewCorrectionHandler(correction.NewService(database), database)
-			backfillHandler := handler.NewBackfillHandler(database)
-			embedHandler := handler.NewEmbedHandler(database)
+			agentMemoryHandler := handler.NewAgentMemoryHandler(database)
+			skillHandler := handler.NewSkillHandler(database, cfg.Server.MaxUploadBytes)
 
-			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler, inspectHandler, correctionHandler, backfillHandler, embedHandler)
+			httpRouter, err := router.New(cfg, healthHandler, sessionUploadHandler, browseHandler, recallHandler, inspectHandler, correctionHandler, agentMemoryHandler, skillHandler)
 			if err != nil {
 				return fmt.Errorf("build router: %w", err)
 			}

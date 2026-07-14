@@ -1,5 +1,6 @@
 import type { SessionDetailTab } from "@/components/sessions/session-detail-types";
 import { sessionDetailHref, sessionKeyFromSearchParams } from "@/lib/session-routes";
+import { skillDetailHref, skillNameFromSearchParams } from "@/lib/skill-routes";
 
 export interface BreadcrumbItem {
   label: string;
@@ -11,6 +12,8 @@ const STATIC_ROUTES: Record<string, string> = {
   "/sessions": "Sessions",
   "/sessions/detail": "Sessions",
   "/memories": "Memories",
+  "/skills": "Skills",
+  "/skills/detail": "Skills",
   "/corrections": "Corrections",
   "/tasks": "Tasks",
 };
@@ -61,6 +64,20 @@ export function buildBreadcrumbs(
       return [{ label: "Sessions", href: "/sessions" }, { label: "Session" }];
     }
     return sessionDetailCrumbs(key, searchParams, dynamicTitle);
+  }
+
+  if (pathname === "/skills/detail") {
+    const name = skillNameFromSearchParams(searchParams);
+    if (!name) {
+      return [{ label: "Skills", href: "/skills" }, { label: "Skill" }];
+    }
+    return [
+      { label: "Skills", href: "/skills" },
+      {
+        label: dynamicTitle ?? name,
+        href: skillDetailHref(name),
+      },
+    ];
   }
 
   const staticLabel = STATIC_ROUTES[pathname];

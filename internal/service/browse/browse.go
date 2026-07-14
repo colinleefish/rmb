@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/colinleefish/rmb/internal/model"
+	"github.com/colinleefish/rmb/internal/service/skill"
 	"github.com/colinleefish/rmb/internal/uri"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -103,6 +104,12 @@ var (
 		allowed:    map[string]string{"updated": "updated_at", "created": "created_at", "status": "status"},
 		defaultKey: "updated",
 	}
+
+	skillSearchCols = []string{"name", "description", "slug", "uri"}
+	skillSort       = sortColumns{
+		allowed:    map[string]string{"updated": "updated_at", "name": "name", "version": "version"},
+		defaultKey: "updated",
+	}
 )
 
 type Overview struct {
@@ -115,6 +122,7 @@ type Overview struct {
 		PipelineStates int64 `json:"pipeline_states"`
 		Tasks          int64 `json:"tasks"`
 		Corrections    int64 `json:"corrections"`
+		Skills         int64 `json:"skills"`
 	} `json:"counts"`
 }
 
@@ -194,6 +202,12 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 		Where("superseded_at IS NULL").
 		Count(&out.Counts.Corrections).Error; err != nil {
 		return Overview{}, fmt.Errorf("count corrections: %w", err)
+	}
+	if err := s.db.WithContext(ctx).
+		Table("skills").
+		Where("superseded_at IS NULL").
+		Count(&out.Counts.Skills).Error; err != nil {
+		return Overview{}, fmt.Errorf("count skills: %w", err)
 	}
 	return out, nil
 }
@@ -578,3 +592,51 @@ func turnToRow(sessionKey string, idx int, turn model.SessionTurn) TurnRow {
 }
 
 const timeRFC3339 = "2006-01-02T15:04:05Z07:00"
+
+// SkillRow is a catalog entry for the skills browse table.
+type SkillRow struct {
+	Slug        string   `json:"slug"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	URI         string   `json:"uri"`
+	Version     int      `json:"version"`
+	UpdatedAt   string   `json:"updated_at"`
+}
+
+// ListSkills returns active skills for the UI catalog.
+func (s *Service) ListSkills(ctx context.Context, p ListParams) ([]SkillRow, int64, error) {
+	base := func() *gorm.DB {
+		q := s.db.WithContext(ctx).Model(&model.Skill{}).Where("superseded_at IS NULL")
+		return applySearch(q, p.Query, skillSearchCols)
+	}
+	var total int64
+	if err := base().Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("count skills: %w", err)
+	}
+	var rows []model.Skill
+	if err := base().
+		Order(skillSort.clause(p.Sort, p.Order)).
+		Limit(p.Limit).Offset(p.Offset).
+		Find(&rows).Error; err != nil {
+		return nil, 0, fmt.Errorf("list skills: %w", err)
+	}
+	out := make([]SkillRow, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, SkillRow{
+			Slug:        r.Slug,
+			Name:        r.Name,
+			Description: r.Description,
+			Tags:        append([]string(nil), []string(r.Tags)...),
+			URI:         r.URI,
+			Version:     r.Version,
+			UpdatedAt:   r.UpdatedAt.UTC().Format(timeRFC3339),
+		})
+	}
+	return out, total, nil
+}
+
+// GetSkill returns full skill detail for the UI.
+func (s *Service) GetSkill(ctx context.Context, slug string) (skill.Detail, error) {
+	return skill.GetDetail(ctx, s.db, slug)
+}

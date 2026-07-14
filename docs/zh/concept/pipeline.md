@@ -53,10 +53,9 @@ Embed Worker 在 `abstract` 变化时为原子、场景、活跃记忆填充 `ve
 
 | 命令 | 检索范围 |
 |------|----------|
-| `rmb find` | 记忆 abstract 向量 |
 | `rmb search` | 记忆 + 场景混合（向量 + FTS） |
 
-CLI 双模式：远程 `RMB_URL` 或本地 `RMB_DB_URL`。
+CLI 通过 `RMB_URL` 调用服务端 HTTP API。
 
 ## 协调
 

@@ -131,6 +131,30 @@ func (h *BrowseHandler) ListTasks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
 }
 
+func (h *BrowseHandler) ListSkills(c *gin.Context) {
+	p := parseListParams(c)
+	rows, total, err := h.svc.ListSkills(c.Request.Context(), p)
+	if err != nil {
+		httperr.Write(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"items": rows, "total": total, "limit": p.Limit, "offset": p.Offset})
+}
+
+func (h *BrowseHandler) GetSkill(c *gin.Context) {
+	slug := c.Param("slug")
+	detail, err := h.svc.GetSkill(c.Request.Context(), slug)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			httperr.JSON(c, http.StatusNotFound, "skill not found")
+			return
+		}
+		httperr.Write(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, detail)
+}
+
 func parsePositiveInt(raw string) (int, error) {
 	return strconv.Atoi(raw)
 }

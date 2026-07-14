@@ -14,7 +14,7 @@ Before asking the user a question, or when a task references something that
 likely happened before (a server, project, credential location, past decision,
 preference), **search your memory first**:
 
-- The user mentions a host/project/tool by name → `rmb find` or `search` it.
+- The user mentions a host/project/tool by name → `rmb search` it.
 - You need a path, port, config location, or prior decision → recall it.
 - The user says "like last time" / "the usual" / "where we left off" → recall it.
 
@@ -26,13 +26,12 @@ If recall returns nothing relevant, then ask the user.
 
 ```
 rmb search "<natural language query>"      # hybrid: meanings + keywords, across memories and scenes
-rmb find "<natural language query>"         # vector-only: closest long-term memories
 ```
 
-- Prefer `search` for most questions — it blends semantic + keyword matching and
-  covers both distilled memories and per-session scenes.
-- Use `find` when you want only the tightest long-term facts.
-- Add `--k=<n>` to control result count (default: find 5, search 8).
+- `search` blends semantic + keyword matching and covers both distilled
+  memories and per-session scenes.
+- Add `--scope=memory` or `--scope=scene` to limit tiers (default: both).
+- Add `--k=<n>` to control result count (default: 5).
 
 Output is a ranked list:
 
@@ -107,6 +106,6 @@ rmb tree rmb://entities/
 - Treat `memories` as the user's established truth; if a memory conflicts with a
   fresh statement from the user, prefer the user and note the discrepancy.
 - Quote the `uri` when you rely on a memory, so the user can verify it.
-- Do not fabricate URIs; only use ones returned by `search`/`find`/`tree`.
+- Do not fabricate URIs; only use ones returned by `search`/`tree`.
 - These commands are read-only recall. Memory is written automatically from
   conversations by background workers — you do not need to store anything.

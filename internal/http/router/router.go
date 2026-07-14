@@ -19,8 +19,8 @@ func New(
 	recallHandler *handler.RecallHandler,
 	inspectHandler *handler.InspectHandler,
 	correctionHandler *handler.CorrectionHandler,
-	backfillHandler *handler.BackfillHandler,
-	embedHandler *handler.EmbedHandler,
+	agentMemoryHandler *handler.AgentMemoryHandler,
+	skillHandler *handler.SkillHandler,
 ) (*gin.Engine, error) {
 	r := gin.Default()
 
@@ -61,6 +61,8 @@ func New(
 		api.GET("/atoms", browseHandler.ListAtoms)
 		api.GET("/scenes", browseHandler.ListScenes)
 		api.GET("/memories", browseHandler.ListMemories)
+		api.GET("/skills", browseHandler.ListSkills)
+		api.GET("/skills/:slug", browseHandler.GetSkill)
 		api.GET("/pipeline-state", browseHandler.ListPipelineStates)
 		api.GET("/tasks", browseHandler.ListTasks)
 	}
@@ -81,14 +83,12 @@ func New(
 		protected.DELETE("/api/v1/corrections", correctionHandler.Retract)
 	}
 
-	if backfillHandler != nil {
-		protected.POST("/api/v1/backfill/t1", backfillHandler.T1)
-		protected.POST("/api/v1/backfill/t2", backfillHandler.T2)
-		protected.POST("/api/v1/backfill/t3", backfillHandler.T3)
+	if agentMemoryHandler != nil {
+		protected.PUT("/api/v1/memories/agent", agentMemoryHandler.Put)
 	}
 
-	if embedHandler != nil {
-		protected.GET("/api/v1/embed/status", embedHandler.Status)
+	if skillHandler != nil {
+		protected.PUT("/api/v1/skills/:slug", skillHandler.Put)
 	}
 
 	return r, nil

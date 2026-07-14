@@ -8,6 +8,8 @@ import type {
   SessionDetail,
   SessionRow,
   TaskModel,
+  SkillDetail,
+  SkillRow,
 } from "@/lib/types";
 
 // Proxied to the Go backend via the App Router handler at app/api/v1/[...path]/route.ts.
@@ -58,6 +60,10 @@ export function getSession(sessionKey: string): Promise<SessionDetail> {
   return apiGet<SessionDetail>(
     `/browse/sessions/${encodeURIComponent(sessionKey)}`,
   );
+}
+
+export function getSkill(name: string): Promise<SkillDetail> {
+  return apiGet<SkillDetail>(`/browse/skills/${encodeURIComponent(name)}`);
 }
 
 // Server-side pagination contract for the browse list endpoints.
@@ -119,6 +125,8 @@ export const pageScenes = (req: PageRequest) =>
   listPage<SceneModel>("/browse/scenes", req);
 export const pageMemories = (req: PageRequest) =>
   listPage<MemoryModel>("/browse/memories", req);
+export const pageSkills = (req: PageRequest) =>
+  listPage<SkillRow>("/browse/skills", req);
 export const pageTasks = (req: PageRequest) =>
   listPage<TaskModel>("/browse/tasks", req);
 

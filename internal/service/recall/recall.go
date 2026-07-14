@@ -147,14 +147,69 @@ func VectorScenes(ctx context.Context, db *gorm.DB, queryVec pgarray.Vector, k i
 	return out, nil
 }
 
+// FTSSkills runs full-text search over active skills (metadata + SKILL.md body).
+func FTSSkills(ctx context.Context, db *gorm.DB, query string, k int) ([]Match, error) {
+	if k <= 0 {
+		k = 5
+	}
+	var out []Match
+	if err := db.WithContext(ctx).Raw(`
+		SELECT s.uri,
+		       'skills' AS tier,
+		       ts_rank(
+		         to_tsvector('english',
+		           coalesce(s.name, '') || ' ' || coalesce(s.description, '') || ' ' || coalesce(f.content, '')
+		         ),
+		         websearch_to_tsquery('english', ?)
+		       ) AS rank,
+		       left(coalesce(s.description, s.name, ''), 160) AS snippet
+		FROM skills s
+		LEFT JOIN skill_files f ON f.skill_id = s.id AND f.rel_path = 'SKILL.md'
+		WHERE s.superseded_at IS NULL
+		  AND to_tsvector('english',
+		        coalesce(s.name, '') || ' ' || coalesce(s.description, '') || ' ' || coalesce(f.content, '')
+		      ) @@ websearch_to_tsquery('english', ?)
+		ORDER BY rank DESC
+		LIMIT ?
+	`, query, query, k).Scan(&out).Error; err != nil {
+		return nil, fmt.Errorf("fts skills: %w", err)
+	}
+	return out, nil
+}
+
+// VectorSkills returns active skills nearest to queryVec by cosine distance.
+func VectorSkills(ctx context.Context, db *gorm.DB, queryVec pgarray.Vector, k int) ([]Match, error) {
+	if k <= 0 {
+		k = 5
+	}
+	lit, err := queryVec.Value()
+	if err != nil {
+		return nil, fmt.Errorf("encode query vector: %w", err)
+	}
+	var out []Match
+	if err := db.WithContext(ctx).Raw(`
+		SELECT uri,
+		       'skills' AS tier,
+		       1 - (embedding <=> ?::vector) AS rank,
+		       left(coalesce(description, name, ''), 160) AS snippet
+		FROM skills
+		WHERE superseded_at IS NULL AND embedding IS NOT NULL
+		ORDER BY embedding <=> ?::vector
+		LIMIT ?
+	`, lit, lit, k).Scan(&out).Error; err != nil {
+		return nil, fmt.Errorf("vector skills: %w", err)
+	}
+	return out, nil
+}
+
 // QueryEmbedder embeds a single query string for vector recall.
 type QueryEmbedder func(ctx context.Context, query string) (pgarray.Vector, error)
 
 // DefaultScopes is the tier set used when no --scope flag is provided.
-var DefaultScopes = []string{"memory", "scene"}
+var DefaultScopes = []string{"memory", "scene", "skill"}
 
 // Search runs hybrid recall (vector + FTS, fused with RRF) over the requested
-// scopes. Valid scope values are "memory" and "scene"; passing nil or an empty
+// scopes. Valid scope values are "memory", "scene", and "skill"; passing nil or an empty
 // slice uses DefaultScopes. Default k is 5.
 func Search(ctx context.Context, db *gorm.DB, embed QueryEmbedder, query string, k int, scopes []string) ([]Match, error) {
 	if k <= 0 {
@@ -164,13 +219,15 @@ func Search(ctx context.Context, db *gorm.DB, embed QueryEmbedder, query string,
 		scopes = DefaultScopes
 	}
 
-	wantMemory, wantScene := false, false
+	wantMemory, wantScene, wantSkill := false, false, false
 	for _, s := range scopes {
 		switch s {
 		case "memory":
 			wantMemory = true
 		case "scene":
 			wantScene = true
+		case "skill":
+			wantSkill = true
 		}
 	}
 
@@ -203,6 +260,17 @@ func Search(ctx context.Context, db *gorm.DB, embed QueryEmbedder, query string,
 			return nil, err
 		}
 		lists = append(lists, vecScene, ftsScene)
+	}
+	if wantSkill {
+		vecSkill, err := VectorSkills(ctx, db, vec, perList)
+		if err != nil {
+			return nil, err
+		}
+		ftsSkill, err := FTSSkills(ctx, db, query, perList)
+		if err != nil {
+			return nil, err
+		}
+		lists = append(lists, vecSkill, ftsSkill)
 	}
 
 	fused := FuseRRF(lists, 60, perList)

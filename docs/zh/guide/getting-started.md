@@ -89,7 +89,7 @@ RMB_PASS=...
 
 1. 进行一段简短 Agent 对话
 2. 打开 `/ui/` → Sessions → 查看 turns
-3. 等待 T1（或服务器上 `rmb t1 backfill`）
+3. 等待 T1 后台 worker 提取 atoms；T2 延迟后生成 scenes
 4. 出现 atoms；T2 延迟后出现 scenes
 
 ## 召回

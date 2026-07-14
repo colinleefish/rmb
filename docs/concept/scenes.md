@@ -68,8 +68,6 @@ Scenes are the **bridge** between session-local facts and durable knowledge. T3 
 
 T2 **rebuilds all scenes for a session** from current atoms when new extraction runs — not incrementally per atom. Existing URIs stay stable; content refreshes.
 
-Manual trigger: `rmb t2 backfill` on the server.
-
 ## Further reading
 
 - [The pyramid](/concept/pyramid) — where scenes sit in T0–T3

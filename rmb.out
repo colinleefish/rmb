@@ -1,0 +1,137 @@
+rmb - long-term memory for AI agents
+
+════════════════════════════════════════
+[profile]
+Profile  rmb://profile
+Who the user is — stable identity, work context, and preferences.
+
+## Identity
+- **Name:** Li Guanghui (李广慧), also known as Colin, username liguanghui, email colinleefish@gmail.com, employee ID 001232.
+- **Location:** Beijing, China (UTC+8).
+- **Role:** DevOps/SRE engineer at HungryStudio.
+- **Primary machine:** MacBook Pro with Apple M5 Pro (15-core, 48 GB unified memory, running macOS 26.x), hostname colin-mbp13-2026.
+- **Other machines:** colin-mbp15-2018, colin-hs-mbp2023.
+- **Workspace:** /Users/liguanghui/hungrystudio/.
+- **Server access:** Via JumpServer bastion at jump.hs99.vip.
+- **Photography:** Enthusiast with Nikon Z30 and iPhone; approximately 4,071 HEIC photos taken between December 2025 and June 2026.
+- **Language:** Comfortable in both Chinese and English; tends to write lowercase and uses command names as verbs.
+- **Preferences:** Prefers to be called 'daddy'; prefers Mandarin for reports; likes cmux help style with tagline, usage pattern, agent help section, flat command list, and environment section.
+- **Projects:** Developing rmb (recall memory bank) tool and PBP (multi-source A-share data pipeline).
+- **Financial data:** Uses AKShare with Sina/Tencent fallbacks; interested in EastMoney (东方财富) and Tonghuashun (同花顺).
+- **Other:** Has an age encryption key; manages Aliyun-style descriptions with [#seq][info][remark] pattern; has a docs directory with an atoms chapter.
+
+════════════════════════════════════════
+[agent]
+Agent guide  rmb://agent
+How to use rmb — recall rules, URI shapes, and skill discovery.
+
+## Memory pyramid (T0 → T3)
+
+| Tier | URI | What |
+|------|-----|------|
+| sessions | rmb://sessions/<id> | conversation container |
+| turns | rmb://turns/<uuid> | raw user+assistant exchange |
+| atoms | rmb://atoms/<uuid> | facts extracted from one session |
+| scenes | rmb://scenes/<uuid> | per-session summary |
+| memories | see below | long-term distilled facts |
+
+## Memory uris
+
+profile | entities/<slug> | preferences/<slug> | events/<slug> | scenes/<uuid> | skills/<name>
+
+## Memory categories (T3)
+
+| Category | URI | Content |
+|----------|-----|--------|
+| profile | rmb://profile | singleton — who the user is |
+| agent | rmb://agent | singleton — how to use rmb (this doc) |
+| preferences | rmb://preferences/<slug> | how the user wants AI to behave |
+| entities | rmb://entities/<slug> | people, projects, hosts, tools |
+| events | rmb://events/<slug> | dated decisions (immutable) |
+
+## Skill auto-discovery (required)
+
+Skills are curated playbooks at `rmb://skills/<name>` — **check them before improvising**.
+
+When the user asks you to do something (jokes, deploy, SSH, PDF, etc.):
+
+1. `rmb search "<what they asked>"` — default scope includes **memory, scene, and skills**.
+2. If a `[skills]` hit looks relevant, **activate it before acting**:
+   - `rmb cat rmb://skills/<name>` — read SKILL.md and follow it
+   - scripts: `rmb skill pull <name>` → run from `~/.rmb/skills/<name>/`
+3. Unsure what's available? `rmb tree rmb://skills/` — catalog of name + description.
+4. **Do not wing it** when a skill matches — skills outrank your defaults for that task.
+
+Narrow scope when you know the tier: `--scope=memory`, `--scope=scene`, or `--scope=skill`.
+
+## Skills reference
+
+| Tier | Command | Content |
+|------|---------|---------|
+| 1 Catalog | `rmb tree rmb://skills/` | name + description per skill |
+| 2 Activation | `rmb cat rmb://skills/<name>` | full SKILL.md |
+| 3 Resources | `rmb cat rmb://skills/<name>/<path>` | scripts, references, assets |
+
+Local cache (for script execution): `rmb skill pull <name>` → `~/.rmb/skills/<name>/`.
+Push edits back: `rmb skill put <name>` from `~/.rmb/skills/<name>/`.
+Do not use `~/.cursor/skills/` or `~/.claude/skills/` — skills live in rmb.
+
+## CLI rules
+
+- Do not run serve — it starts the server. Recall uses RMB_URL.
+- search "<query>" before asking the user (includes skills by default), then cat / meta / tree as needed.
+- search [--scope=...] — only search accepts --scope. cat/tree/meta take a single uri.
+- tree <uri-prefix> — browse rmb://entities/, rmb://skills/, rmb://profile (not rmb://memories/).
+- Never invent uris. correction add only when the user explicitly asks and search returned a real uri.
+- Recall is read-only. Workers distill new facts after conversations.
+
+════════════════════════════════════════
+[skills]
+Skills  rmb://skills/
+Curated playbooks. Read SKILL.md with rmb cat; run scripts via rmb skill pull.
+
+rmb://skills/bryan-daddy-jokes
+  [desc] Tell original corny daddy jokes on demand. The dad in every joke is always named Bryan — never Dad, never another nam…
+  [tags] personal
+
+rmb://skills/jump-hs99-vip
+  [desc] USER/OPERATOR skill — list hosts and run SSH commands on servers via JumpServer bastion at jump.hs99.vip. Use when th…
+  [tags] work
+════════════════════════════════════════
+[usage]
+
+Usage:
+  rmb [global-options] <command> [options]
+
+Agent Help:
+  Profile, Agent guide, and Skills sections above load from the server when RMB_URL is set.
+  Do not run serve — recall uses the remote server. Search before asking the user
+  (default scope includes skills); then cat / meta / tree as needed. Never invent uris.
+
+Memory uris:
+  profile | entities/<slug> | preferences/<slug> | events/<slug> | scenes/<uuid> | skills/<name>
+
+Commands:
+  serve
+  hook-submit --source=<cursor|cc|codex|pi>
+  search "<query>" [--scope=memory|scene|skill|...] [--k=<n>]
+  skill ls
+  skill put <name> [--dir=<path>]     default dir: ~/.rmb/skills/<name>/
+  skill pull <name> [--out=<dir>]     default: ~/.rmb/skills/<name>/
+  skill pull --all [--out=<base>]     default base: ~/.rmb/skills/
+  tree <uri-prefix>
+  cat <uri>
+  meta <uri>
+  correction add <uri> [<uri>...] "<statement>"
+  correction rm <correction-uri>
+  correction ls [<target-uri>]
+  help
+
+  search [--scope=...]       only search accepts --scope; cat/tree/meta take a single uri
+  tree <uri-prefix>          browse: rmb://entities/, rmb://skills/, rmb://profile (not rmb://memories/)
+
+Environment:
+  RMB_URL           Remote server (required for recall commands). Env or ~/.rmb.conf / ~/.rmb/config.yaml.
+  RMB_USERNAME      Basic auth user (alias: USERNAME).
+  RMB_PASSWORD      Basic auth password (alias: PASSWORD).
+  RMB_CONFIG        Override client config path (absolute path only for recall CLI).

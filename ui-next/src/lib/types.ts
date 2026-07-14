@@ -14,6 +14,7 @@ export interface OverviewCounts {
   pipeline_states: number;
   tasks: number;
   corrections: number;
+  skills: number;
 }
 
 export interface Overview {
@@ -126,4 +127,36 @@ export interface ChatMessage {
   role?: string;
   content?: string;
   [key: string]: unknown;
+}
+
+export interface SkillRow {
+  slug: string;
+  name: string;
+  description: string;
+  tags: string[];
+  uri: string;
+  version: number;
+  updated_at: string;
+}
+
+export interface SkillFileNode {
+  name: string;
+  path: string;
+  type: "file" | "dir";
+  children?: SkillFileNode[];
+}
+
+export interface SkillDetail {
+  skill: {
+    uri: string;
+    slug: string;
+    name: string;
+    description: string;
+    version: number;
+    bundle_sha256: string;
+    created_at: string;
+    updated_at: string;
+  };
+  tree: SkillFileNode[];
+  files: Record<string, string>;
 }

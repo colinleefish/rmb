@@ -11,6 +11,7 @@ import (
 
 	"github.com/colinleefish/rmb/internal/model"
 	"github.com/colinleefish/rmb/internal/service/correction"
+	"github.com/colinleefish/rmb/internal/service/skill"
 	"github.com/colinleefish/rmb/internal/uri"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -35,6 +36,8 @@ func (s *Service) Cat(ctx context.Context, raw string, w io.Writer) error {
 		return s.catRoot(w)
 	case uri.ScopeProfile:
 		return s.catMemoryByURI(ctx, uri.BuildProfile(), w)
+	case uri.ScopeAgent:
+		return s.catMemoryByURI(ctx, uri.BuildAgent(), w)
 	case uri.ScopePrefs, uri.ScopeEntities, uri.ScopeEvents:
 		return s.catMemoryByURI(ctx, u.String(), w)
 	case uri.ScopeScenes:
@@ -54,6 +57,8 @@ func (s *Service) Cat(ctx context.Context, raw string, w io.Writer) error {
 		return s.catTurn(ctx, u.Segments[0], w)
 	case uri.ScopeSessions:
 		return s.catSessionPath(ctx, u, w)
+	case uri.ScopeSkills:
+		return s.catSkill(ctx, u, w)
 	default:
 		return fmt.Errorf("unsupported scope %q", u.Scope)
 	}
@@ -72,8 +77,10 @@ func (s *Service) Tree(ctx context.Context, raw string, w io.Writer) error {
 	switch u.Scope {
 	case uri.ScopeSessions:
 		return s.treeSession(ctx, u, w)
-	case uri.ScopeScenes, uri.ScopeAtoms, uri.ScopeTurns, uri.ScopePrefs, uri.ScopeEntities, uri.ScopeEvents, uri.ScopeProfile:
+	case uri.ScopeScenes, uri.ScopeAtoms, uri.ScopeTurns, uri.ScopePrefs, uri.ScopeEntities, uri.ScopeEvents, uri.ScopeProfile, uri.ScopeAgent:
 		return s.treeScope(ctx, u, w)
+	case uri.ScopeSkills:
+		return s.treeSkill(ctx, u, w)
 	default:
 		return fmt.Errorf("unsupported tree prefix %q", u.String())
 	}
@@ -89,6 +96,8 @@ func (s *Service) Meta(ctx context.Context, raw string, w io.Writer) error {
 	switch u.Scope {
 	case uri.ScopeProfile:
 		payload, err = s.metaMemory(ctx, uri.BuildProfile())
+	case uri.ScopeAgent:
+		payload, err = s.metaMemory(ctx, uri.BuildAgent())
 	case uri.ScopePrefs, uri.ScopeEntities, uri.ScopeEvents:
 		payload, err = s.metaMemory(ctx, u.String())
 	case uri.ScopeScenes:
@@ -99,6 +108,8 @@ func (s *Service) Meta(ctx context.Context, raw string, w io.Writer) error {
 		payload, err = s.metaTurn(ctx, u.String())
 	case uri.ScopeSessions:
 		payload, err = s.metaSessionPath(ctx, u)
+	case uri.ScopeSkills:
+		payload, err = s.metaSkill(ctx, u)
 	default:
 		return fmt.Errorf("unsupported meta uri %q", u.String())
 	}
@@ -119,6 +130,7 @@ func (s *Service) catRoot(w io.Writer) error {
 func (s *Service) treeRoot(w io.Writer) error {
 	scopes := []string{
 		uri.BuildProfile(),
+		uri.BuildAgent(),
 		"rmb://sessions/",
 		"rmb://turns/",
 		"rmb://atoms/",
@@ -126,6 +138,7 @@ func (s *Service) treeRoot(w io.Writer) error {
 		"rmb://preferences/",
 		"rmb://entities/",
 		"rmb://events/",
+		"rmb://skills/",
 	}
 	for _, line := range scopes {
 		if _, err := fmt.Fprintln(w, line); err != nil {
@@ -249,6 +262,18 @@ func (s *Service) treeScope(ctx context.Context, u uri.URI, w io.Writer) error {
 		}
 		if count > 0 {
 			_, err := fmt.Fprintln(w, uri.BuildProfile())
+			return err
+		}
+		return nil
+	case uri.ScopeAgent:
+		var count int64
+		if err := s.db.WithContext(ctx).Model(&model.Memory{}).
+			Where("category = ? AND superseded_at IS NULL", uri.ScopeAgent).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if count > 0 {
+			_, err := fmt.Fprintln(w, uri.BuildAgent())
 			return err
 		}
 		return nil
@@ -512,6 +537,94 @@ func (s *Service) metaSessionPath(ctx context.Context, u uri.URI) (map[string]an
 	}
 
 	return nil, fmt.Errorf("meta not supported for %q", u.String())
+}
+
+func (s *Service) catSkill(ctx context.Context, u uri.URI, w io.Writer) error {
+	if len(u.Segments) == 0 {
+		return fmt.Errorf("skill name required; use `tree %s` to list skills", u.String())
+	}
+	slug := u.Segments[0]
+	relPath := skill.ManifestPath
+	if len(u.Segments) > 1 {
+		relPath = strings.Join(u.Segments[1:], "/")
+	}
+	text, err := skill.ReadFile(ctx, s.db, slug, relPath)
+	if err != nil {
+		return err
+	}
+	_, err = io.WriteString(w, text)
+	return err
+}
+
+func (s *Service) treeSkill(ctx context.Context, u uri.URI, w io.Writer) error {
+	if len(u.Segments) == 0 {
+		catalog, err := skill.ListCatalog(ctx, s.db)
+		if err != nil {
+			return err
+		}
+		for _, e := range catalog {
+			parsed, err := uri.Parse(e.URI)
+			if err != nil || len(parsed.Segments) < 1 {
+				continue
+			}
+			line := uri.BuildSkill(parsed.Segments[0]) + "/"
+			desc := e.Description
+			if len(e.Tags) > 0 {
+				desc = "[" + strings.Join(e.Tags, ", ") + "] " + desc
+			}
+			if _, err := fmt.Fprintf(w, "%s\t%s\n", line, desc); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	slug := u.Segments[0]
+	prefix := ""
+	if len(u.Segments) > 1 {
+		prefix = strings.Join(u.Segments[1:], "/")
+	}
+	children, err := skill.ListTreeChildren(ctx, s.db, slug, prefix)
+	if err != nil {
+		return err
+	}
+	for _, line := range children {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) metaSkill(ctx context.Context, u uri.URI) (map[string]any, error) {
+	if len(u.Segments) == 0 {
+		return nil, fmt.Errorf("skill name required")
+	}
+	slug := u.Segments[0]
+	row, err := skill.LoadActive(ctx, s.db, slug)
+	if err != nil {
+		return nil, fmt.Errorf("load skill: %w", err)
+	}
+	files, err := skill.LoadFiles(ctx, s.db, row.ID)
+	if err != nil {
+		return nil, err
+	}
+	paths := make([]string, 0, len(files))
+	for _, f := range files {
+		paths = append(paths, f.RelPath)
+	}
+	sort.Strings(paths)
+	return map[string]any{
+		"uri":            row.URI,
+		"slug":           row.Slug,
+		"name":           row.Name,
+		"description":    row.Description,
+		"tags":           append([]string(nil), []string(row.Tags)...),
+		"version":        row.Version,
+		"bundle_sha256":  row.BundleSHA256,
+		"files":          paths,
+		"created_at":     row.CreatedAt,
+		"updated_at":     row.UpdatedAt,
+	}, nil
 }
 
 // SortedSessionKeys is used in tests.

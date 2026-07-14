@@ -11,7 +11,6 @@ import (
 	"github.com/colinleefish/rmb/internal/db"
 	"github.com/colinleefish/rmb/internal/db/pgarray"
 	"github.com/colinleefish/rmb/internal/model"
-	"github.com/colinleefish/rmb/internal/service/session"
 	"github.com/colinleefish/rmb/internal/uri"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -462,46 +461,4 @@ func (w *Worker) failPendingTasks(tx *gorm.DB, sessionID uuid.UUID, errMsg strin
 			"status": model.TaskStatusFailed,
 			"error":  errMsg,
 		}).Error
-}
-
-// EnqueueSession marks a session for T1 (used by backfill CLI).
-func EnqueueSession(ctx context.Context, gdb *gorm.DB, sessionID uuid.UUID) error {
-	now := time.Now().UTC()
-	return gdb.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var ps model.PipelineState
-		err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-			Where("session_id = ?", sessionID).
-			Take(&ps).Error
-		if err == gorm.ErrRecordNotFound {
-			ps = model.PipelineState{
-				SessionID:       sessionID,
-				T1Status:        model.PipelineStatusPending,
-				T2Status:        model.PipelineStatusIdle,
-				T3Status:        model.PipelineStatusIdle,
-				WarmupThreshold: 2,
-				CreatedAt:       now,
-				UpdatedAt:       now,
-			}
-			return tx.Create(&ps).Error
-		}
-		if err != nil {
-			return err
-		}
-		return tx.Model(&ps).Updates(map[string]any{
-			"t1_status": model.PipelineStatusPending,
-		}).Error
-	})
-}
-
-// EnqueueSessionByKey resolves session_key to id and enqueues T1.
-func EnqueueSessionByKey(ctx context.Context, gdb *gorm.DB, sessionKey string) error {
-	sessionKey, err := session.ValidateSessionKey(sessionKey)
-	if err != nil {
-		return err
-	}
-	var s model.Session
-	if err := gdb.WithContext(ctx).Where("session_key = ?", sessionKey).Take(&s).Error; err != nil {
-		return fmt.Errorf("load session: %w", err)
-	}
-	return EnqueueSession(ctx, gdb, s.ID)
 }

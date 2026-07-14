@@ -32,12 +32,12 @@ Workers move data **up** the pyramid on a schedule (not every hook). T0 is never
 | **Phase A** — schema + observe                 | ✅ Done         | Migrations `00001`–`00002`, CLI, `/ui/`       |
 | **Design lock** — append-first, versioning     | ✅ Done         | §6.1 in design doc; review doc updated        |
 | **Phase B+** — `memories` versioning migration | ✅ Done (early) | `00003` applied on prod before T3 code exists |
-| **Phase B** — T1 worker                        | ✅ Done         | `RMB_EXTRACTION_*`; `rmb t1 backfill`   |
-| **Phase C** — T2 worker                        | ✅ Done         | `RMB_SCENE_*`; `rmb t2 backfill`        |
-| **Phase D** — T3 worker                        | ✅ Done         | `RMB_MEMORY_*`; `rmb t3 backfill`       |
+| **Phase B** — T1 worker                        | ✅ Done         | `RMB_EXTRACTION_*`                    |
+| **Phase C** — T2 worker                        | ✅ Done         | `RMB_SCENE_*`                         |
+| **Phase D** — T3 worker                        | ✅ Done         | `RMB_MEMORY_*`                        |
 | **Phase D** — `rmb eval`                    | 🔲 Planned      | Drift detection after rollup                  |
 | **Phase E** — retire legacy summarizer         | 🔲 Planned      | Drop `overview_text` path                     |
-| **Retrieval** — `find` / `search`              | 🔲 Later        | Design §10                                    |
+| **Retrieval** — `rmb search`                   | ✅ Done         | Hybrid vector + FTS                           |
 | **MCP wrapper**                                | 🔲 Later        | After CLI/recall stable                       |
 
 Production: <https://rmb.colinleefish.com>
@@ -80,8 +80,7 @@ Production: <https://rmb.colinleefish.com>
    - Optional later: `rmb atom merge <a> <b>` for explicit human/agent merge.
 3. **Config** — `extraction.every_n`, `extraction.idle_seconds`, `extraction.warmup`, LLM + embedding client (1024-dim).
 4. **Tasks API** (minimal) — upload returns `202 { task_id, turn_uri }` when ready; poll task status (design §8).
-5. **CLI** — `rmb t1 backfill [--session=…]` for historical turns.
-6. **Production hygiene** — set `RMB_SUMMARIZER_ENABLED=false` so legacy `overview_text` does not compete with the new pipeline.
+5. **Production hygiene** — set `RMB_SUMMARIZER_ENABLED=false` so legacy `overview_text` does not compete with the new pipeline.
 
 **Do not**
 
@@ -181,9 +180,9 @@ Production: <https://rmb.colinleefish.com>
 | Item                                | Purpose                                           | Depends on                   |
 | ----------------------------------- | ------------------------------------------------- | ---------------------------- |
 | **Embed worker**                    | Fill `embedding IS NULL` on atoms/scenes/memories | Phase B–D producing rows     |
-| **`rmb find` / `rmb search`** | Hybrid recall (vector + FTS, score propagation)   | Design §10; stable T3 data   |
+| **`rmb search`** | Hybrid recall (vector + FTS)                      | Design §10; stable T3 data   |
 | **`rmb eval` in deploy**         | Auto-run after T3 rollup; alert on regression     | Phase D                      |
-| **MCP wrapper**                     | Expose recall to agents                           | Stable find/search           |
+| **MCP wrapper**                     | Expose recall to agents                           | Stable search                |
 | **OpenViking URI migration**        | One-off import script                             | Optional; see root `TODO.md` |
 
 ---

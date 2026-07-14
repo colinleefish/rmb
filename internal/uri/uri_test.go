@@ -11,6 +11,11 @@ func TestParseAndString(t *testing.T) {
 		{"rmb://turns/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d",
 			"rmb://turns/4f1916ce-2f6e-4b76-8249-4a5f4184fd8d"},
 		{"rmb://profile", "rmb://profile"},
+		{"rmb://agent", "rmb://agent"},
+		{"rmb://skills/", "rmb://skills/"},
+		{"rmb://skills/pdf-processing", "rmb://skills/pdf-processing"},
+		{"rmb://skills/pdf-processing/scripts/extract.py",
+			"rmb://skills/pdf-processing/scripts/extract.py"},
 		{"rmb://preferences/coffee", "rmb://preferences/coffee"},
 	}
 

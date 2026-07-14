@@ -4,6 +4,7 @@ import {
   MessagesSquare,
   ShieldCheck,
   Sparkles,
+  Wand2,
   type LucideIcon,
 } from "lucide-react";
 
@@ -78,6 +79,21 @@ export const NAV_GROUPS: NavGroup[] = [
         href: "/corrections",
         icon: ShieldCheck,
         countKey: "corrections",
+        enabled: true,
+      },
+    ],
+  },
+  {
+    id: "agent",
+    label: "Agent",
+    hint: "Curated playbooks separate from distilled memory.",
+    items: [
+      {
+        id: "skills",
+        label: "Skills",
+        href: "/skills",
+        icon: Wand2,
+        countKey: "skills",
         enabled: true,
       },
     ],

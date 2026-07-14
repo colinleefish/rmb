@@ -17,6 +17,8 @@ preference), **search your memory first**:
 - The user mentions a host/project/tool by name → `rmb search` it.
 - You need a path, port, config location, or prior decision → recall it.
 - The user says "like last time" / "the usual" / "where we left off" → recall it.
+- The user asks you to **do something** (jokes, deploy, SSH, etc.) → `rmb search` it;
+  if a `[skills]` hit matches, read and follow that skill before improvising.
 
 If recall returns nothing relevant, then ask the user.
 
@@ -32,12 +34,13 @@ rmb search "<query>" --k=<n>             # control result count (default: 5)
 ```
 
 `search` blends semantic (vector) and keyword (FTS) matching, fused with
-reciprocal rank fusion. By default it covers both `memory` and `scene` tiers.
+reciprocal rank fusion. By default it covers **memory**, **scene**, and **skills** tiers.
 
 - Use `--scope=memory` when you want tight, specific fact recall — e.g. a config
   value, a person's role, a past decision.
 - Use `--scope=scene` when you want conversational context — e.g. "what were we
   working on in that session".
+- Use `--scope=skill` when you only want curated playbooks.
 - Omit `--scope` for most queries; the combined result is usually best.
 
 Output is a ranked list:
@@ -75,6 +78,7 @@ Memory is a pyramid; results carry a `tier` and a `uri`:
 | Tier | URI shape | What it is |
 |------|-----------|------------|
 | memories | `rmb://profile`, `rmb://preferences/<slug>`, `rmb://entities/<slug>`, `rmb://events/<slug>` | Long-term, cross-session distilled facts. Most useful. |
+| skills | `rmb://skills/<name>` | Curated Agent Skills bundles (separate from memory pyramid). |
 | scenes | `rmb://scenes/<uuid>` | Per-conversation summaries ("what we were doing"). |
 | turns | `rmb://turns/<uuid>` | Raw user+assistant exchange (`meta` → `session_id`). |
 | atoms | `rmb://atoms/<uuid>` | Structured facts from a session (`meta` → `session_id`). |
@@ -86,6 +90,23 @@ Memory categories:
 - **preferences** — recurring "prefers X", including how the user wants the AI to behave.
 - **entities** — people, projects, companies, hosts, tools.
 - **events** — dated decisions and milestones (immutable).
+
+## Skills (Agent Skills bundles)
+
+Skills are **not** distilled memory — they are curated playbooks at `rmb://skills/<name>`.
+**Check skills before improvising** on a user request that might match one.
+
+| Tier | Command | Content |
+|------|---------|---------|
+| Catalog | `rmb tree rmb://skills/` | name + description |
+| Activation | `rmb cat rmb://skills/<name>` | full SKILL.md |
+| Resources | `rmb cat rmb://skills/<name>/<path>` | bundled scripts/references |
+
+Flow: `rmb search "<task>"` → if `[skills]` hit → `rmb cat rmb://skills/<name>` → follow SKILL.md.
+
+Local cache for script execution: `rmb skill pull <name>` → `~/.rmb/skills/<name>/`.
+Push edits: `rmb skill put <name>` from that directory.
+Do not use `~/.cursor/skills/` or `~/.claude/skills/`.
 
 To trace a fact to its source: `meta <memory-uri>` shows `source_scene_uris`;
 `cat` those scenes; scenes link back to atoms and raw turns.
@@ -109,6 +130,11 @@ rmb search "recent work" --scope=scene
 # Browse what categories exist
 rmb tree rmb://
 rmb tree rmb://entities/
+rmb tree rmb://skills/
+
+# Agent skill playbook
+rmb cat rmb://skills/my-skill
+rmb skill pull my-skill   # → ~/.rmb/skills/my-skill/
 ```
 
 ## Corrections

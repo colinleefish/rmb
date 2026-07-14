@@ -29,8 +29,7 @@ Production (`rmb.colinleefish.com`): Caddy in Docker terminates TLS and proxies 
 
 **Roadmap:** [`docs/reference/plan.md`](docs/reference/plan.md) (Phase A–E). Run `make docs-dev` for the full docs site.
 
-Planned (see `TODO.md`): storage CLI (`store/read/list/delete/search`),
-embedding worker, hybrid recall, MCP wrapper.
+Planned (see `TODO.md`): MCP wrapper, `rmb eval` drift probes.
 
 ## Architecture
 
@@ -259,12 +258,10 @@ the `rmb://turns/<uuid>` URI for the new turn.
 
 ### Recall API
 
-`GET /api/v1/find?q=<query>&k=<n>` — vector recall over long-term memories.
-
 `GET /api/v1/search?q=<query>&k=<n>` — hybrid (vector + FTS) recall across
 memories and scenes, fused with reciprocal rank fusion.
 
-Both return `{ "items": [ { "uri", "tier", "rank", "snippet" } ] }` and require
+Returns `{ "items": [ { "uri", "tier", "rank", "snippet" } ] }` and requires
 the server to have an embedding client configured (`RMB_EMBED_API_KEY`).
 
 `GET /api/v1/inspect/{cat,tree,meta}?uri=<uri>` — text output of the inspection
@@ -272,19 +269,15 @@ commands (used by the CLI's remote mode).
 
 ## CLI: local vs remote
 
-Operational CLI commands (`t1/t2/t3 backfill`, `embed status`, `eval`) talk
-**directly to the database** (`RMB_DB_URL`) — run them on the server or
-against a local dev DB.
-
-`find`, `search`, `cat`, `tree`, and `meta` are **dual-mode**:
-
-- **Remote (client):** if `RMB_URL` is set (env, `~/.rmb.conf`, or `~/.rmb/config.yaml`), they
-  call the server's recall API over HTTP with basic auth — run them from your
-  laptop against production.
-- **Local:** otherwise they query the database directly and embed the query
-  locally via `RMB_EMBED_*`.
+Recall and inspection commands (`search`, `cat`, `tree`, `meta`, `correction`)
+require `RMB_URL` — they call the server over HTTP with basic auth (from env,
+`~/.rmb.conf`, or `~/.rmb/config.yaml`). Run them from your laptop against
+production; you do not need a local database.
 
 `hook-submit` is always an HTTP client (posts to `RMB_URL`).
+
+`rmb serve` loads server config (`RMB_DB_URL`, workers, etc.) and is run on the
+host that owns the database.
 
 ## Testing
 

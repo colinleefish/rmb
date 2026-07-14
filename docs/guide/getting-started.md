@@ -90,7 +90,7 @@ RMB_PASS=...
 
 1. Have a short agent conversation
 2. Open `/ui/` → Sessions → pick your session → see turns
-3. Wait for T1 (or run `rmb t1 backfill` on the server)
+3. Wait for T1 background workers to extract atoms; scenes follow after T2 delay
 4. Atoms appear under the session; scenes follow after T2 delay
 
 ## Recall
