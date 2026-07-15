@@ -1,0 +1,6 @@
+# Copy to Caddyfile and set RMB_DOMAIN in deploy/.env.
+# Caddy obtains TLS certificates automatically when the domain points here.
+
+{$RMB_DOMAIN} {
+	reverse_proxy rmb:8080
+}

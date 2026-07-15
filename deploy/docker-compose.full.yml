@@ -1,0 +1,68 @@
+# All-in-one production stack: PostgreSQL + rmb + Caddy (TLS).
+# Run from the repo root:
+#   docker compose -f deploy/docker-compose.full.yml --env-file deploy/.env up -d --build
+#
+# Or use: ./scripts/install.sh
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    container_name: rmb-postgres
+    environment:
+      POSTGRES_USER: rmb
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+      POSTGRES_DB: rmb_db
+    volumes:
+      - rmb_pg:/var/lib/postgresql
+      - ../docker/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rmb -d rmb_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [rmb]
+
+  rmb:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+    image: ${RMB_IMAGE:-rmb:local}
+    container_name: rmb-app
+    env_file: .env
+    environment:
+      RMB_DB_URL: postgres://rmb:${POSTGRES_PASSWORD}@postgres:5432/rmb_db?sslmode=disable
+      RMB_ADDR: ":8080"
+      GIN_MODE: release
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [rmb]
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: rmb-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      RMB_DOMAIN: ${RMB_DOMAIN:?set RMB_DOMAIN in deploy/.env}
+    volumes:
+      - ./config/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - rmb
+    restart: unless-stopped
+    networks: [rmb]
+
+networks:
+  rmb:
+
+volumes:
+  rmb_pg:
+  caddy_data:
+  caddy_config:

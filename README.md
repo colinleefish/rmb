@@ -1,207 +1,150 @@
 # rmb
 
-Personal long-term memory store for AI-agent conversations. Captures every
-turn from supported agent tools into PostgreSQL, then summarizes them in the
-background so they can be recalled across sessions.
+English / [简体中文](README_CN.md)
 
-## Status
+**Long-term memory for AI agents.**
 
-What works today:
+rmb captures conversation turns from your coding agents, distills them into structured facts in the background, and lets any agent recall what it learned across sessions. You run the server; your data stays on your infrastructure.
 
-- HTTP API for uploading conversation turns (`POST /api/v1/sessions/:id/upload`).
-- `rmb hook-submit --source=<cursor|cc|codex|pi>` for ingesting hook payloads from
-  Cursor, Claude Code, Codex, and [Pi](https://pi.dev).
-- **T1 extraction worker** (Phase B): async atom extraction from turns into
-  `atoms` (append-only; `RMB_EXTRACTION_ENABLED=true` by default).
-- **T2 scene worker** (Phase C): groups atoms into `scenes` and writes
-  `sessions.abstract` (`RMB_SCENE_ENABLED=true` by default).
-- **T3 memory worker** (Phase D): rolls atoms across sessions into versioned
-  long-term `memories` by category/slug (`RMB_MEMORY_ENABLED=true` by default).
-- Legacy summarizer (`overview_text`) is off by default (`RMB_SUMMARIZER_ENABLED=false`).
+## Why rmb?
 
-Inspection CLI: `rmb cat`, `rmb tree`, `rmb meta` (Phase A).
+AI agents forget everything when a session ends. rmb fixes that with a layered memory pipeline:
 
-Web observer UI at `/ui/` when the server is running (browse sessions, turns, atoms,
-scenes, memories, pipeline state, and tasks).
+1. **Capture** — hooks from Cursor, Claude Code, Codex, or Pi upload each turn to your server.
+2. **Distill** — background workers extract atoms, group them into scenes, and roll durable memories across sessions.
+3. **Recall** — agents search and browse memories with the `rmb` CLI before asking you the same question twice.
 
-Production (`rmb.colinleefish.com`): Caddy in Docker terminates TLS and proxies to
-`rmb` on `:8080` — see `deploy/config/Caddyfile` and `deploy/docker-compose.yml`.
+Everything is stored in PostgreSQL (with pgvector for semantic search) and addressed with stable `rmb://` URIs.
 
-**Roadmap:** [`docs/reference/plan.md`](docs/reference/plan.md) (Phase A–E). Run `make docs-dev` for the full docs site.
+## Memory pyramid
 
-Planned (see `TODO.md`): MCP wrapper, `rmb eval` drift probes.
-
-## Architecture
-
-```txt
-agent (Cursor / Claude Code)
-   │
-   │ stdin JSON  ── hooks ──► rmb hook-submit --source=…
-   │                                │
-   │                                ▼
-   │                     POST /api/v1/sessions/:id/upload
-   │                                │
-   ▼                                ▼
-                              ┌──────────────┐
-                              │   rmb     │
-                              │   (Gin HTTP) │
-                              └──────┬───────┘
-                                     │
-                                     ▼
-                              ┌──────────────┐       ┌──────────────────┐
-                              │  PostgreSQL  │◄──────┤ summarize.Worker │
-                              │ (sessions,   │       │ (per-session     │
-                              │  session_   │       │  overview merge) │
-                              │  turns)     │       └──────────────────┘
-                              └──────────────┘
-```
-
-Data model (PostgreSQL, [goose](https://github.com/pressly/goose) migrations on startup):
-
-- `sessions` — one row per agent conversation, identified by `session_key`
-  (the agent's session/conversation UUID). Holds the rolling `overview_text`.
-- `session_turns` — one row per ingested turn. `messages_jsonl` stores the
-  user + assistant pair; `turn_status` tracks summarization
-  (`not_summarized → summarizing → summarized | failed`).
-
-## Layout
+Knowledge is organized in tiers from raw chat to long-term facts:
 
 ```
-cmd/rmb/            entry point (serve / hook-submit)
-internal/
-  cli/                 argv parsing
-  config/              .env + ~/.rmb.conf or ~/.rmb/config.yaml + env overrides
-  db/                  gorm connection + auto-migrate
-  hook/                hook payload → upload adapter
-    hook.go            Submit() + routing + HTTP post
-    cursor.go          Cursor afterAgentResponse extraction
-    claude.go          Claude Code Stop extraction (race-free)
-  http/                gin router + handlers
-  llm/                 OpenAI-compatible chat-completions client
-  model/               gorm schemas
-  server/              http.Server lifecycle
-  service/
-    health/            DB ping + pgvector probe
-    session/           Upload service (turn insert, archive URI)
-    summarize/         Background worker (claim → merge → mark summarized)
-docker/                init.sql for the pgvector container
-scripts/               ci.sh, deploy.sh, SQL utilities
+                    ┌─────────────────────────────────────┐
+                    │  T3 — memories (cross-session)      │
+                    │  profile · preferences · entities   │
+                    └──────────────────▲──────────────────┘
+                                       │
+              ┌────────────────────────┴─────────────────────────┐
+              │  Session · rmb://sessions/<sid>                  │
+              │  turns (T0) → atoms (T1) → scenes (T2)           │
+              └──────────────────────────────────────────────────┘
 ```
 
-## Running
+| Tier | What | URI example |
+|------|------|-------------|
+| T0 | Raw user + assistant exchange | `rmb://turns/<uuid>` |
+| T1 | Small extracted fact | `rmb://atoms/<uuid>` |
+| T2 | Session-local narrative segment | `rmb://scenes/<uuid>` |
+| T3 | Durable cross-session memory | `rmb://profile`, `rmb://entities/<slug>` |
+
+See [`docs/concept/pyramid.md`](docs/concept/pyramid.md) for the full model.
+
+## Features
+
+- **Agent hooks** — `rmb hook-submit --source=<cursor|cc|codex|pi>` ingests turns from supported tools.
+- **Background workers** — T1 extraction, T2 scene synthesis, and T3 memory rollup (enabled by default).
+- **Hybrid recall** — vector + full-text search fused with reciprocal rank fusion.
+- **Skills** — curated agent playbooks stored in rmb (`rmb://skills/<name>`).
+- **Corrections** — human overrides that agents must respect.
+- **Web UI** — browse sessions, turns, atoms, scenes, memories, and pipeline state at `/ui/`.
+- **CLI** — `search`, `cat`, `tree`, `meta`, `correction`, and `skill` commands for agents and operators.
+
+## Quick start
 
 ### Prerequisites
 
-- Go 1.26+
-- PostgreSQL 16+ (the docker-compose target uses `pgvector/pgvector:pg18`)
+- Go 1.26+ (to build from source)
+- PostgreSQL 16+ with [pgvector](https://github.com/pgvector/pgvector)
+- An OpenAI-compatible LLM API key (for distillation workers)
+- An embedding API key (for semantic search)
 
-### Local
+### 1. Clone and configure
 
+```bash
+git clone https://github.com/colinleefish/rmb.git
+cd rmb
+cp .env.example .env
 ```
-cp .env.example .env       # edit RMB_DB_URL, RMB_LLM_API_KEY, …
-make run                    # go run ./cmd/rmb serve
+
+Edit `.env` by concern (`cp .env.example .env`, then replace `replace_me` and connection strings):
+
+**Database**
+
+- `RMB_DB_URL` — PostgreSQL connection string  
+  - Source + local Postgres: set for your instance (see `.env.example`)  
+  - `docker compose`: in-container default is `postgres://rmb:rmb@postgres:5432/rmb_db`; if you run `make run` on the host against the compose DB, use `postgres://rmb:rmb@127.0.0.1:5433/rmb_db`
+
+**Chat API (T1–T3 background workers — all three required)**
+
+- `RMB_LLM_API_BASE` — OpenAI-compatible API base URL  
+- `RMB_LLM_API_KEY` — API key  
+- `RMB_LLM_MODEL` — model name (e.g. `gpt-4o-mini`, `glm-4.7`)
+
+**Embedding API (semantic search + embed worker)**
+
+- `RMB_EMBED_API_KEY` — API key (`rmb search` is unavailable without it)  
+- `RMB_EMBED_API_BASE` — API base (defaults to Zhipu; change when switching providers)  
+- `RMB_EMBED_MODEL` — model name (default `embedding-3`)  
+- `RMB_EMBED_DIMENSIONS` — vector size (default `1024`; must match the model)
+
+**HTTP auth**
+
+- Optional when listening on `127.0.0.1`; **required** when binding to `0.0.0.0`, `:8080`, or any address reachable off localhost — set both `USERNAME` and `PASSWORD` (or `RMB_USERNAME` / `RMB_PASSWORD`)
+
+With the root `docker compose`, add `env_file: .env` (or explicit `environment` entries) under the `rmb` service so LLM and embed keys are passed into the container.
+
+### 2. Start the server
+
+**Docker Compose** (PostgreSQL + app):
+
+```bash
+docker compose up -d
+curl http://localhost:8080/healthz
+```
+
+**From source:**
+
+```bash
+make run
 # or
 make build && ./bin/rmb serve
 ```
 
-### Docker
+Open the observer UI at `http://localhost:8080/ui/`.
 
-```
-docker compose up -d        # postgres + app on :8080
-```
-
-Health check: `curl localhost:8080/healthz`.
-
-## CI / Deploy (agents)
-
-There is **no GitHub Actions**. CI and production deploy are **agent-driven**: run
-scripts from the repo root on a machine that can SSH to production.
-
-### CI
+### 3. Build the CLI
 
 ```bash
-make ci
+make build
+./bin/rmb help
 ```
 
-Runs `go test ./...` and a compile check (`scripts/ci.sh`). Use after code changes
-and before deploy. For test-only or PR prep, stop here.
+Install `./bin/rmb` on your PATH, or point agent hooks at the binary directly.
 
-### Deploy
+### 4. Point the CLI at your server
 
-**Production:** https://rmb.colinleefish.com — runtime at `/app/rmb` (`.env`,
-`docker-compose.yml`, `config/Caddyfile`; no git checkout on the server).
+Create `~/.rmb.conf` or `~/.rmb/config.yaml`:
 
-```bash
-make deploy
+```ini
+RMB_URL=http://127.0.0.1:8080
+RMB_USERNAME=your-user
+RMB_PASSWORD=your-password
 ```
 
-Runs CI, builds and pushes a Docker image as `<branch-slug>` and
-`<branch-slug>-<sha>` (production uses `:main`), SCPs runtime files to `/app/rmb`,
-pulls and force-recreates the `rmb` container, and waits for `/healthz`.
+Recall commands (`search`, `cat`, `tree`, `meta`, `correction`, `skill`) call the server over HTTP. `hook-submit` posts turns to the same URL.
 
-**Prerequisites**
+### 5. Register agent hooks
 
-- SSH access to `root@rmb.colinleefish.com` (default key: `~/.ssh/colinleefish_ed25519`).
-- Optional overrides: `scripts/deploy.env` (copy from `scripts/deploy.env.example`; gitignored).
-- HTTP(S) proxy on port **1080** on your machine when pushing to GitHub from China.
-
-**Proxy (China → GitHub)**
-
-| Where | When | Setting |
-|-------|------|---------|
-| **Your machine** | `git push` / `git fetch` to GitHub | `ssproxy` then git (sets `http(s)_proxy=http://127.0.0.1:1080`) |
-
-Example push from China:
-
-```bash
-ssproxy && git push origin main
-```
-
-### When the user says ship / deploy / release
-
-1. `make ci` — fix any failures.
-2. Commit and push to `main` with `ssproxy && git push` when GitHub is unreachable directly (ask first if unclear).
-3. `make deploy`.
-4. Report whether `/healthz` passed and link https://rmb.colinleefish.com
-
-More detail: [deploy guide](docs/reference/deploy.md) (`make docs-dev` to preview).
-
-## Configuration
-
-Resolution order (later wins):
-
-1. Defaults baked into `internal/config`.
-2. `~/.rmb.conf` (flat `KEY=value`) or `~/.rmb/config.yaml` (structured; path overridable via `RMB_CONFIG`).
-3. `.env` in the working directory.
-4. Process environment.
-
-Key variables (see `.env.example` for the full list):
-
-| Var                                   | Default                                                            |
-|---------------------------------------|--------------------------------------------------------------------|
-| `RMB_DB_URL`                       | `postgres://admin@127.0.0.1:5432/rmb_db?sslmode=disable`       |
-| `RMB_ADDR`                         | `:8080`                                                            |
-| `RMB_LLM_API_BASE` / `_API_KEY` / `_MODEL` | OpenAI-compatible endpoint used by the summarizer            |
-| `RMB_SUMMARIZER_ENABLED`           | `true`                                                             |
-| `RMB_SUMMARIZER_POLL_INTERVAL`     | `15s`                                                              |
-| `RMB_SUMMARIZER_MAX_TURNS_PER_MERGE` | `4`                                                              |
-
-For `hook-submit`, the target API URL is read from `RMB_URL` or
-`~/.rmb.conf` or `~/.rmb/config.yaml` (`client.url` / `RMB_URL=`), defaulting to `http://127.0.0.1:8080`.
-
-## Hook Integration
-
-Each agent gets a single hook entry. `--source` is mandatory; mismatched
-payloads exit non-zero.
-
-`~/.cursor/hooks.json`:
+**Cursor** — `~/.cursor/hooks.json`:
 
 ```json
 {
   "hooks": {
     "afterAgentResponse": [
       {
-        "command": "/path/to/rmb/bin/rmb hook-submit --source=cursor",
+        "command": "/path/to/rmb hook-submit --source=cursor",
         "timeout": 5
       }
     ]
@@ -210,7 +153,7 @@ payloads exit non-zero.
 }
 ```
 
-`~/.claude/settings.json`:
+**Claude Code** — `~/.claude/settings.json`:
 
 ```json
 {
@@ -218,7 +161,7 @@ payloads exit non-zero.
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "/path/to/rmb/bin/rmb hook-submit --source=cc" }
+          { "type": "command", "command": "/path/to/rmb hook-submit --source=cc" }
         ]
       }
     ]
@@ -226,72 +169,212 @@ payloads exit non-zero.
 }
 ```
 
-Design notes for the extraction logic (status filter on Cursor, race-free
-pairing on Claude Code) live in `internal/hook/cursor.go` and
-`internal/hook/claude.go` as package-level comments.
+**Pi** — install the extension from [`integrations/pi/`](integrations/pi/README.md) (no shell hooks; uses `agent_settled` events).
 
-### Pi
+`--source` is mandatory. Mismatched payloads exit non-zero.
 
-Pi has no shell hooks. Install the extension from `integrations/pi/` — it
-listens for `agent_settled` and pipes a JSON payload to
-`rmb hook-submit --source=pi`. See [`integrations/pi/README.md`](integrations/pi/README.md).
+### 6. Verify it works
+
+1. Have a short agent conversation.
+2. Open `/ui/` → Sessions → pick your session → see turns appear.
+3. Wait for background workers to extract atoms and scenes.
+4. Recall from the CLI:
+
+```bash
+rmb search "what do you know about me"
+rmb cat rmb://profile
+rmb tree rmb://sessions/<session-uuid>/
+```
+
+## Deploy on your server
+
+rmb is designed to run on infrastructure you control. A typical production layout:
+
+```
+Internet
+   │
+   ▼
+┌─────────┐     ┌──────────────┐     ┌────────────┐
+│  Caddy  │────►│  rmb :8080   │────►│ PostgreSQL │
+│  :443   │     │  (Docker)    │     │  + pgvector│
+└─────────┘     └──────────────┘     └────────────┘
+```
+
+### Option A — Docker Compose (all-in-one dev / small deploy)
+
+The root [`docker-compose.yml`](docker-compose.yml) runs PostgreSQL and rmb together. Good for a single VM or homelab:
+
+```bash
+docker compose up -d
+```
+
+Customize environment in `docker-compose.yml` or an `.env` file alongside it.
+
+### Option B — Split database + app container
+
+For production, run PostgreSQL on the host (or a managed service) and deploy only the app container. See [`deploy/docker-compose.yml`](deploy/docker-compose.yml) for a minimal two-service layout (rmb + Caddy reverse proxy).
+
+1. Copy `deploy/` to your server (e.g. `/app/rmb`).
+2. Create `.env` with `RMB_DB_URL`, LLM keys, and auth credentials.
+3. Edit [`deploy/config/Caddyfile`](deploy/config/Caddyfile) — replace the hostname with your domain:
+
+```
+memory.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+4. Build and push your own image, or build on the server:
+
+```bash
+docker build -t rmb:local .
+```
+
+5. Start:
+
+```bash
+cd /app/rmb
+docker compose up -d
+curl -fsS https://memory.example.com/healthz
+```
+
+6. Set `RMB_URL=https://memory.example.com` in client config on machines that run hooks or recall.
+
+### Security checklist
+
+- Always enable `USERNAME` / `PASSWORD` (or `RMB_USERNAME` / `RMB_PASSWORD`) when the server is not bound to localhost.
+- Terminate TLS at a reverse proxy (Caddy, nginx, Traefik).
+- Keep PostgreSQL off the public internet; rmb connects to it over a private network or localhost.
+- Store API keys in `.env` on the server, not in hook configs.
+
+## Architecture
+
+```txt
+agent (Cursor / Claude Code / Pi)
+   │
+   │ stdin JSON  ── hooks ──► rmb hook-submit --source=…
+   │                                │
+   │                                ▼
+   │                     POST /api/v1/sessions/:id/upload
+   │                                │
+   ▼                                ▼
+                              ┌──────────────┐
+                              │     rmb      │
+                              │  (Gin HTTP)  │
+                              └──────┬───────┘
+                                     │
+                    ┌────────────────┼────────────────┐
+                    ▼                ▼                ▼
+             ┌────────────┐   ┌────────────┐   ┌────────────┐
+             │ T1 extract │   │ T2 scene   │   │ T3 memory  │
+             │  worker    │   │  worker    │   │  worker    │
+             └─────┬──────┘   └─────┬──────┘   └─────┬──────┘
+                   │                │                │
+                   └────────────────┼────────────────┘
+                                    ▼
+                              ┌──────────────┐
+                              │  PostgreSQL  │
+                              │  + pgvector  │
+                              └──────────────┘
+```
+
+Background workers run inside the `rmb serve` process. They need an OpenAI-compatible chat API. The embed worker (for recall) uses a separate embedding endpoint.
+
+## CLI reference
+
+| Command | Purpose |
+|---------|---------|
+| `rmb serve` | Start the HTTP server (run on the host that owns the database) |
+| `rmb hook-submit --source=<src>` | Ingest a hook payload (always HTTP client) |
+| `rmb search "<query>"` | Hybrid recall across memories, scenes, and skills |
+| `rmb cat <uri>` | Print the body of a memory artifact |
+| `rmb tree <uri-prefix>` | List children under a scope |
+| `rmb meta <uri>` | Show metadata (provenance, session links) |
+| `rmb correction add <uri> "…"` | Attach a human correction |
+| `rmb skill ls` / `pull` / `put` | Manage curated agent skills |
+
+Agents should run `rmb search` before asking the user, then `rmb cat` on relevant URIs. See [`docs/guide/cli-for-agents.md`](docs/guide/cli-for-agents.md).
 
 ## API
 
-`POST /api/v1/sessions/:session_id/upload`
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/v1/sessions/:id/upload` | Append a turn (hook target) |
+| `GET /api/v1/search?q=…&k=…` | Hybrid recall |
+| `GET /api/v1/inspect/{cat,tree,meta}?uri=…` | Inspection (used by CLI) |
+| `GET /healthz` | DB ping + pgvector check |
+
+Upload body:
 
 ```json
 {
-  "started_at":"optional RFC3339",
-  "messages":  [
-    {"role": "user",      "content": "..."},
+  "started_at": "optional RFC3339",
+  "messages": [
+    {"role": "user", "content": "..."},
     {"role": "assistant", "content": "..."}
   ]
 }
 ```
 
-`session_id` must be a UUID. Each request appends one `session_turns` row
-to the session (creating the session row on first upload). Response includes
-the `rmb://turns/<uuid>` URI for the new turn.
+## Configuration
 
-`GET /healthz` — DB ping + `pg_extension` lookup for `vector`, plus `commit` (git SHA baked in at build time).
+Resolution order (later wins):
 
-### Recall API
+1. Defaults in `internal/config`
+2. `~/.rmb.conf` or `~/.rmb/config.yaml` (client); server uses `.env` in the working directory
+3. Process environment
 
-`GET /api/v1/search?q=<query>&k=<n>` — hybrid (vector + FTS) recall across
-memories and scenes, fused with reciprocal rank fusion.
+Key server variables (see [`.env.example`](.env.example)):
 
-Returns `{ "items": [ { "uri", "tier", "rank", "snippet" } ] }` and requires
-the server to have an embedding client configured (`RMB_EMBED_API_KEY`).
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `RMB_DB_URL` | `postgres://admin@127.0.0.1:5432/rmb_db?sslmode=disable` | PostgreSQL |
+| `RMB_ADDR` | `:8080` | Listen address |
+| `RMB_LLM_API_BASE` / `_API_KEY` / `_MODEL` | — | Chat API for workers |
+| `RMB_EMBED_API_KEY` | — | Embeddings for recall (required for search) |
+| `RMB_EXTRACTION_ENABLED` | `true` | T1 atom extraction |
+| `RMB_SCENE_ENABLED` | `true` | T2 scene synthesis |
+| `RMB_MEMORY_ENABLED` | `true` | T3 memory rollup |
 
-`GET /api/v1/inspect/{cat,tree,meta}?uri=<uri>` — text output of the inspection
-commands (used by the CLI's remote mode).
+Client variables: `RMB_URL`, `RMB_USERNAME`, `RMB_PASSWORD`.
 
-## CLI: local vs remote
+## Project layout
 
-Recall and inspection commands (`search`, `cat`, `tree`, `meta`, `correction`)
-require `RMB_URL` — they call the server over HTTP with basic auth (from env,
-`~/.rmb.conf`, or `~/.rmb/config.yaml`). Run them from your laptop against
-production; you do not need a local database.
-
-`hook-submit` is always an HTTP client (posts to `RMB_URL`).
-
-`rmb serve` loads server config (`RMB_DB_URL`, workers, etc.) and is run on the
-host that owns the database.
-
-## Testing
-
-Same as CI (preferred):
-
-```bash
-make ci
+```
+cmd/rmb/              CLI entry point (serve / hook-submit / recall)
+internal/
+  hook/               hook payload → upload adapter (cursor, cc, codex, pi)
+  http/               Gin router, handlers, embedded web UI
+  service/
+    extract/          T1 extraction worker
+    scene/            T2 scene worker
+    memory/           T3 memory worker
+    embed/            embedding worker
+  llm/                OpenAI-compatible clients
+ui-next/              Next.js observer UI (built into the binary)
+integrations/pi/      Pi agent extension
+deploy/               production compose + Caddy example
+docs/                 full documentation site (make docs-dev)
 ```
 
-Or directly:
+## Development
 
 ```bash
-go test ./...
+make ci          # go test ./... + compile check
+go test ./...    # tests only
+make docs-dev    # documentation site at localhost:5173
 ```
+
+Roadmap: [`docs/reference/plan.md`](docs/reference/plan.md). Planned: MCP wrapper, `rmb eval` drift probes.
+
+## Documentation
+
+- [Getting started](docs/guide/getting-started.md)
+- [The memory pyramid](docs/concept/pyramid.md)
+- [URI scheme](docs/concept/uri-scheme.md)
+- [Hook integration details](docs/guide/getting-started.md#register-hooks)
+
+Run `make docs-dev` to browse the full docs site locally.
 
 ## License
 
