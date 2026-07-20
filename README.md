@@ -43,7 +43,7 @@ See [`docs/concept/pyramid.md`](docs/concept/pyramid.md) for the full model.
 
 ## Features
 
-- **Agent hooks** — `rmb hook-submit --source=<cursor|cc|codex|pi>` ingests turns from supported tools.
+- **Agent hooks** — `rmb hook-submit --source=<cursor|cc|codex|pi|opencode>` ingests turns from supported tools.
 - **Background workers** — T1 extraction, T2 scene synthesis, and T3 memory rollup (enabled by default).
 - **Hybrid recall** — vector + full-text search fused with reciprocal rank fusion.
 - **Skills** — curated agent playbooks stored in rmb (`rmb://skills/<name>`).
@@ -170,6 +170,8 @@ Recall commands (`search`, `cat`, `tree`, `meta`, `correction`, `skill`) call th
 ```
 
 **Pi** — install the extension from [`integrations/pi/`](integrations/pi/README.md) (no shell hooks; uses `agent_settled` events).
+
+**OpenCode** — install the plugin from [`integrations/opencode/`](integrations/opencode/README.md) (uses `session.status` idle / `session.idle` events).
 
 `--source` is mandatory. Mismatched payloads exit non-zero.
 
@@ -343,7 +345,7 @@ Client variables: `RMB_URL`, `RMB_USERNAME`, `RMB_PASSWORD`.
 ```
 cmd/rmb/              CLI entry point (serve / hook-submit / recall)
 internal/
-  hook/               hook payload → upload adapter (cursor, cc, codex, pi)
+  hook/               hook payload → upload adapter (cursor, cc, codex, pi, opencode)
   http/               Gin router, handlers, embedded web UI
   service/
     extract/          T1 extraction worker
@@ -353,6 +355,7 @@ internal/
   llm/                OpenAI-compatible clients
 ui-next/              Next.js observer UI (built into the binary)
 integrations/pi/      Pi agent extension
+integrations/opencode/ OpenCode plugin
 deploy/               production compose + Caddy example
 docs/                 full documentation site (make docs-dev)
 ```

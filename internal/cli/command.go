@@ -310,7 +310,7 @@ Memory uris:
 
 Commands:
   serve
-  hook-submit --source=<cursor|cc|codex|pi>
+  hook-submit --source=<cursor|cc|codex|pi|opencode>
   search "<query>" [--scope=memory|scene|skill|...] [--k=<n>]
   skill ls
   skill put <name> [--dir=<path>]     default dir: ~/.rmb/skills/<name>/

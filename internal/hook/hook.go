@@ -99,6 +99,12 @@ func Submit(ctx context.Context, in SubmitInput) error {
 		}
 		sessionID, messages, parseReason, err = buildMessagesFromPiPayload(in.StdinJSON)
 
+	case "opencode":
+		if !isOpenCodePayload(in.StdinJSON) {
+			return logf("skip", "not an opencode payload")
+		}
+		sessionID, messages, parseReason, err = buildMessagesFromOpenCodePayload(in.StdinJSON)
+
 	default:
 		return fmt.Errorf("hook-submit: unknown source %q", source)
 	}

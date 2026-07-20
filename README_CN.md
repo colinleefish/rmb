@@ -43,7 +43,7 @@ rmb 从 Cursor、Claude Code 等编码智能体捕获每一轮对话，在后台
 
 ## 功能
 
-- **智能体 Hook** — `rmb hook-submit --source=<cursor|cc|codex|pi>` 从支持的工具摄入对话轮次。
+- **智能体 Hook** — `rmb hook-submit --source=<cursor|cc|codex|pi|opencode>` 从支持的工具摄入对话轮次。
 - **后台 Worker** — T1 提取、T2 场景合成、T3 记忆汇总（默认开启）。
 - **混合召回** — 向量 + 全文检索，经倒数排名融合（RRF）合并。
 - **Skills** — 存放在 rmb 中的智能体技能手册（`rmb://skills/<name>`）。
@@ -170,6 +170,8 @@ RMB_PASSWORD=your-password
 ```
 
 **Pi** — 从 [`integrations/pi/`](integrations/pi/README.md) 安装扩展（无 shell hook，使用 `agent_settled` 事件）。
+
+**OpenCode** — 从 [`integrations/opencode/`](integrations/opencode/README.md) 安装插件（使用 `session.status` idle / `session.idle` 事件）。
 
 `--source` 为必填项；载荷与来源不匹配时以非零退出。
 
@@ -343,7 +345,7 @@ agent (Cursor / Claude Code / Pi)
 ```
 cmd/rmb/              CLI 入口（serve / hook-submit / recall）
 internal/
-  hook/               hook 载荷 → 上传适配（cursor、cc、codex、pi）
+  hook/               hook 载荷 → 上传适配（cursor、cc、codex、pi、opencode）
   http/               Gin 路由、handler、内嵌 Web UI
   service/
     extract/          T1 提取 worker
@@ -353,6 +355,7 @@ internal/
   llm/                OpenAI 兼容客户端
 ui-next/              Next.js 观察器 UI（编译进二进制）
 integrations/pi/      Pi 智能体扩展
+integrations/opencode/ OpenCode 插件
 deploy/               生产 compose + Caddy 示例
 docs/                 完整文档站（make docs-dev）
 ```
